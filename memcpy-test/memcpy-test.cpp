@@ -15,29 +15,6 @@ void u64_store(uint64_t v, char* dst)
     memcpy(dst, &v, sizeof(v));
 }
 
-void libcMemcpy(void* dst, const void* src, size_t size)
-{
-    memmove(dst, src, size);
-}
-
-void naiveMemcpy(void* dst, const void* src, size_t size)
-{
-    char* cdst = (char*)dst;
-    const char* csrc = (char*)src;
-    const char* end = csrc + size;
-    const char* aend = end - size % 8;
-    while (csrc != aend) {
-        u64_store(u64_load(csrc), cdst);
-        csrc += 8;
-        cdst += 8;
-    }
-    while (csrc != end) {
-        *cdst = *csrc;
-        csrc++;
-        cdst++;
-    }
-}
-
 template <size_t align, typename T>
 T* alignedPtr(T* p)
 {
@@ -60,6 +37,29 @@ template <size_t align, typename T>
 bool isAligned(const T* p)
 {
     return (((uintptr_t)p) & (align - 1)) == 0;
+}
+
+void libcMemcpy(void* dst, const void* src, size_t size)
+{
+    memmove(dst, src, size);
+}
+
+void naiveMemcpy(void* dst, const void* src, size_t size)
+{
+    char* cdst = (char*)dst;
+    const char* csrc = (char*)src;
+    const char* end = csrc + size;
+    const char* aend = alignedEnd<8>(end);
+    while (csrc != aend) {
+        u64_store(u64_load(csrc), cdst);
+        csrc += 8;
+        cdst += 8;
+    }
+    while (csrc != end) {
+        *cdst = *csrc;
+        csrc++;
+        cdst++;
+    }
 }
 
 void naiveSseMemcpy(void* dst, const void* src, size_t size)
