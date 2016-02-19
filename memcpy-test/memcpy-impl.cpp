@@ -39,11 +39,6 @@ bool isAligned(const T* p)
     return (((uintptr_t)p) & (align - 1)) == 0;
 }
 
-void libcMemcpy(void* dst, const void* src, size_t size)
-{
-    memmove(dst, src, size);
-}
-
 void naiveMemcpy(void* dst, const void* src, size_t size)
 {
     char* cdst = (char*)dst;
