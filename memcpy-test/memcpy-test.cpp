@@ -87,6 +87,7 @@ void naiveSseMemcpy(void* dst, const void* src, size_t size)
             cdst += 16;
         }
     } else {
+        // Use proper shift + aligned store.
         while (csrc != aend) {
             _mm_storeu_ps((float*)cdst, _mm_load_ps((float*)csrc));
             csrc += 16;
@@ -120,20 +121,25 @@ void unrolled2xSseMemcpy(void* dst, const void* src, size_t size)
     }
     if (isAligned<16>(cdst)) {
         while (csrc != aend) {
-            _mm_store_ps((float*)cdst, _mm_load_ps((float*)csrc));
+            __m128 m0 = _mm_load_ps((float*)csrc);
             csrc += 16;
+            __m128 m1 = _mm_load_ps((float*)csrc);
+            csrc += 16;
+            _mm_store_ps((float*)cdst, m0);
             cdst += 16;
-            _mm_store_ps((float*)cdst, _mm_load_ps((float*)csrc));
-            csrc += 16;
+            _mm_store_ps((float*)cdst, m1);
             cdst += 16;
         }
     } else {
         while (csrc != aend) {
-            _mm_storeu_ps((float*)cdst, _mm_load_ps((float*)csrc));
+            // Use proper shift + aligned store.
+            __m128 m0 = _mm_load_ps((float*)csrc);
             csrc += 16;
+            __m128 m1 = _mm_load_ps((float*)csrc);
+            csrc += 16;
+            _mm_storeu_ps((float*)cdst, m0);
             cdst += 16;
-            _mm_storeu_ps((float*)cdst, _mm_load_ps((float*)csrc));
-            csrc += 16;
+            _mm_storeu_ps((float*)cdst, m1);
             cdst += 16;
         }
     }
@@ -164,32 +170,41 @@ void unrolled4xSseMemcpy(void* dst, const void* src, size_t size)
     }
     if (isAligned<16>(cdst)) {
         while (csrc != aend) {
-            _mm_store_ps((float*)cdst, _mm_load_ps((float*)csrc));
+            __m128 m0 = _mm_load_ps((float*)csrc);
             csrc += 16;
+            __m128 m1 = _mm_load_ps((float*)csrc);
+            csrc += 16;
+            __m128 m2 = _mm_load_ps((float*)csrc);
+            csrc += 16;
+            __m128 m3 = _mm_load_ps((float*)csrc);
+            csrc += 16;
+            _mm_store_ps((float*)cdst, m0);
             cdst += 16;
-            _mm_store_ps((float*)cdst, _mm_load_ps((float*)csrc));
-            csrc += 16;
+            _mm_store_ps((float*)cdst, m1);
             cdst += 16;
-            _mm_store_ps((float*)cdst, _mm_load_ps((float*)csrc));
-            csrc += 16;
+            _mm_store_ps((float*)cdst, m2);
             cdst += 16;
-            _mm_store_ps((float*)cdst, _mm_load_ps((float*)csrc));
-            csrc += 16;
+            _mm_store_ps((float*)cdst, m3);
             cdst += 16;
         }
     } else {
         while (csrc != aend) {
-            _mm_storeu_ps((float*)cdst, _mm_load_ps((float*)csrc));
+            // Use proper shift + aligned store.
+            __m128 m0 = _mm_load_ps((float*)csrc);
             csrc += 16;
+            __m128 m1 = _mm_load_ps((float*)csrc);
+            csrc += 16;
+            __m128 m2 = _mm_load_ps((float*)csrc);
+            csrc += 16;
+            __m128 m3 = _mm_load_ps((float*)csrc);
+            csrc += 16;
+            _mm_storeu_ps((float*)cdst, m0);
             cdst += 16;
-            _mm_storeu_ps((float*)cdst, _mm_load_ps((float*)csrc));
-            csrc += 16;
+            _mm_storeu_ps((float*)cdst, m1);
             cdst += 16;
-            _mm_storeu_ps((float*)cdst, _mm_load_ps((float*)csrc));
-            csrc += 16;
+            _mm_storeu_ps((float*)cdst, m2);
             cdst += 16;
-            _mm_storeu_ps((float*)cdst, _mm_load_ps((float*)csrc));
-            csrc += 16;
+            _mm_storeu_ps((float*)cdst, m3);
             cdst += 16;
         }
     }
@@ -198,6 +213,18 @@ void unrolled4xSseMemcpy(void* dst, const void* src, size_t size)
         csrc++;
         cdst++;
     }
+}
+
+void repMovsbMemcpy(void* dst, const void* src, size_t size)
+{
+    asm("rep movsb" : : "S" (src), "D" (dst), "c" (size) : "%rcx", "%rsi", "%rdi");
+}
+
+void repMovsqMemcpy(void* dst, const void* src, size_t size)
+{
+    asm("rep movsq\n"
+        "movq %0, %%rcx"
+        : : "S" (src), "D" (dst), "c" (size / 8), "r" (size & 7) : "%rcx", "%rsi", "%rdi");
 }
 
 // void muslMemcpy(void* dst, const void* src, size_t size)

@@ -12,7 +12,9 @@ void naiveMemcpy(void* dst, const void* src, size_t size);
 void naiveSseMemcpy(void* dst, const void* src, size_t size);
 void unrolled2xSseMemcpy(void* dst, const void* src, size_t size);
 void unrolled4xSseMemcpy(void* dst, const void* src, size_t size);
-// void muslMemcpy(void* dst, const void* src, size_t size);
+void repMovsbMemcpy(void* dst, const void* src, size_t size);
+void repMovsqMemcpy(void* dst, const void* src, size_t size);
+void muslMemcpy(void* dst, const void* src, size_t size);
 
 // Guaranteed to get into L1.
 const int L1_SIZE = 16 * 1024;
@@ -67,7 +69,7 @@ size_t shuffleBlock(char* block, size_t blockSize, size_t strideSize, const T& m
 }
 
 template <typename T>
-void testMemcpy(char* block, size_t blockSize, size_t strideSize, const T& memcpyFunc, const char* memcpyName)
+void benchMemcpy(char* block, size_t blockSize, size_t strideSize, const T& memcpyFunc, const char* memcpyName)
 {
     int64_t timeFreq = getTimeFreq();
     int64_t totalBytes = 0;
@@ -105,34 +107,42 @@ int main()
         block[i] = i;
     }
 
-    // const size_t L1_STRIDES[] = { 8, 16, 128, L1_SIZE / 4, L1_SIZE / 2 };
-     const size_t L1_STRIDES[] = { 16, 128, L1_SIZE / 4, L1_SIZE / 2 };
+    const size_t L1_STRIDES[] = { 8, 16, 128, L1_SIZE / 4, L1_SIZE / 2 };
     for (size_t i = 0; i < arraySize(L1_STRIDES); i++) {
-        testMemcpy(block, L1_SIZE, L1_STRIDES[i], libcMemcpy, "libc");
-        testMemcpy(block, L1_SIZE, L1_STRIDES[i], naiveMemcpy, "naive");
-        testMemcpy(block, L1_SIZE, L1_STRIDES[i], naiveSseMemcpy, "naiveSse");
-        testMemcpy(block, L1_SIZE, L1_STRIDES[i], unrolled2xSseMemcpy, "unrolled2xSseMemcpy");
-        testMemcpy(block, L1_SIZE, L1_STRIDES[i], unrolled4xSseMemcpy, "unrolled4xSseMemcpy");
+        benchMemcpy(block, L1_SIZE, L1_STRIDES[i], libcMemcpy, "libc");
+        benchMemcpy(block, L1_SIZE, L1_STRIDES[i], naiveMemcpy, "naive");
+        benchMemcpy(block, L1_SIZE, L1_STRIDES[i], naiveSseMemcpy, "naiveSse");
+        benchMemcpy(block, L1_SIZE, L1_STRIDES[i], unrolled2xSseMemcpy, "unrolled2xSseMemcpy");
+        benchMemcpy(block, L1_SIZE, L1_STRIDES[i], unrolled4xSseMemcpy, "unrolled4xSseMemcpy");
+        benchMemcpy(block, L1_SIZE, L1_STRIDES[i], repMovsbMemcpy, "repMovsbMemcpy");
+        benchMemcpy(block, L1_SIZE, L1_STRIDES[i], repMovsqMemcpy, "repMovsqMemcpy");
+        // testMemcpy(block, L1_SIZE, L1_STRIDES[i], muslMemcpy, "muslMemcpy");
         printf("\n");
     }
 
     const size_t L2_STRIDES[] = { 8, 16, 128, L1_SIZE / 2, L2_SIZE / 4, L2_SIZE / 2 };
     for (size_t i = 0; i < arraySize(L2_STRIDES); i++) {
-        testMemcpy(block, L2_SIZE, L2_STRIDES[i], libcMemcpy, "libc");
-        testMemcpy(block, L2_SIZE, L2_STRIDES[i], naiveMemcpy, "naive");
-        testMemcpy(block, L2_SIZE, L2_STRIDES[i], naiveSseMemcpy, "naiveSse");
-        testMemcpy(block, L2_SIZE, L2_STRIDES[i], unrolled2xSseMemcpy, "unrolled2xSseMemcpy");
-        testMemcpy(block, L2_SIZE, L2_STRIDES[i], unrolled4xSseMemcpy, "unrolled4xSseMemcpy");
+        benchMemcpy(block, L2_SIZE, L2_STRIDES[i], libcMemcpy, "libc");
+        benchMemcpy(block, L2_SIZE, L2_STRIDES[i], naiveMemcpy, "naive");
+        benchMemcpy(block, L2_SIZE, L2_STRIDES[i], naiveSseMemcpy, "naiveSse");
+        benchMemcpy(block, L2_SIZE, L2_STRIDES[i], unrolled2xSseMemcpy, "unrolled2xSseMemcpy");
+        benchMemcpy(block, L2_SIZE, L2_STRIDES[i], unrolled4xSseMemcpy, "unrolled4xSseMemcpy");
+        benchMemcpy(block, L2_SIZE, L2_STRIDES[i], repMovsbMemcpy, "repMovsbMemcpy");
+        benchMemcpy(block, L2_SIZE, L2_STRIDES[i], repMovsqMemcpy, "repMovsqMemcpy");
+        // testMemcpy(block, L2_SIZE, L2_STRIDES[i], muslMemcpy, "muslMemcpy");
         printf("\n");
     }
 
     const size_t MAIN_STRIDES[] = { 8, 16, 128, L1_SIZE / 2, L2_SIZE / 2, MAIN_SIZE / 4, MAIN_SIZE / 2 };
     for (size_t i = 0; i < arraySize(MAIN_STRIDES); i++) {
-        testMemcpy(block, MAIN_SIZE, MAIN_STRIDES[i], libcMemcpy, "libc");
-        testMemcpy(block, MAIN_SIZE, MAIN_STRIDES[i], naiveMemcpy, "naive");
-        testMemcpy(block, MAIN_SIZE, MAIN_STRIDES[i], naiveSseMemcpy, "naiveSse");
-        testMemcpy(block, MAIN_SIZE, MAIN_STRIDES[i], unrolled2xSseMemcpy, "unrolled2xSseMemcpy");
-        testMemcpy(block, MAIN_SIZE, MAIN_STRIDES[i], unrolled4xSseMemcpy, "unrolled4xSseMemcpy");
+        benchMemcpy(block, MAIN_SIZE, MAIN_STRIDES[i], libcMemcpy, "libc");
+        benchMemcpy(block, MAIN_SIZE, MAIN_STRIDES[i], naiveMemcpy, "naive");
+        benchMemcpy(block, MAIN_SIZE, MAIN_STRIDES[i], naiveSseMemcpy, "naiveSse");
+        benchMemcpy(block, MAIN_SIZE, MAIN_STRIDES[i], unrolled2xSseMemcpy, "unrolled2xSseMemcpy");
+        benchMemcpy(block, MAIN_SIZE, MAIN_STRIDES[i], unrolled4xSseMemcpy, "unrolled4xSseMemcpy");
+        benchMemcpy(block, MAIN_SIZE, MAIN_STRIDES[i], repMovsbMemcpy, "repMovsbMemcpy");
+        benchMemcpy(block, MAIN_SIZE, MAIN_STRIDES[i], repMovsqMemcpy, "repMovsqMemcpy");
+        // testMemcpy(block, MAIN_SIZE, MAIN_STRIDES[i], muslMemcpy, "muslMemcpy");
         printf("\n");
     }
     
