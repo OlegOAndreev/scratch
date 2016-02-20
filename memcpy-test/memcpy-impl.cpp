@@ -82,7 +82,7 @@ void naiveSseMemcpy(void* dst, const void* src, size_t size)
             cdst += 16;
         }
     } else {
-        // Use proper shift + aligned store.
+        // TODO: Use proper shift + aligned store.
         while (csrc != aend) {
             _mm_storeu_ps((float*)cdst, _mm_load_ps((float*)csrc));
             csrc += 16;
@@ -127,7 +127,7 @@ void unrolled2xSseMemcpy(void* dst, const void* src, size_t size)
         }
     } else {
         while (csrc != aend) {
-            // Use proper shift + aligned store.
+            // TODO: Use proper shift + aligned store.
             __m128 m0 = _mm_load_ps((float*)csrc);
             csrc += 16;
             __m128 m1 = _mm_load_ps((float*)csrc);
@@ -184,7 +184,7 @@ void unrolled4xSseMemcpy(void* dst, const void* src, size_t size)
         }
     } else {
         while (csrc != aend) {
-            // Use proper shift + aligned store.
+            // TODO: Use proper shift + aligned store.
             __m128 m0 = _mm_load_ps((float*)csrc);
             csrc += 16;
             __m128 m1 = _mm_load_ps((float*)csrc);

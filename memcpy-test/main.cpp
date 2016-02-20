@@ -1,3 +1,4 @@
+#include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -8,7 +9,15 @@
 #include <time.h>
 #endif
 
-bool useRandomFrom = false;
+// If true, randomizes the positions of memory to copy from and to (substantially slows things down).
+bool useRandomFromTo = false;
+
+// Guaranteed to get into L1.
+const int L1_SIZE = 16 * 1024;
+// Guaranteed to get into L2 but not in L1.
+const int L2_SIZE = 96 * 1024;
+// Guaranteed to get into main memory.
+const int MAIN_SIZE = 64 * 1024 * 1024;
 
 void naiveMemcpy(void* dst, const void* src, size_t size);
 void naiveSseMemcpy(void* dst, const void* src, size_t size);
@@ -18,14 +27,75 @@ void repMovsbMemcpy(void* dst, const void* src, size_t size);
 void repMovsqMemcpy(void* dst, const void* src, size_t size);
 void muslMemcpy(void* dst, const void* src, size_t size);
 
-// * add tests for memcpy correctness
+// Tests one memcpy run with given src, dst and size.
+template <typename MemcpyFunc>
+bool testMemcpyFuncIter(const MemcpyFunc& memcpyFunc, char* dst, char* src, size_t size)
+{
+    for (size_t i = 0; i < size; i++) {
+        src[i] = rand() % 256;
+    }
+    memcpyFunc(dst, src, size);
+    // We assume that memcmp is implemented correctly.
+    return memcmp(dst, src, size) == 0;
+}
 
-// Guaranteed to get into L1.
-const int L1_SIZE = 16 * 1024;
-// Guaranteed to get into L2 but not in L1.
-const int L2_SIZE = 96 * 1024;
-// Guaranteed to get into main memory.
-const int MAIN_SIZE = 64 * 1024 * 1024;
+// Tests memcpy with a few sizes near the given size and different alignments (srcBlock and dstBlock must have some additional
+// space after them).
+template <typename MemcpyFunc>
+bool testMemcpyFuncSize(const MemcpyFunc& memcpyFunc, char* dstBlock, char* srcBlock, size_t size)
+{
+    if ((size_t)labs(dstBlock - srcBlock) < size + 128) {
+        printf("Internal error: srcBlock and dstBlock not too far apart\n");
+        return false;
+    }
+
+    for (int i = 0; i < 2; i++) {
+        for (size_t testSize = size; testSize < size + 64; testSize++) {
+        }
+
+        // Swap srcBlock and dstBlock so that we check if the switch of direction affects memcpy.
+        char* tmp = srcBlock;
+        srcBlock = dstBlock;
+        dstBlock = tmp;
+    }
+    return true;
+}
+
+// Runs the tests that the memcpy is valid.
+template <typename MemcpyFunc>
+bool testMemcpyFunc(const MemcpyFunc& memcpyFunc)
+{
+    char* bigBlock = new char[MAIN_SIZE];
+    
+    // Test with various sizes. Sizes are specifically chosen to be near power-of-two.
+    if (!testMemcpyFuncSize(memcpyFunc, bigBlock, bigBlock + MAIN_SIZE / 2, 1)) {
+        return false;
+    }
+    if (!testMemcpyFuncSize(memcpyFunc, bigBlock, bigBlock + MAIN_SIZE / 2, 100)) {
+        return false;
+    }
+    if (!testMemcpyFuncSize(memcpyFunc, bigBlock, bigBlock + MAIN_SIZE / 2, 1000)) {
+        return false;
+    }
+    if (!testMemcpyFuncSize(memcpyFunc, bigBlock, bigBlock + MAIN_SIZE / 2, 10000)) {
+        return false;
+    }
+    if (!testMemcpyFuncSize(memcpyFunc, bigBlock, bigBlock + MAIN_SIZE / 2, 100000)) {
+        return false;
+    }
+    if (!testMemcpyFuncSize(memcpyFunc, bigBlock, bigBlock + MAIN_SIZE / 2, 1000000)) {
+        return false;
+    }
+    if (!testMemcpyFuncSize(memcpyFunc, bigBlock, bigBlock + MAIN_SIZE / 2, 10000000)) {
+        return false;
+    }
+    if (!testMemcpyFuncSize(memcpyFunc, bigBlock, bigBlock + MAIN_SIZE / 2, 10000000)) {
+        return false;
+    }
+
+    delete[] bigBlock;
+    return true;
+}
 
 int64_t getTimeCounter()
 {
@@ -50,18 +120,20 @@ int64_t getTimeFreq()
 }
 
 // Take strides of size strideSize from one half of the block and randomly copy them to the other half.
-template <typename T>
-size_t shuffleBlock(char* block, size_t blockSize, size_t strideSize, const T& memcpyFunc)
+template <typename MemcpyFunc>
+size_t shuffleBlock(char* block, size_t blockSize, size_t strideSize, const MemcpyFunc& memcpyFunc)
 {
     size_t numStrides = blockSize / strideSize;
-    if (useRandomFrom) {
-        for (size_t to = 0; to < numStrides / 2; to++) {
-            size_t from = rand() % (numStrides / 2) + (numStrides / 2);
+    size_t halfStrides = numStrides / 2;
+    if (useRandomFromTo) {
+        for (size_t i = 0; i < halfStrides; i++) {
+            size_t from = rand() % halfStrides + halfStrides;
+            size_t to = rand() % halfStrides;
             memcpyFunc(block + to * strideSize, block + from * strideSize, strideSize);
         }
     } else {
-        for (size_t to = 0; to < numStrides / 2; to++) {
-            size_t from = to + (numStrides / 2);
+        for (size_t to = 0; to < halfStrides; to++) {
+            size_t from = to + halfStrides;
             memcpyFunc(block + to * strideSize, block + from * strideSize, strideSize);
         }
     }
@@ -69,8 +141,8 @@ size_t shuffleBlock(char* block, size_t blockSize, size_t strideSize, const T& m
     return blockSize / 2;
 }
 
-template <typename T>
-void benchMemcpy(char* block, size_t blockSize, size_t strideSize, const T& memcpyFunc, const char* memcpyName)
+template <typename MemcpyFunc>
+void benchMemcpy(char* block, size_t blockSize, size_t strideSize, const MemcpyFunc& memcpyFunc, const char* memcpyName)
 {
     int64_t timeFreq = getTimeFreq();
     int64_t totalBytes = 0;
@@ -102,10 +174,19 @@ size_t arraySize(T(&)[N])
 int main(int argc, char** argv)
 {
     if (argc > 1 && strcmp(argv[1], "random")) {
-        useRandomFrom = true;
-        srand(0);
+        useRandomFromTo = true;
+        printf("Randomized copying enabled\n");
     }
+    srand(0);
     
+    testMemcpyFunc(memcpy);
+    testMemcpyFunc(naiveMemcpy);
+    testMemcpyFunc(naiveSseMemcpy);
+    testMemcpyFunc(unrolled2xSseMemcpy);
+    testMemcpyFunc(unrolled4xSseMemcpy);
+    testMemcpyFunc(repMovsbMemcpy);
+    testMemcpyFunc(repMovsqMemcpy);
+
     char* block = new char[MAIN_SIZE];
     for (size_t i = 0; i < MAIN_SIZE; i++) {
         block[i] = i;
