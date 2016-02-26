@@ -30,6 +30,7 @@ void naiveAvxMemcpy(char* dst, const char* src, size_t size);
 void naiveAvxMemcpyUnrolled(char* dst, const char* src, size_t size);
 void repMovsbMemcpy(char* dst, const char* src, size_t size);
 void repMovsqMemcpy(char* dst, const char* src, size_t size);
+void memcpyFromMusl(char* dst, const char* src, size_t size);
 
 // Compute a very simple hash, see: http://www.eecs.harvard.edu/margo/papers/usenix91/paper.ps
 size_t simpleHash(const char* s, size_t size)
@@ -318,6 +319,9 @@ int main(int argc, char** argv)
         if (!testMemcpyFunc(repMovsqMemcpy, "repMovsqMemcpy")) {
             return 1;
         }
+        if (!testMemcpyFunc(memcpyFromMusl, "memcpyFromMusl")) {
+            return 1;
+        }
         return 0;
     }
 
@@ -344,6 +348,7 @@ int main(int argc, char** argv)
         }
         timeMemcpy(block, blockSize, strideSize, repMovsbMemcpy, "repMovsbMemcpy");
         timeMemcpy(block, blockSize, strideSize, repMovsqMemcpy, "repMovsqMemcpy");
+        timeMemcpy(block, blockSize, strideSize, memcpyFromMusl, "memcpyFromMusl");
         printf("\n");
     }
 
@@ -365,6 +370,7 @@ int main(int argc, char** argv)
         }
         timeMemcpy(block, blockSize, strideSize, repMovsbMemcpy, "repMovsbMemcpy");
         timeMemcpy(block, blockSize, strideSize, repMovsqMemcpy, "repMovsqMemcpy");
+        timeMemcpy(block, blockSize, strideSize, memcpyFromMusl, "memcpyFromMusl");
         printf("\n");
     }
 
@@ -387,6 +393,7 @@ int main(int argc, char** argv)
         }
         timeMemcpy(block, blockSize, strideSize, repMovsbMemcpy, "repMovsbMemcpy");
         timeMemcpy(block, blockSize, strideSize, repMovsqMemcpy, "repMovsqMemcpy");
+        timeMemcpy(block, blockSize, strideSize, memcpyFromMusl, "memcpyFromMusl");
         printf("\n");
     }
     
