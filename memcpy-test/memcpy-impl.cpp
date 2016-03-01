@@ -412,6 +412,7 @@ void naiveSseMemcpyUnrolledNT(char* dst, const char* src, size_t size)
         "  movntps %%xmm1, 16(%%rdi, %%rcx)\n"
         "  add $32, %%rcx\n"
         "  jnz 1b\n"
+        "  sfence\n"
         // Copy 16, 8, 4, 2, 1 bytes depending on set bits in rdx.
         "3:\n"
         "  test %%rdx, %%rdx\n"

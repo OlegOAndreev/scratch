@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -251,7 +252,7 @@ void timeMemcpy(char* block, size_t blockSize, size_t strideSize, const MemcpyFu
         }
         gbPerSec[i] = double(totalBytes) * timeFreq / (deltaUsec * 1024 * 1024 * 1024);
     }
-    bubbleSort(gbPerSec, arraySize(gbPerSec));
+    std::sort(gbPerSec, gbPerSec + arraySize(gbPerSec));
 
     char memcpyNamePadding[256];
     preparePadding(memcpyNamePadding, memcpyName);
@@ -263,6 +264,15 @@ void timeMemcpy(char* block, size_t blockSize, size_t strideSize, const MemcpyFu
                (int)blockSize, (int)strideSize, gbPerSec[1], gbPerSec[0], gbPerSec[2]);
     }
 }
+
+// Gets the next pointer after src aligned to align. If src is already aligned, it is returned.
+template <size_t align, typename T>
+T* alignPtr(T* src)
+{
+    static_assert((align & (align - 1)) == 0, "align must be power-of-two");
+    return (T*)(((uintptr_t)src + align - 1) & ~(align - 1));
+}
+
 
 int main(int argc, char** argv)
 {
@@ -341,21 +351,22 @@ int main(int argc, char** argv)
     for (size_t i = 0; i < arraySize(PAGE_STRIDES); i++) {
         size_t blockSize = PAGE_SIZE;
         size_t strideSize = PAGE_STRIDES[i];
-        timeMemcpy(block, blockSize, strideSize, memcpy, "libc");
-        timeMemcpy(block, blockSize, strideSize, naiveMemcpy, "naive");
-        timeMemcpy(block, blockSize, strideSize, naiveMemcpyAligned, "naiveAligned");
-        timeMemcpy(block, blockSize, strideSize, naiveMemcpyUnrolled, "naiveUnrolled");
-        timeMemcpy(block, blockSize, strideSize, naiveSseMemcpy, "naiveSse");
-        timeMemcpy(block, blockSize, strideSize, naiveSseMemcpyUnrolledBody, "naiveSseUnrolledBody");
-        timeMemcpy(block, blockSize, strideSize, naiveSseMemcpyUnrolled, "naiveSseUnrolled");
-        timeMemcpy(block, blockSize, strideSize, naiveSseMemcpyUnrolledNT, "naiveSseUnrolledNT");
+        char* alignedBlock = alignPtr<PAGE_SIZE>(block);
+        timeMemcpy(alignedBlock, blockSize, strideSize, memcpy, "libc");
+        timeMemcpy(alignedBlock, blockSize, strideSize, naiveMemcpy, "naive");
+        timeMemcpy(alignedBlock, blockSize, strideSize, naiveMemcpyAligned, "naiveAligned");
+        timeMemcpy(alignedBlock, blockSize, strideSize, naiveMemcpyUnrolled, "naiveUnrolled");
+        timeMemcpy(alignedBlock, blockSize, strideSize, naiveSseMemcpy, "naiveSse");
+        timeMemcpy(alignedBlock, blockSize, strideSize, naiveSseMemcpyUnrolledBody, "naiveSseUnrolledBody");
+        timeMemcpy(alignedBlock, blockSize, strideSize, naiveSseMemcpyUnrolled, "naiveSseUnrolled");
+        timeMemcpy(alignedBlock, blockSize, strideSize, naiveSseMemcpyUnrolledNT, "naiveSseUnrolledNT");
         if (avxSupported) {
-            timeMemcpy(block, blockSize, strideSize, naiveAvxMemcpy, "naiveAvx");
-            timeMemcpy(block, blockSize, strideSize, naiveAvxMemcpyUnrolled, "naiveAvxUnrolled");
+            timeMemcpy(alignedBlock, blockSize, strideSize, naiveAvxMemcpy, "naiveAvx");
+            timeMemcpy(alignedBlock, blockSize, strideSize, naiveAvxMemcpyUnrolled, "naiveAvxUnrolled");
         }
-        timeMemcpy(block, blockSize, strideSize, repMovsbMemcpy, "repMovsbMemcpy");
-        timeMemcpy(block, blockSize, strideSize, repMovsqMemcpy, "repMovsqMemcpy");
-        timeMemcpy(block, blockSize, strideSize, memcpyFromMusl, "memcpyFromMusl");
+        timeMemcpy(alignedBlock, blockSize, strideSize, repMovsbMemcpy, "repMovsbMemcpy");
+        timeMemcpy(alignedBlock, blockSize, strideSize, repMovsqMemcpy, "repMovsqMemcpy");
+        timeMemcpy(alignedBlock, blockSize, strideSize, memcpyFromMusl, "memcpyFromMusl");
         printf("\n");
     }
 
