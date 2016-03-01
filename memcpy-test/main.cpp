@@ -4,8 +4,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
 #if defined(__APPLE__)
+
 #include <sys/time.h>
+
 #elif defined(__linux__)
 #include <time.h>
 #endif
@@ -54,7 +57,7 @@ bool testMemcpyFuncIter(const MemcpyFunc& memcpyFunc, char* dst, char* src, size
 
     // Fills the buffer with randomized values.
     for (size_t i = 0; i < size + REDZONE; i++) {
-        src[i] = (unsigned char)(rand() % 256);
+        src[i] = (unsigned char) (rand() % 256);
     }
 
     // Computes the input hash to check later that the input has not been modified.
@@ -70,7 +73,7 @@ bool testMemcpyFuncIter(const MemcpyFunc& memcpyFunc, char* dst, char* src, size
     if (memcmp(dst, src, size) != 0) {
         for (size_t i = 0; i < size; i++) {
             if (dst[i] != src[i]) {
-                printf("ERROR: Byte %d of %d\n", (int)i, (int)size);
+                printf("ERROR: Byte %d of %d\n", (int) i, (int) size);
                 return false;
             }
         }
@@ -84,8 +87,8 @@ bool testMemcpyFuncIter(const MemcpyFunc& memcpyFunc, char* dst, char* src, size
     }
 
     for (size_t i = size; i < size + REDZONE; i++) {
-        if ((char)dst[i] != (char)(src[i] ^ 255)) {
-            printf("ERROR: Redzone byte %d overwritten (size %d)\n", (int)i, (int)size);
+        if ((char) dst[i] != (char) (src[i] ^ 255)) {
+            printf("ERROR: Redzone byte %d overwritten (size %d)\n", (int) i, (int) size);
             return false;
         }
     }
@@ -96,11 +99,12 @@ bool testMemcpyFuncIter(const MemcpyFunc& memcpyFunc, char* dst, char* src, size
 // Tests memcpy with a few sizes near the given size and different alignments (srcBlock and dstBlock must have
 // some additional space after them).
 template <typename MemcpyFunc>
-bool testMemcpyFuncSize(const MemcpyFunc& memcpyFunc, char* dstBlock, char* srcBlock, size_t size, const char* memcpyName)
+bool testMemcpyFuncSize(const MemcpyFunc& memcpyFunc, char* dstBlock, char* srcBlock, size_t size,
+                        const char* memcpyName)
 {
-    printf("== Testing size %d\n", (int)size);
+    printf("== Testing size %d\n", (int) size);
 
-    if ((size_t)labs(dstBlock - srcBlock) < size + 128) {
+    if ((size_t) labs(dstBlock - srcBlock) < size + 128) {
         printf("INTERNAL ERROR: srcBlock and dstBlock not too far apart\n");
         return false;
     }
@@ -111,7 +115,7 @@ bool testMemcpyFuncSize(const MemcpyFunc& memcpyFunc, char* dstBlock, char* srcB
                 for (char* dst = dstBlock; dst < dstBlock + 16; dst++) {
                     if (!testMemcpyFuncIter(memcpyFunc, dst, src, testSize)) {
                         printf("ERROR: %s failed on block size %d, src align %d, dst align %d\n", memcpyName,
-                               (int)testSize, (int)(src - srcBlock), (int)(dst - dstBlock));
+                               (int) testSize, (int) (src - srcBlock), (int) (dst - dstBlock));
                         return false;
                     }
                 }
@@ -133,7 +137,7 @@ bool testMemcpyFunc(const MemcpyFunc& memcpyFunc, const char* memcpyName)
     printf("== Testing memcpy %s\n", memcpyName);
 
     char* bigBlock = new char[MAIN_SIZE];
-    
+
     // Test with various sizes. Sizes are specifically chosen to be near power-of-two.
     if (!testMemcpyFuncSize(memcpyFunc, bigBlock, bigBlock + MAIN_SIZE / 2, 1, memcpyName)) {
         return false;
@@ -238,7 +242,7 @@ template <typename MemcpyFunc>
 void timeMemcpy(char* block, size_t blockSize, size_t strideSize, const MemcpyFunc& memcpyFunc, const char* memcpyName)
 {
     int64_t timeFreq = getTimeFreq();
-    double gbPerSec[3] = { 0.0 };
+    double gbPerSec[3] = {0.0};
     for (int i = 0; i < 3; i++) {
         int64_t totalBytes = 0;
         int64_t start = getTimeCounter();
@@ -258,10 +262,10 @@ void timeMemcpy(char* block, size_t blockSize, size_t strideSize, const MemcpyFu
     preparePadding(memcpyNamePadding, memcpyName);
     if (gbPerSec[0] > 10) {
         printf("%s:%s block size %d with copy stride %d: %.1f (%.1f - %.1f) Gb/sec\n", memcpyName, memcpyNamePadding,
-               (int)blockSize, (int)strideSize, gbPerSec[1], gbPerSec[0], gbPerSec[2]);
+               (int) blockSize, (int) strideSize, gbPerSec[1], gbPerSec[0], gbPerSec[2]);
     } else {
         printf("%s:%s block size %d with copy stride %d: %.2f (%.2f - %.2f) Gb/sec\n", memcpyName, memcpyNamePadding,
-               (int)blockSize, (int)strideSize, gbPerSec[1], gbPerSec[0], gbPerSec[2]);
+               (int) blockSize, (int) strideSize, gbPerSec[1], gbPerSec[0], gbPerSec[2]);
     }
 }
 
@@ -270,7 +274,7 @@ template <size_t align, typename T>
 T* alignPtr(T* src)
 {
     static_assert((align & (align - 1)) == 0, "align must be power-of-two");
-    return (T*)(((uintptr_t)src + align - 1) & ~(align - 1));
+    return (T*) (((uintptr_t) src + align - 1) & ~(align - 1));
 }
 
 
@@ -346,8 +350,8 @@ int main(int argc, char** argv)
         block[i] = i;
     }
 
-    const size_t PAGE_STRIDES[] = { 4, 8, 12, 16, 20, 124, 128, 132, PAGE_SIZE / 4 - 4, PAGE_SIZE / 4, PAGE_SIZE / 4 + 4,
-                                  PAGE_SIZE / 2 };
+    const size_t PAGE_STRIDES[] = {4, 8, 12, 16, 20, 124, 128, 132, PAGE_SIZE / 4 - 4, PAGE_SIZE / 4, PAGE_SIZE / 4 + 4,
+                                   PAGE_SIZE / 2};
     for (size_t i = 0; i < arraySize(PAGE_STRIDES); i++) {
         size_t blockSize = PAGE_SIZE;
         size_t strideSize = PAGE_STRIDES[i];
@@ -370,8 +374,8 @@ int main(int argc, char** argv)
         printf("\n");
     }
 
-    const size_t L1_STRIDES[] = { 4, 8, 12, 16, 20, 124, 128, 132, PAGE_SIZE / 4 - 4, PAGE_SIZE / 4, PAGE_SIZE / 4 + 4,
-                                  L1_SIZE / 4 - 4, L1_SIZE / 4, L1_SIZE / 4 + 4, L1_SIZE / 2 };
+    const size_t L1_STRIDES[] = {4, 8, 12, 16, 20, 124, 128, 132, PAGE_SIZE / 4 - 4, PAGE_SIZE / 4, PAGE_SIZE / 4 + 4,
+                                 L1_SIZE / 4 - 4, L1_SIZE / 4, L1_SIZE / 4 + 4, L1_SIZE / 2};
     for (size_t i = 0; i < arraySize(L1_STRIDES); i++) {
         size_t blockSize = L1_SIZE;
         size_t strideSize = L1_STRIDES[i];
@@ -393,9 +397,9 @@ int main(int argc, char** argv)
         printf("\n");
     }
 
-    const size_t L2_STRIDES[] = { 4, 8, 12, 16, 20, 124, 128, 132, PAGE_SIZE / 4 - 4, PAGE_SIZE / 4, PAGE_SIZE / 4 + 4,
-                                  L1_SIZE / 2 - 4, L1_SIZE / 2, L1_SIZE / 2 + 4, L2_SIZE / 4 - 4, L2_SIZE / 4,
-                                  L2_SIZE / 4 + 4, L2_SIZE / 2 };
+    const size_t L2_STRIDES[] = {4, 8, 12, 16, 20, 124, 128, 132, PAGE_SIZE / 4 - 4, PAGE_SIZE / 4, PAGE_SIZE / 4 + 4,
+                                 L1_SIZE / 2 - 4, L1_SIZE / 2, L1_SIZE / 2 + 4, L2_SIZE / 4 - 4, L2_SIZE / 4,
+                                 L2_SIZE / 4 + 4, L2_SIZE / 2};
     for (size_t i = 0; i < arraySize(L2_STRIDES); i++) {
         size_t blockSize = L2_SIZE;
         size_t strideSize = L2_STRIDES[i];
@@ -417,9 +421,9 @@ int main(int argc, char** argv)
         printf("\n");
     }
 
-    const size_t MAIN_STRIDES[] = { 4, 8, 12, 16, 20, 124, 128, 132, L1_SIZE / 2 - 4, PAGE_SIZE / 4 - 4, PAGE_SIZE / 4,
-                                    PAGE_SIZE / 4 + 4, L1_SIZE / 2, L1_SIZE / 2 + 4, L2_SIZE / 2 - 4, L2_SIZE / 2,
-                                    L2_SIZE / 2 + 4, MAIN_SIZE / 4 - 4, MAIN_SIZE / 4, MAIN_SIZE / 4 + 4, MAIN_SIZE / 2 };
+    const size_t MAIN_STRIDES[] = {4, 8, 12, 16, 20, 124, 128, 132, PAGE_SIZE / 4 - 4, PAGE_SIZE / 4, PAGE_SIZE / 4 + 4,
+                                   L1_SIZE / 2 - 4, L1_SIZE / 2, L1_SIZE / 2 + 4, L2_SIZE / 2 - 4, L2_SIZE / 2,
+                                   L2_SIZE / 2 + 4, MAIN_SIZE / 4 - 4, MAIN_SIZE / 4, MAIN_SIZE / 4 + 4, MAIN_SIZE / 2};
     for (size_t i = 0; i < arraySize(MAIN_STRIDES); i++) {
         size_t blockSize = MAIN_SIZE;
         size_t strideSize = MAIN_STRIDES[i];
@@ -440,7 +444,7 @@ int main(int argc, char** argv)
         timeMemcpy(block, blockSize, strideSize, memcpyFromMusl, "memcpyFromMusl");
         printf("\n");
     }
-    
+
     int code = 0;
     for (size_t i = 0; i < MAIN_SIZE; i++) {
         code += block[i];
