@@ -12,6 +12,8 @@
 // If true, randomizes the positions of memory to copy from and to (substantially slows things down).
 bool useRandomFromTo = false;
 
+// Page size on all OSes.
+const int PAGE_SIZE = 4096;
 // Guaranteed to get into L1.
 const int L1_SIZE = 16 * 1024;
 // Guaranteed to get into L2 but not in L1.
@@ -23,8 +25,9 @@ void naiveMemcpy(char* dst, const char* src, size_t size);
 void naiveMemcpyAligned(char* dst, const char* src, size_t size);
 void naiveMemcpyUnrolled(char* dst, const char* src, size_t size);
 void naiveSseMemcpy(char* dst, const char* src, size_t size);
-void naiveSseMemcpyUnrolled(char* dst, const char* src, size_t size);
 void naiveSseMemcpyUnrolledBody(char* dst, const char* src, size_t size);
+void naiveSseMemcpyUnrolled(char* dst, const char* src, size_t size);
+void naiveSseMemcpyUnrolledNT(char* dst, const char* src, size_t size);
 bool isAvxSupported();
 void naiveAvxMemcpy(char* dst, const char* src, size_t size);
 void naiveAvxMemcpyUnrolled(char* dst, const char* src, size_t size);
@@ -305,6 +308,9 @@ int main(int argc, char** argv)
         if (!testMemcpyFunc(naiveSseMemcpyUnrolledBody, "naiveSseUnrolledBody")) {
             return 1;
         }
+        if (!testMemcpyFunc(naiveSseMemcpyUnrolledNT, "naiveSseUnrolledBodyNT")) {
+            return 1;
+        }
         if (avxSupported) {
             if (!testMemcpyFunc(naiveAvxMemcpy, "naiveAvx")) {
                 return 1;
@@ -330,18 +336,19 @@ int main(int argc, char** argv)
         block[i] = i;
     }
 
-    const size_t L1_STRIDES[] = { 4, 8, 12, 16, 20, 124, 128, 132, L1_SIZE / 4 - 4, L1_SIZE / 4, L1_SIZE / 4 + 4,
-                                  L1_SIZE / 2 };
-    for (size_t i = 0; i < arraySize(L1_STRIDES); i++) {
-        size_t blockSize = L1_SIZE;
-        size_t strideSize = L1_STRIDES[i];
+    const size_t PAGE_STRIDES[] = { 4, 8, 12, 16, 20, 124, 128, 132, PAGE_SIZE / 4 - 4, PAGE_SIZE / 4, PAGE_SIZE / 4 + 4,
+                                  PAGE_SIZE / 2 };
+    for (size_t i = 0; i < arraySize(PAGE_STRIDES); i++) {
+        size_t blockSize = PAGE_SIZE;
+        size_t strideSize = PAGE_STRIDES[i];
         timeMemcpy(block, blockSize, strideSize, memcpy, "libc");
         timeMemcpy(block, blockSize, strideSize, naiveMemcpy, "naive");
         timeMemcpy(block, blockSize, strideSize, naiveMemcpyAligned, "naiveAligned");
         timeMemcpy(block, blockSize, strideSize, naiveMemcpyUnrolled, "naiveUnrolled");
         timeMemcpy(block, blockSize, strideSize, naiveSseMemcpy, "naiveSse");
-        timeMemcpy(block, blockSize, strideSize, naiveSseMemcpyUnrolled, "naiveSseUnrolled");
         timeMemcpy(block, blockSize, strideSize, naiveSseMemcpyUnrolledBody, "naiveSseUnrolledBody");
+        timeMemcpy(block, blockSize, strideSize, naiveSseMemcpyUnrolled, "naiveSseUnrolled");
+        timeMemcpy(block, blockSize, strideSize, naiveSseMemcpyUnrolledNT, "naiveSseUnrolledNT");
         if (avxSupported) {
             timeMemcpy(block, blockSize, strideSize, naiveAvxMemcpy, "naiveAvx");
             timeMemcpy(block, blockSize, strideSize, naiveAvxMemcpyUnrolled, "naiveAvxUnrolled");
@@ -352,8 +359,32 @@ int main(int argc, char** argv)
         printf("\n");
     }
 
-    const size_t L2_STRIDES[] = { 4, 8, 12, 16, 20, 124, 128, 132, L1_SIZE / 2 - 4, L1_SIZE / 2, L1_SIZE / 2 + 4,
-                                  L2_SIZE / 4 - 4, L2_SIZE / 4, L2_SIZE / 4 + 4, L2_SIZE / 2 };
+    const size_t L1_STRIDES[] = { 4, 8, 12, 16, 20, 124, 128, 132, PAGE_SIZE / 4 - 4, PAGE_SIZE / 4, PAGE_SIZE / 4 + 4,
+                                  L1_SIZE / 4 - 4, L1_SIZE / 4, L1_SIZE / 4 + 4, L1_SIZE / 2 };
+    for (size_t i = 0; i < arraySize(L1_STRIDES); i++) {
+        size_t blockSize = L1_SIZE;
+        size_t strideSize = L1_STRIDES[i];
+        timeMemcpy(block, blockSize, strideSize, memcpy, "libc");
+        timeMemcpy(block, blockSize, strideSize, naiveMemcpy, "naive");
+        timeMemcpy(block, blockSize, strideSize, naiveMemcpyAligned, "naiveAligned");
+        timeMemcpy(block, blockSize, strideSize, naiveMemcpyUnrolled, "naiveUnrolled");
+        timeMemcpy(block, blockSize, strideSize, naiveSseMemcpy, "naiveSse");
+        timeMemcpy(block, blockSize, strideSize, naiveSseMemcpyUnrolledBody, "naiveSseUnrolledBody");
+        timeMemcpy(block, blockSize, strideSize, naiveSseMemcpyUnrolled, "naiveSseUnrolled");
+        timeMemcpy(block, blockSize, strideSize, naiveSseMemcpyUnrolledNT, "naiveSseUnrolledNT");
+        if (avxSupported) {
+            timeMemcpy(block, blockSize, strideSize, naiveAvxMemcpy, "naiveAvx");
+            timeMemcpy(block, blockSize, strideSize, naiveAvxMemcpyUnrolled, "naiveAvxUnrolled");
+        }
+        timeMemcpy(block, blockSize, strideSize, repMovsbMemcpy, "repMovsbMemcpy");
+        timeMemcpy(block, blockSize, strideSize, repMovsqMemcpy, "repMovsqMemcpy");
+        timeMemcpy(block, blockSize, strideSize, memcpyFromMusl, "memcpyFromMusl");
+        printf("\n");
+    }
+
+    const size_t L2_STRIDES[] = { 4, 8, 12, 16, 20, 124, 128, 132, PAGE_SIZE / 4 - 4, PAGE_SIZE / 4, PAGE_SIZE / 4 + 4,
+                                  L1_SIZE / 2 - 4, L1_SIZE / 2, L1_SIZE / 2 + 4, L2_SIZE / 4 - 4, L2_SIZE / 4,
+                                  L2_SIZE / 4 + 4, L2_SIZE / 2 };
     for (size_t i = 0; i < arraySize(L2_STRIDES); i++) {
         size_t blockSize = L2_SIZE;
         size_t strideSize = L2_STRIDES[i];
@@ -364,6 +395,7 @@ int main(int argc, char** argv)
         timeMemcpy(block, blockSize, strideSize, naiveSseMemcpy, "naiveSse");
         timeMemcpy(block, blockSize, strideSize, naiveSseMemcpyUnrolledBody, "naiveSseUnrolledBody");
         timeMemcpy(block, blockSize, strideSize, naiveSseMemcpyUnrolled, "naiveSseUnrolled");
+        timeMemcpy(block, blockSize, strideSize, naiveSseMemcpyUnrolledNT, "naiveSseUnrolledNT");
         if (avxSupported) {
             timeMemcpy(block, blockSize, strideSize, naiveAvxMemcpy, "naiveAvx");
             timeMemcpy(block, blockSize, strideSize, naiveAvxMemcpyUnrolled, "naiveAvxUnrolled");
@@ -374,9 +406,9 @@ int main(int argc, char** argv)
         printf("\n");
     }
 
-    const size_t MAIN_STRIDES[] = { 4, 8, 12, 16, 20, 124, 128, 132, L1_SIZE / 2 - 4, L1_SIZE / 2, L1_SIZE / 2 + 4,
-                                    L2_SIZE / 2 - 4, L2_SIZE / 2, L2_SIZE / 2 + 4, MAIN_SIZE / 4 - 4, MAIN_SIZE / 4,
-                                    MAIN_SIZE / 4 + 4, MAIN_SIZE / 2 };
+    const size_t MAIN_STRIDES[] = { 4, 8, 12, 16, 20, 124, 128, 132, L1_SIZE / 2 - 4, PAGE_SIZE / 4 - 4, PAGE_SIZE / 4,
+                                    PAGE_SIZE / 4 + 4, L1_SIZE / 2, L1_SIZE / 2 + 4, L2_SIZE / 2 - 4, L2_SIZE / 2,
+                                    L2_SIZE / 2 + 4, MAIN_SIZE / 4 - 4, MAIN_SIZE / 4, MAIN_SIZE / 4 + 4, MAIN_SIZE / 2 };
     for (size_t i = 0; i < arraySize(MAIN_STRIDES); i++) {
         size_t blockSize = MAIN_SIZE;
         size_t strideSize = MAIN_STRIDES[i];
@@ -387,6 +419,7 @@ int main(int argc, char** argv)
         timeMemcpy(block, blockSize, strideSize, naiveSseMemcpy, "naiveSse");
         timeMemcpy(block, blockSize, strideSize, naiveSseMemcpyUnrolledBody, "naiveSseUnrolledBody");
         timeMemcpy(block, blockSize, strideSize, naiveSseMemcpyUnrolled, "naiveSseUnrolled");
+        timeMemcpy(block, blockSize, strideSize, naiveSseMemcpyUnrolledNT, "naiveSseUnrolledNT");
         if (avxSupported) {
             timeMemcpy(block, blockSize, strideSize, naiveAvxMemcpy, "naiveAvx");
             timeMemcpy(block, blockSize, strideSize, naiveAvxMemcpyUnrolled, "naiveAvxUnrolled");
