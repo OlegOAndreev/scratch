@@ -25,10 +25,12 @@ const int L2_SIZE = 96 * 1024;
 // Guaranteed to get into main memory.
 const int MAIN_SIZE = 64 * 1024 * 1024;
 
+void libcMemcpy(char* dst, const char* src, size_t size);
 void naiveMemcpy(char* dst, const char* src, size_t size);
 void naiveMemcpyAligned(char* dst, const char* src, size_t size);
 void naiveMemcpyUnrolled(char* dst, const char* src, size_t size);
 void naiveSseMemcpy(char* dst, const char* src, size_t size);
+void naiveSseMemcpyAligned(char* dst, const char* src, size_t size);
 void naiveSseMemcpyUnrolledBody(char* dst, const char* src, size_t size);
 void naiveSseMemcpyUnrolled(char* dst, const char* src, size_t size);
 void naiveSseMemcpyUnrolledNT(char* dst, const char* src, size_t size);
@@ -232,14 +234,16 @@ void preparePadding(char* padding, const char* name)
 {
     size_t len = strlen(name);
     size_t i = 0;
-    for (; i < 20 - len; i++) {
-        padding[i] = ' ';
+    if (len < 24) {
+        for (; i < 24 - len; i++) {
+            padding[i] = ' ';
+        }
     }
     padding[i] = '\0';
 }
 
 template <typename MemcpyFunc>
-void timeMemcpy(char* block, size_t blockSize, size_t strideSize, const MemcpyFunc& memcpyFunc, const char* memcpyName)
+void benchMemcpy(char* block, size_t blockSize, size_t strideSize, const MemcpyFunc& memcpyFunc, const char* memcpyName)
 {
     int64_t timeFreq = getTimeFreq();
     double gbPerSec[3] = {0.0};
@@ -277,19 +281,53 @@ T* alignPtr(T* src)
     return (T*) (((uintptr_t) src + align - 1) & ~(align - 1));
 }
 
+// Returns true if name is contained in names or names is empty.
+bool containedIn(const char* name, char** names, int numNames)
+{
+    if (numNames == 0) {
+        return true;
+    }
+    for (int i = 0; i < numNames; i++) {
+        if (strcmp(name, names[i]) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+#define TEST_MEMCPY(memcpyFunc, memcpyNames, numMemcpyNames) \
+    if (containedIn(#memcpyFunc, memcpyNames, numMemcpyNames)) { \
+        if (!testMemcpyFunc(memcpyFunc, #memcpyFunc)) { \
+            return 1; \
+        } \
+    }
+
+#define BENCH_MEMCPY(block, blockSize, strideSize, memcpyFunc, memcpyNames, numMemcpyNames) \
+    if (containedIn(#memcpyFunc, memcpyNames, numMemcpyNames)) { \
+        benchMemcpy(block, blockSize, strideSize, memcpyFunc, #memcpyFunc); \
+    }
 
 int main(int argc, char** argv)
 {
     srand(0);
 
     bool runTest = false;
+    char** memcpyNames;
+    int numMemcpyNames;
     if (argc > 1) {
         if (strcmp(argv[1], "random") == 0) {
-            useRandomFromTo = true;
             printf("== Randomized copying enabled\n");
+            useRandomFromTo = true;
+            memcpyNames = argv + 2;
+            numMemcpyNames = argc - 2;
         } else if (strcmp(argv[1], "test") == 0) {
-            runTest = true;
             printf("== Running tests\n");
+            runTest = true;
+            memcpyNames = argv + 2;
+            numMemcpyNames = argc - 2;
+        } else {
+            memcpyNames = argv + 1;
+            numMemcpyNames = argc - 1;
         }
     }
 
@@ -301,47 +339,22 @@ int main(int argc, char** argv)
     }
 
     if (runTest) {
-        if (!testMemcpyFunc(memcpy, "libc")) {
-            return 1;
-        }
-        if (!testMemcpyFunc(naiveMemcpy, "naive")) {
-            return 1;
-        }
-        if (!testMemcpyFunc(naiveMemcpyAligned, "naiveAligned")) {
-            return 1;
-        }
-        if (!testMemcpyFunc(naiveMemcpyUnrolled, "naiveUnrolled")) {
-            return 1;
-        }
-        if (!testMemcpyFunc(naiveSseMemcpy, "naiveSse")) {
-            return 1;
-        }
-        if (!testMemcpyFunc(naiveSseMemcpyUnrolled, "naiveSseUnrolled")) {
-            return 1;
-        }
-        if (!testMemcpyFunc(naiveSseMemcpyUnrolledBody, "naiveSseUnrolledBody")) {
-            return 1;
-        }
-        if (!testMemcpyFunc(naiveSseMemcpyUnrolledNT, "naiveSseUnrolledBodyNT")) {
-            return 1;
-        }
+        TEST_MEMCPY(libcMemcpy, memcpyNames, numMemcpyNames)
+        TEST_MEMCPY(naiveMemcpy, memcpyNames, numMemcpyNames)
+        TEST_MEMCPY(naiveMemcpyAligned, memcpyNames, numMemcpyNames)
+        TEST_MEMCPY(naiveMemcpyUnrolled, memcpyNames, numMemcpyNames)
+        TEST_MEMCPY(naiveSseMemcpy, memcpyNames, numMemcpyNames)
+        TEST_MEMCPY(naiveSseMemcpyAligned, memcpyNames, numMemcpyNames)
+        TEST_MEMCPY(naiveSseMemcpyUnrolled, memcpyNames, numMemcpyNames)
+        TEST_MEMCPY(naiveSseMemcpyUnrolledBody, memcpyNames, numMemcpyNames)
+        TEST_MEMCPY(naiveSseMemcpyUnrolledNT, memcpyNames, numMemcpyNames)
         if (avxSupported) {
-            if (!testMemcpyFunc(naiveAvxMemcpy, "naiveAvx")) {
-                return 1;
-            }
-            if (!testMemcpyFunc(naiveAvxMemcpyUnrolled, "naiveAvxUnrolled")) {
-                return 1;
-            }
+            TEST_MEMCPY(naiveAvxMemcpy, memcpyNames, numMemcpyNames)
+            TEST_MEMCPY(naiveAvxMemcpyUnrolled, memcpyNames, numMemcpyNames)
         }
-        if (!testMemcpyFunc(repMovsbMemcpy, "repMovsbMemcpy")) {
-            return 1;
-        }
-        if (!testMemcpyFunc(repMovsqMemcpy, "repMovsqMemcpy")) {
-            return 1;
-        }
-        if (!testMemcpyFunc(memcpyFromMusl, "memcpyFromMusl")) {
-            return 1;
-        }
+        TEST_MEMCPY(repMovsbMemcpy, memcpyNames, numMemcpyNames)
+        TEST_MEMCPY(repMovsqMemcpy, memcpyNames, numMemcpyNames)
+        TEST_MEMCPY(memcpyFromMusl, memcpyNames, numMemcpyNames)
         return 0;
     }
 
@@ -356,21 +369,22 @@ int main(int argc, char** argv)
         size_t blockSize = PAGE_SIZE;
         size_t strideSize = PAGE_STRIDES[i];
         char* alignedBlock = alignPtr<PAGE_SIZE>(block);
-        timeMemcpy(alignedBlock, blockSize, strideSize, memcpy, "libc");
-        timeMemcpy(alignedBlock, blockSize, strideSize, naiveMemcpy, "naive");
-        timeMemcpy(alignedBlock, blockSize, strideSize, naiveMemcpyAligned, "naiveAligned");
-        timeMemcpy(alignedBlock, blockSize, strideSize, naiveMemcpyUnrolled, "naiveUnrolled");
-        timeMemcpy(alignedBlock, blockSize, strideSize, naiveSseMemcpy, "naiveSse");
-        timeMemcpy(alignedBlock, blockSize, strideSize, naiveSseMemcpyUnrolledBody, "naiveSseUnrolledBody");
-        timeMemcpy(alignedBlock, blockSize, strideSize, naiveSseMemcpyUnrolled, "naiveSseUnrolled");
-        timeMemcpy(alignedBlock, blockSize, strideSize, naiveSseMemcpyUnrolledNT, "naiveSseUnrolledNT");
+        BENCH_MEMCPY(alignedBlock, blockSize, strideSize, libcMemcpy, memcpyNames, numMemcpyNames)
+        BENCH_MEMCPY(alignedBlock, blockSize, strideSize, naiveMemcpy, memcpyNames, numMemcpyNames)
+        BENCH_MEMCPY(alignedBlock, blockSize, strideSize, naiveMemcpyAligned, memcpyNames, numMemcpyNames)
+        BENCH_MEMCPY(alignedBlock, blockSize, strideSize, naiveMemcpyUnrolled, memcpyNames, numMemcpyNames)
+        BENCH_MEMCPY(alignedBlock, blockSize, strideSize, naiveSseMemcpy, memcpyNames, numMemcpyNames)
+        BENCH_MEMCPY(alignedBlock, blockSize, strideSize, naiveSseMemcpyAligned, memcpyNames, numMemcpyNames)
+        BENCH_MEMCPY(alignedBlock, blockSize, strideSize, naiveSseMemcpyUnrolledBody, memcpyNames, numMemcpyNames)
+        BENCH_MEMCPY(alignedBlock, blockSize, strideSize, naiveSseMemcpyUnrolled, memcpyNames, numMemcpyNames)
+        BENCH_MEMCPY(alignedBlock, blockSize, strideSize, naiveSseMemcpyUnrolledNT, memcpyNames, numMemcpyNames)
         if (avxSupported) {
-            timeMemcpy(alignedBlock, blockSize, strideSize, naiveAvxMemcpy, "naiveAvx");
-            timeMemcpy(alignedBlock, blockSize, strideSize, naiveAvxMemcpyUnrolled, "naiveAvxUnrolled");
+            BENCH_MEMCPY(alignedBlock, blockSize, strideSize, naiveAvxMemcpy, memcpyNames, numMemcpyNames)
+            BENCH_MEMCPY(alignedBlock, blockSize, strideSize, naiveAvxMemcpyUnrolled, memcpyNames, numMemcpyNames)
         }
-        timeMemcpy(alignedBlock, blockSize, strideSize, repMovsbMemcpy, "repMovsbMemcpy");
-        timeMemcpy(alignedBlock, blockSize, strideSize, repMovsqMemcpy, "repMovsqMemcpy");
-        timeMemcpy(alignedBlock, blockSize, strideSize, memcpyFromMusl, "memcpyFromMusl");
+        BENCH_MEMCPY(alignedBlock, blockSize, strideSize, repMovsbMemcpy, memcpyNames, numMemcpyNames)
+        BENCH_MEMCPY(alignedBlock, blockSize, strideSize, repMovsqMemcpy, memcpyNames, numMemcpyNames)
+        BENCH_MEMCPY(alignedBlock, blockSize, strideSize, memcpyFromMusl, memcpyNames, numMemcpyNames)
         printf("\n");
     }
 
@@ -379,21 +393,22 @@ int main(int argc, char** argv)
     for (size_t i = 0; i < arraySize(L1_STRIDES); i++) {
         size_t blockSize = L1_SIZE;
         size_t strideSize = L1_STRIDES[i];
-        timeMemcpy(block, blockSize, strideSize, memcpy, "libc");
-        timeMemcpy(block, blockSize, strideSize, naiveMemcpy, "naive");
-        timeMemcpy(block, blockSize, strideSize, naiveMemcpyAligned, "naiveAligned");
-        timeMemcpy(block, blockSize, strideSize, naiveMemcpyUnrolled, "naiveUnrolled");
-        timeMemcpy(block, blockSize, strideSize, naiveSseMemcpy, "naiveSse");
-        timeMemcpy(block, blockSize, strideSize, naiveSseMemcpyUnrolledBody, "naiveSseUnrolledBody");
-        timeMemcpy(block, blockSize, strideSize, naiveSseMemcpyUnrolled, "naiveSseUnrolled");
-        timeMemcpy(block, blockSize, strideSize, naiveSseMemcpyUnrolledNT, "naiveSseUnrolledNT");
+        BENCH_MEMCPY(block, blockSize, strideSize, libcMemcpy, memcpyNames, numMemcpyNames)
+        BENCH_MEMCPY(block, blockSize, strideSize, naiveMemcpy, memcpyNames, numMemcpyNames)
+        BENCH_MEMCPY(block, blockSize, strideSize, naiveMemcpyAligned, memcpyNames, numMemcpyNames)
+        BENCH_MEMCPY(block, blockSize, strideSize, naiveMemcpyUnrolled, memcpyNames, numMemcpyNames)
+        BENCH_MEMCPY(block, blockSize, strideSize, naiveSseMemcpy, memcpyNames, numMemcpyNames)
+        BENCH_MEMCPY(block, blockSize, strideSize, naiveSseMemcpyAligned, memcpyNames, numMemcpyNames)
+        BENCH_MEMCPY(block, blockSize, strideSize, naiveSseMemcpyUnrolledBody, memcpyNames, numMemcpyNames)
+        BENCH_MEMCPY(block, blockSize, strideSize, naiveSseMemcpyUnrolled, memcpyNames, numMemcpyNames)
+        BENCH_MEMCPY(block, blockSize, strideSize, naiveSseMemcpyUnrolledNT, memcpyNames, numMemcpyNames)
         if (avxSupported) {
-            timeMemcpy(block, blockSize, strideSize, naiveAvxMemcpy, "naiveAvx");
-            timeMemcpy(block, blockSize, strideSize, naiveAvxMemcpyUnrolled, "naiveAvxUnrolled");
+            BENCH_MEMCPY(block, blockSize, strideSize, naiveAvxMemcpy, memcpyNames, numMemcpyNames)
+            BENCH_MEMCPY(block, blockSize, strideSize, naiveAvxMemcpyUnrolled, memcpyNames, numMemcpyNames)
         }
-        timeMemcpy(block, blockSize, strideSize, repMovsbMemcpy, "repMovsbMemcpy");
-        timeMemcpy(block, blockSize, strideSize, repMovsqMemcpy, "repMovsqMemcpy");
-        timeMemcpy(block, blockSize, strideSize, memcpyFromMusl, "memcpyFromMusl");
+        BENCH_MEMCPY(block, blockSize, strideSize, repMovsbMemcpy, memcpyNames, numMemcpyNames)
+        BENCH_MEMCPY(block, blockSize, strideSize, repMovsqMemcpy, memcpyNames, numMemcpyNames)
+        BENCH_MEMCPY(block, blockSize, strideSize, memcpyFromMusl, memcpyNames, numMemcpyNames)
         printf("\n");
     }
 
@@ -403,21 +418,22 @@ int main(int argc, char** argv)
     for (size_t i = 0; i < arraySize(L2_STRIDES); i++) {
         size_t blockSize = L2_SIZE;
         size_t strideSize = L2_STRIDES[i];
-        timeMemcpy(block, blockSize, strideSize, memcpy, "libc");
-        timeMemcpy(block, blockSize, strideSize, naiveMemcpy, "naive");
-        timeMemcpy(block, blockSize, strideSize, naiveMemcpyAligned, "naiveAligned");
-        timeMemcpy(block, blockSize, strideSize, naiveMemcpyUnrolled, "naiveUnrolled");
-        timeMemcpy(block, blockSize, strideSize, naiveSseMemcpy, "naiveSse");
-        timeMemcpy(block, blockSize, strideSize, naiveSseMemcpyUnrolledBody, "naiveSseUnrolledBody");
-        timeMemcpy(block, blockSize, strideSize, naiveSseMemcpyUnrolled, "naiveSseUnrolled");
-        timeMemcpy(block, blockSize, strideSize, naiveSseMemcpyUnrolledNT, "naiveSseUnrolledNT");
+        BENCH_MEMCPY(block, blockSize, strideSize, libcMemcpy, memcpyNames, numMemcpyNames)
+        BENCH_MEMCPY(block, blockSize, strideSize, naiveMemcpy, memcpyNames, numMemcpyNames)
+        BENCH_MEMCPY(block, blockSize, strideSize, naiveMemcpyAligned, memcpyNames, numMemcpyNames)
+        BENCH_MEMCPY(block, blockSize, strideSize, naiveMemcpyUnrolled, memcpyNames, numMemcpyNames)
+        BENCH_MEMCPY(block, blockSize, strideSize, naiveSseMemcpy, memcpyNames, numMemcpyNames)
+        BENCH_MEMCPY(block, blockSize, strideSize, naiveSseMemcpyAligned, memcpyNames, numMemcpyNames)
+        BENCH_MEMCPY(block, blockSize, strideSize, naiveSseMemcpyUnrolledBody, memcpyNames, numMemcpyNames)
+        BENCH_MEMCPY(block, blockSize, strideSize, naiveSseMemcpyUnrolled, memcpyNames, numMemcpyNames)
+        BENCH_MEMCPY(block, blockSize, strideSize, naiveSseMemcpyUnrolledNT, memcpyNames, numMemcpyNames)
         if (avxSupported) {
-            timeMemcpy(block, blockSize, strideSize, naiveAvxMemcpy, "naiveAvx");
-            timeMemcpy(block, blockSize, strideSize, naiveAvxMemcpyUnrolled, "naiveAvxUnrolled");
+            BENCH_MEMCPY(block, blockSize, strideSize, naiveAvxMemcpy, memcpyNames, numMemcpyNames)
+            BENCH_MEMCPY(block, blockSize, strideSize, naiveAvxMemcpyUnrolled, memcpyNames, numMemcpyNames)
         }
-        timeMemcpy(block, blockSize, strideSize, repMovsbMemcpy, "repMovsbMemcpy");
-        timeMemcpy(block, blockSize, strideSize, repMovsqMemcpy, "repMovsqMemcpy");
-        timeMemcpy(block, blockSize, strideSize, memcpyFromMusl, "memcpyFromMusl");
+        BENCH_MEMCPY(block, blockSize, strideSize, repMovsbMemcpy, memcpyNames, numMemcpyNames)
+        BENCH_MEMCPY(block, blockSize, strideSize, repMovsqMemcpy, memcpyNames, numMemcpyNames)
+        BENCH_MEMCPY(block, blockSize, strideSize, memcpyFromMusl, memcpyNames, numMemcpyNames)
         printf("\n");
     }
 
@@ -427,21 +443,22 @@ int main(int argc, char** argv)
     for (size_t i = 0; i < arraySize(MAIN_STRIDES); i++) {
         size_t blockSize = MAIN_SIZE;
         size_t strideSize = MAIN_STRIDES[i];
-        timeMemcpy(block, blockSize, strideSize, memcpy, "libc");
-        timeMemcpy(block, blockSize, strideSize, naiveMemcpy, "naive");
-        timeMemcpy(block, blockSize, strideSize, naiveMemcpyAligned, "naiveAligned");
-        timeMemcpy(block, blockSize, strideSize, naiveMemcpyUnrolled, "naiveUnrolled");
-        timeMemcpy(block, blockSize, strideSize, naiveSseMemcpy, "naiveSse");
-        timeMemcpy(block, blockSize, strideSize, naiveSseMemcpyUnrolledBody, "naiveSseUnrolledBody");
-        timeMemcpy(block, blockSize, strideSize, naiveSseMemcpyUnrolled, "naiveSseUnrolled");
-        timeMemcpy(block, blockSize, strideSize, naiveSseMemcpyUnrolledNT, "naiveSseUnrolledNT");
+        BENCH_MEMCPY(block, blockSize, strideSize, libcMemcpy, memcpyNames, numMemcpyNames)
+        BENCH_MEMCPY(block, blockSize, strideSize, naiveMemcpy, memcpyNames, numMemcpyNames)
+        BENCH_MEMCPY(block, blockSize, strideSize, naiveMemcpyAligned, memcpyNames, numMemcpyNames)
+        BENCH_MEMCPY(block, blockSize, strideSize, naiveMemcpyUnrolled, memcpyNames, numMemcpyNames)
+        BENCH_MEMCPY(block, blockSize, strideSize, naiveSseMemcpy, memcpyNames, numMemcpyNames)
+        BENCH_MEMCPY(block, blockSize, strideSize, naiveSseMemcpyAligned, memcpyNames, numMemcpyNames)
+        BENCH_MEMCPY(block, blockSize, strideSize, naiveSseMemcpyUnrolledBody, memcpyNames, numMemcpyNames)
+        BENCH_MEMCPY(block, blockSize, strideSize, naiveSseMemcpyUnrolled, memcpyNames, numMemcpyNames)
+        BENCH_MEMCPY(block, blockSize, strideSize, naiveSseMemcpyUnrolledNT, memcpyNames, numMemcpyNames)
         if (avxSupported) {
-            timeMemcpy(block, blockSize, strideSize, naiveAvxMemcpy, "naiveAvx");
-            timeMemcpy(block, blockSize, strideSize, naiveAvxMemcpyUnrolled, "naiveAvxUnrolled");
+            BENCH_MEMCPY(block, blockSize, strideSize, naiveAvxMemcpy, memcpyNames, numMemcpyNames)
+            BENCH_MEMCPY(block, blockSize, strideSize, naiveAvxMemcpyUnrolled, memcpyNames, numMemcpyNames)
         }
-        timeMemcpy(block, blockSize, strideSize, repMovsbMemcpy, "repMovsbMemcpy");
-        timeMemcpy(block, blockSize, strideSize, repMovsqMemcpy, "repMovsqMemcpy");
-        timeMemcpy(block, blockSize, strideSize, memcpyFromMusl, "memcpyFromMusl");
+        BENCH_MEMCPY(block, blockSize, strideSize, repMovsbMemcpy, memcpyNames, numMemcpyNames)
+        BENCH_MEMCPY(block, blockSize, strideSize, repMovsqMemcpy, memcpyNames, numMemcpyNames)
+        BENCH_MEMCPY(block, blockSize, strideSize, memcpyFromMusl, memcpyNames, numMemcpyNames)
         printf("\n");
     }
 

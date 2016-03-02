@@ -1,5 +1,11 @@
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
+
+void libcMemcpy(char* dst, const char* src, size_t size)
+{
+    memcpy(dst, src, size);
+}
 
 // The basic unaligned memcpy: does 8-byte copies, then 1-byte copies the rest.
 void naiveMemcpy(char* dst, const char* src, size_t size)
@@ -154,6 +160,41 @@ void naiveMemcpyUnrolled(char* dst, const char* src, size_t size)
 
 // The basic SSE memcpy: aligns the dst with 1-byte copies, does 16-byte copies, then 1-byte copies the rest.
 void naiveSseMemcpy(char* dst, const char* src, size_t size)
+{
+    asm volatile(
+        "  mov %%rdx, %%rcx\n"
+        "  and $-16, %%rcx\n"
+        "  jz 3f\n"
+        // Do 16-byte iters, rsi = src end, rdi = dst end.
+        "  and $15, %%rdx\n"
+        "  add %%rcx, %%rsi\n"
+        "  add %%rcx, %%rdi\n"
+        "  neg %%rcx\n"
+        "1:\n"
+        "  movups (%%rsi, %%rcx), %%xmm0\n"
+        "  movups %%xmm0, (%%rdi, %%rcx)\n"
+        "  add $16, %%rcx\n"
+        "  jnz 1b\n"
+        "3:\n"
+        "  test %%rdx, %%rdx\n"
+        "  jz 2f\n"
+        // Do the rest of 1-byte iters, rsi = src end, rdi = dst end.
+        "  add %%rdx, %%rsi\n"
+        "  add %%rdx, %%rdi\n"
+        "  neg %%rdx\n"
+        "1:\n"
+        "  mov (%%rsi, %%rdx), %%al\n"
+        "  mov %%al, (%%rdi, %%rdx)\n"
+        "  inc %%rdx\n"
+        "  jnz 1b\n"
+        "2:\n"
+    : "+S" (src), "+D" (dst), "+d" (size)
+    : : "memory", "cc", "rax", "rcx", "xmm0");
+}
+
+// The basic SSE memcpy with alignment: aligns the dst with 1-byte copies, does 16-byte copies, then 1-byte copies
+// the rest.
+void naiveSseMemcpyAligned(char* dst, const char* src, size_t size)
 {
     asm volatile(
         "  cmp $16, %%rdx\n"
@@ -450,6 +491,7 @@ void naiveSseMemcpyUnrolledNT(char* dst, const char* src, size_t size)
     : "+S" (src), "+D" (dst), "+d" (size)
     : : "memory", "cc", "rax", "rcx", "r8", "xmm0", "xmm1");
 }
+
 // The basic AVX memcpy: aligns the dst with 1-byte copies, does 32-byte copies, then 1-byte copies the rest.
 void naiveAvxMemcpy(char* dst, const char* src, size_t size)
 {
