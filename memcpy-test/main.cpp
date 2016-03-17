@@ -312,8 +312,8 @@ int main(int argc, char** argv)
     srand(0);
 
     bool runTest = false;
-    char** memcpyNames;
-    int numMemcpyNames;
+    char** memcpyNames = 0;
+    int numMemcpyNames = 0;
     if (argc > 1) {
         if (strcmp(argv[1], "random") == 0) {
             printf("== Randomized copying enabled\n");
