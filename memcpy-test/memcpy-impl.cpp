@@ -706,3 +706,8 @@ void memcpyFromMusl(char* dst, const char* src, size_t size)
     : "+S" (src), "+D" (dst), "+d" (size)
     : : "memory", "cc", "rax", "rcx");
 }
+
+void dispatchingMemcpy(char* dst, const char* src, size_t size)
+{
+
+}

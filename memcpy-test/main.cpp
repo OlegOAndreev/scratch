@@ -6,9 +6,7 @@
 #include <string.h>
 
 #if defined(__APPLE__)
-
 #include <sys/time.h>
-
 #elif defined(__linux__)
 #include <time.h>
 #endif
@@ -40,6 +38,7 @@ void naiveAvxMemcpyUnrolled(char* dst, const char* src, size_t size);
 void repMovsbMemcpy(char* dst, const char* src, size_t size);
 void repMovsqMemcpy(char* dst, const char* src, size_t size);
 void memcpyFromMusl(char* dst, const char* src, size_t size);
+void dispatchingMemcpy(char* dst, const char* src, size_t size);
 
 // Compute a very simple hash, see: http://www.eecs.harvard.edu/margo/papers/usenix91/paper.ps
 size_t simpleHash(const char* s, size_t size)
@@ -355,6 +354,7 @@ int main(int argc, char** argv)
         TEST_MEMCPY(repMovsbMemcpy, memcpyNames, numMemcpyNames)
         TEST_MEMCPY(repMovsqMemcpy, memcpyNames, numMemcpyNames)
         TEST_MEMCPY(memcpyFromMusl, memcpyNames, numMemcpyNames)
+        TEST_MEMCPY(dispatchingMemcpy, memcpyNames, numMemcpyNames)
         return 0;
     }
 
@@ -385,6 +385,7 @@ int main(int argc, char** argv)
         BENCH_MEMCPY(alignedBlock, blockSize, strideSize, repMovsbMemcpy, memcpyNames, numMemcpyNames)
         BENCH_MEMCPY(alignedBlock, blockSize, strideSize, repMovsqMemcpy, memcpyNames, numMemcpyNames)
         BENCH_MEMCPY(alignedBlock, blockSize, strideSize, memcpyFromMusl, memcpyNames, numMemcpyNames)
+        BENCH_MEMCPY(alignedBlock, blockSize, strideSize, dispatchingMemcpy, memcpyNames, numMemcpyNames)
         printf("\n");
     }
 
@@ -409,6 +410,7 @@ int main(int argc, char** argv)
         BENCH_MEMCPY(block, blockSize, strideSize, repMovsbMemcpy, memcpyNames, numMemcpyNames)
         BENCH_MEMCPY(block, blockSize, strideSize, repMovsqMemcpy, memcpyNames, numMemcpyNames)
         BENCH_MEMCPY(block, blockSize, strideSize, memcpyFromMusl, memcpyNames, numMemcpyNames)
+        BENCH_MEMCPY(block, blockSize, strideSize, dispatchingMemcpy, memcpyNames, numMemcpyNames)
         printf("\n");
     }
 
@@ -434,6 +436,7 @@ int main(int argc, char** argv)
         BENCH_MEMCPY(block, blockSize, strideSize, repMovsbMemcpy, memcpyNames, numMemcpyNames)
         BENCH_MEMCPY(block, blockSize, strideSize, repMovsqMemcpy, memcpyNames, numMemcpyNames)
         BENCH_MEMCPY(block, blockSize, strideSize, memcpyFromMusl, memcpyNames, numMemcpyNames)
+        BENCH_MEMCPY(block, blockSize, strideSize, dispatchingMemcpy, memcpyNames, numMemcpyNames)
         printf("\n");
     }
 
@@ -459,6 +462,7 @@ int main(int argc, char** argv)
         BENCH_MEMCPY(block, blockSize, strideSize, repMovsbMemcpy, memcpyNames, numMemcpyNames)
         BENCH_MEMCPY(block, blockSize, strideSize, repMovsqMemcpy, memcpyNames, numMemcpyNames)
         BENCH_MEMCPY(block, blockSize, strideSize, memcpyFromMusl, memcpyNames, numMemcpyNames)
+        BENCH_MEMCPY(block, blockSize, strideSize, dispatchingMemcpy, memcpyNames, numMemcpyNames)
         printf("\n");
     }
 
