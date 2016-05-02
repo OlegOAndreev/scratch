@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -192,6 +193,53 @@ int filling2(int n)
 }
 
 // field[n * i + j] = number of queen hitting the (i, j) square. 
+int fillingIter3(char* field, int y, int n)
+{
+    int total = 0;
+    for (int i = 0; i < n; i++) {
+        if (field[n * y + i] > 0) {
+            continue;
+        }
+        if (y == n - 1) {
+            total++;
+        } else {
+            // Fill two half-diagonals and horizontal.
+            int m = std::min(n - y - 1, n - i - 1);
+            for (int j = 0; j < m; j++) {
+                field[n * (y + 1 + j) + (i + 1 + j)]++;
+            }
+            m = std::min(n - y - 1, i);
+            for (int j = 0; j < m; j++) {
+                field[n * (y + 1 + j) + (i - 1 - j)]++;
+            }
+            for (int j = y + 1; j < n; j++) {
+                field[n * j + i]++;
+            }
+            total += fillingIter3(field, y + 1, n);
+            // Unfill two half-diagonals and horizontal.
+            m = std::min(n - y - 1, n - i - 1);
+            for (int j = 0; j < m; j++) {
+                field[n * (y + 1 + j) + (i + 1 + j)]--;
+            }
+            m = std::min(n - y - 1, i);
+            for (int j = 0; j < m; j++) {
+                field[n * (y + 1 + j) + (i - 1 - j)]--;
+            }
+            for (int j = y + 1; j < n; j++) {
+                field[n * j + i]--;
+            }
+        }
+    }
+    return total;
+}
+
+int filling3(int n)
+{
+    std::vector<char> field(n * n);
+    return fillingIter3(field.data(), 0, n);
+}
+
+// field[n * i + j] = number of queen hitting the (i, j) square. 
 int copyingIter(char* field, int y, int n)
 {
     int total = 0;
@@ -211,7 +259,7 @@ int copyingIter(char* field, int y, int n)
                 newField[n * j + k] = 1;
             }
             for (int j = y + 1; j < n; j++) {
-                newField[n * j + i]++;
+                newField[n * j + i] = 1;
             }
             total += copyingIter(newField.data(), y + 1, n);
         }
@@ -247,7 +295,7 @@ int copyingIter2(char* field, int y, int n)
                 newField[n * j + k] = 1;
             }
             for (int j = y + 1; j < n; j++) {
-                newField[n * j + i]++;
+                newField[n * j + i] = 1;
             }
             total += copyingIter2(newField, y + 1, n);
         }
@@ -259,6 +307,44 @@ int copying2(int n)
 {
     std::vector<char> field(n * n);
     return copyingIter2(field.data(), 0, n);
+}
+
+// field[n * i + j] = number of queen hitting the (i, j) square. 
+int copyingIter3(char* field, int y, int n)
+{
+    int total = 0;
+    for (int i = 0; i < n; i++) {
+        if (field[n * y + i] > 0) {
+            continue;
+        }
+        if (y == n - 1) {
+            total++;
+        } else {
+            // Limit the max size of field to ~31x31.
+            char newField[1000];
+            memcpy(newField, field, n * n);
+            // Fill two half-diagonals and horizontal.
+            int m = std::min(n - y - 1, n - i - 1);
+            for (int j = 0; j < m; j++) {
+                newField[n * (y + 1 + j) + (i + 1 + j)] = 1;
+            }
+            m = std::min(n - y - 1, i);
+            for (int j = 0; j < m; j++) {
+                newField[n * (y + 1 + j) + (i - 1 - j)] = 1;
+            }
+            for (int j = y + 1; j < n; j++) {
+                newField[n * j + i] = 1;
+            }
+            total += copyingIter3(newField, y + 1, n);
+        }
+    }
+    return total;
+}
+
+int copying3(int n)
+{
+    std::vector<char> field(n * n);
+    return copyingIter3(field.data(), 0, n);
 }
 
 template <typename Func>
@@ -290,7 +376,9 @@ int main(int argc, char** argv)
     runTest("naive2", n, naive2);
     runTest("filling", n, filling);
     runTest("filling2", n, filling2);
+    runTest("filling3", n, filling3);
     runTest("copying", n, copying);
     runTest("copying2", n, copying2);
+    runTest("copying3", n, copying3);
     return 0;
 }
