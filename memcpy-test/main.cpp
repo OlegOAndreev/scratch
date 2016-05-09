@@ -1,12 +1,10 @@
 #include <algorithm>
-#include <stddef.h>
-#include <stdint.h>
-#include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 
 #if defined(__APPLE__)
+
 #include <sys/time.h>
+
 #elif defined(__linux__)
 #include <time.h>
 #endif
@@ -14,15 +12,7 @@
 // If true, randomizes the positions of memory to copy from and to (substantially slows things down).
 bool useRandomFromTo = false;
 
-// Page size on all OSes.
-const int PAGE_SIZE = 4096;
-// Guaranteed to get into L1.
-const int L1_SIZE = 16 * 1024;
-// Guaranteed to get into L2 but not in L1.
-const int L2_SIZE = 96 * 1024;
-// Guaranteed to get into main memory.
-const int MAIN_SIZE = 64 * 1024 * 1024;
-
+bool isAvxSupported();
 void libcMemcpy(char* dst, const char* src, size_t size);
 void naiveMemcpy(char* dst, const char* src, size_t size);
 void naiveMemcpyAligned(char* dst, const char* src, size_t size);
@@ -32,13 +22,38 @@ void naiveSseMemcpyAligned(char* dst, const char* src, size_t size);
 void naiveSseMemcpyUnrolledBody(char* dst, const char* src, size_t size);
 void naiveSseMemcpyUnrolled(char* dst, const char* src, size_t size);
 void naiveSseMemcpyUnrolledNT(char* dst, const char* src, size_t size);
-bool isAvxSupported();
 void naiveAvxMemcpy(char* dst, const char* src, size_t size);
 void naiveAvxMemcpyUnrolled(char* dst, const char* src, size_t size);
 void repMovsbMemcpy(char* dst, const char* src, size_t size);
 void repMovsqMemcpy(char* dst, const char* src, size_t size);
 void memcpyFromMusl(char* dst, const char* src, size_t size);
-void dispatchingMemcpy(char* dst, const char* src, size_t size);
+void dispatchingMemcpyHsw(char* dst, const char* src, size_t size);
+
+#define DECLARE_MEMCPY_FUNC(memcpyFunc, avxRequired) \
+    { memcpyFunc, #memcpyFunc, avxRequired }
+
+struct {
+    void (*func)(char* dst, const char* src, size_t size);
+    const char* name;
+    bool avxRequired;
+} memcpyFuncs[] = {
+    DECLARE_MEMCPY_FUNC(libcMemcpy, false),
+//    DECLARE_MEMCPY_FUNC(naiveMemcpy, false),
+//    DECLARE_MEMCPY_FUNC(naiveMemcpyAligned, false),
+//    DECLARE_MEMCPY_FUNC(naiveMemcpyUnrolled, false),
+//    DECLARE_MEMCPY_FUNC(naiveSseMemcpy, false),
+//    DECLARE_MEMCPY_FUNC(naiveSseMemcpyAligned, false),
+//    DECLARE_MEMCPY_FUNC(naiveSseMemcpyUnrolledBody, false),
+//    DECLARE_MEMCPY_FUNC(naiveSseMemcpyUnrolled, false),
+//    DECLARE_MEMCPY_FUNC(naiveSseMemcpyUnrolledNT, false),
+    DECLARE_MEMCPY_FUNC(naiveAvxMemcpy, false),
+    DECLARE_MEMCPY_FUNC(naiveAvxMemcpyUnrolled, false),
+//    DECLARE_MEMCPY_FUNC(repMovsbMemcpy, false),
+//    DECLARE_MEMCPY_FUNC(repMovsqMemcpy, false),
+//    DECLARE_MEMCPY_FUNC(memcpyFromMusl, false),
+//    DECLARE_MEMCPY_FUNC(dispatchingMemcpyHsw, false),
+};
+
 
 // Compute a very simple hash, see: http://www.eecs.harvard.edu/margo/papers/usenix91/paper.ps
 size_t simpleHash(const char* s, size_t size)
@@ -58,7 +73,7 @@ bool testMemcpyFuncIter(const MemcpyFunc& memcpyFunc, char* dst, char* src, size
 
     // Fills the buffer with randomized values.
     for (size_t i = 0; i < size + REDZONE; i++) {
-        src[i] = (unsigned char) (rand() % 256);
+        src[i] = (unsigned char)(rand() % 256);
     }
 
     // Computes the input hash to check later that the input has not been modified.
@@ -74,7 +89,7 @@ bool testMemcpyFuncIter(const MemcpyFunc& memcpyFunc, char* dst, char* src, size
     if (memcmp(dst, src, size) != 0) {
         for (size_t i = 0; i < size; i++) {
             if (dst[i] != src[i]) {
-                printf("ERROR: Byte %d of %d\n", (int) i, (int) size);
+                printf("ERROR: Byte %d of %d\n", (int)i, (int)size);
                 return false;
             }
         }
@@ -88,8 +103,8 @@ bool testMemcpyFuncIter(const MemcpyFunc& memcpyFunc, char* dst, char* src, size
     }
 
     for (size_t i = size; i < size + REDZONE; i++) {
-        if ((char) dst[i] != (char) (src[i] ^ 255)) {
-            printf("ERROR: Redzone byte %d overwritten (size %d)\n", (int) i, (int) size);
+        if ((char)dst[i] != (char)(src[i] ^ 255)) {
+            printf("ERROR: Redzone byte %d overwritten (size %d)\n", (int)i, (int)size);
             return false;
         }
     }
@@ -103,9 +118,9 @@ template <typename MemcpyFunc>
 bool testMemcpyFuncSize(const MemcpyFunc& memcpyFunc, char* dstBlock, char* srcBlock, size_t size,
                         const char* memcpyName)
 {
-    printf("== Testing size %d\n", (int) size);
+    printf("== Testing size %d\n", (int)size);
 
-    if ((size_t) labs(dstBlock - srcBlock) < size + 128) {
+    if ((size_t)labs(dstBlock - srcBlock) < size + 128) {
         printf("INTERNAL ERROR: srcBlock and dstBlock not too far apart\n");
         return false;
     }
@@ -116,7 +131,7 @@ bool testMemcpyFuncSize(const MemcpyFunc& memcpyFunc, char* dstBlock, char* srcB
                 for (char* dst = dstBlock; dst < dstBlock + 16; dst++) {
                     if (!testMemcpyFuncIter(memcpyFunc, dst, src, testSize)) {
                         printf("ERROR: %s failed on block size %d, src align %d, dst align %d\n", memcpyName,
-                               (int) testSize, (int) (src - srcBlock), (int) (dst - dstBlock));
+                               (int)testSize, (int)(src - srcBlock), (int)(dst - dstBlock));
                         return false;
                     }
                 }
@@ -137,22 +152,23 @@ bool testMemcpyFunc(const MemcpyFunc& memcpyFunc, const char* memcpyName)
 {
     printf("== Testing memcpy %s\n", memcpyName);
 
-    char* bigBlock = new char[MAIN_SIZE];
+    size_t bigBlockSize = 10 * 1024 * 1024;
+    char* bigBlock = new char[bigBlockSize];
 
     // Test with various sizes. Sizes are specifically chosen to be near power-of-two.
-    if (!testMemcpyFuncSize(memcpyFunc, bigBlock, bigBlock + MAIN_SIZE / 2, 1, memcpyName)) {
+    if (!testMemcpyFuncSize(memcpyFunc, bigBlock, bigBlock + bigBlockSize / 2, 1, memcpyName)) {
         return false;
     }
-    if (!testMemcpyFuncSize(memcpyFunc, bigBlock, bigBlock + MAIN_SIZE / 2, 100, memcpyName)) {
+    if (!testMemcpyFuncSize(memcpyFunc, bigBlock, bigBlock + bigBlockSize / 2, 100, memcpyName)) {
         return false;
     }
-    if (!testMemcpyFuncSize(memcpyFunc, bigBlock, bigBlock + MAIN_SIZE / 2, 1000, memcpyName)) {
+    if (!testMemcpyFuncSize(memcpyFunc, bigBlock, bigBlock + bigBlockSize / 2, 1000, memcpyName)) {
         return false;
     }
-    if (!testMemcpyFuncSize(memcpyFunc, bigBlock, bigBlock + MAIN_SIZE / 2, 16370, memcpyName)) {
+    if (!testMemcpyFuncSize(memcpyFunc, bigBlock, bigBlock + bigBlockSize / 2, 16370, memcpyName)) {
         return false;
     }
-    if (!testMemcpyFuncSize(memcpyFunc, bigBlock, bigBlock + MAIN_SIZE / 2, 131056, memcpyName)) {
+    if (!testMemcpyFuncSize(memcpyFunc, bigBlock, bigBlock + bigBlockSize / 2, 131056, memcpyName)) {
         return false;
     }
 //    if (!testMemcpyFuncSize(memcpyFunc, bigBlock, bigBlock + MAIN_SIZE / 2, 1048560, memcpyName)) {
@@ -185,48 +201,77 @@ int64_t getTimeFreq()
 #endif
 }
 
-// Take strides of size strideSize from one half of the block and randomly copy them to the other half.
-template <typename MemcpyFunc>
-size_t shuffleBlock(char* block, size_t blockSize, size_t strideSize, const MemcpyFunc& memcpyFunc)
-{
-    size_t numStrides = blockSize / strideSize;
-    // halfStrides * strideSize * 2 <= numStrides * strideSize <= blockSize, so everything stays in bounds.
-    size_t halfStrides = numStrides / 2;
-    if (useRandomFromTo) {
-        for (size_t i = 0; i < halfStrides; i++) {
-            size_t from = rand() % halfStrides + halfStrides;
-            size_t to = rand() % halfStrides;
-            memcpyFunc(block + to * strideSize, block + from * strideSize, strideSize);
-        }
-    } else {
-        for (size_t to = 0; to < halfStrides; to++) {
-            size_t from = to + halfStrides;
-            memcpyFunc(block + to * strideSize, block + from * strideSize, strideSize);
-        }
-    }
-
-    return blockSize / 2;
-}
-
-// I can't believe it, I'm writing a bubble sort.
-template <typename T>
-void bubbleSort(T* a, size_t n)
-{
-    for (size_t i = 0; i < n; i++) {
-        for (size_t j = 0; j < n - i - 1; j++) {
-            if (a[j] > a[j + 1]) {
-                T tmp = a[j];
-                a[j] = a[j + 1];
-                a[j + 1] = tmp;
-            }
-        }
-    }
-}
-
 template <typename T, size_t N>
 size_t arraySize(T(&)[N])
 {
     return N;
+}
+
+// Take batches of size blockSize from one half of the block and copy them (randomly or not) to the other half.
+template <typename MemcpyFunc>
+size_t memcpyBuffer(char* buffer, size_t bufferSize, size_t blockSize, const MemcpyFunc& memcpyFunc)
+{
+    size_t numBlocks = bufferSize / blockSize;
+    // halfBlocks * blockSize * 2 <= numBlocks * blockSize <= bufferSize, so everything stays in bounds.
+    size_t halfBlocks = numBlocks / 2;
+    if (useRandomFromTo) {
+        for (size_t i = 0; i < halfBlocks; i++) {
+            size_t from = rand() % halfBlocks + halfBlocks;
+            size_t to = rand() % halfBlocks;
+            memcpyFunc(buffer + to * blockSize, buffer + from * blockSize, blockSize);
+        }
+    } else {
+        for (size_t to = 0; to < halfBlocks; to++) {
+            size_t from = to + halfBlocks;
+            memcpyFunc(buffer + to * blockSize, buffer + from * blockSize, blockSize);
+        }
+    }
+
+    return halfBlocks * blockSize;
+}
+
+// Take blocks of sizes [fromBlockSize ... toBlockSize] from one half of the buffer and copy them (randomly or not)
+// to the other half.
+template <typename MemcpyFunc>
+size_t memcpyBufferMulti(char* buffer, size_t bufferSize, size_t fromBlockSize, size_t toBlockSize,
+                         const MemcpyFunc& memcpyFunc)
+{
+    size_t blockSizes[5];
+    blockSizes[0] = fromBlockSize;
+    blockSizes[1] = fromBlockSize + (toBlockSize - fromBlockSize) / 4;
+    blockSizes[2] = fromBlockSize + (toBlockSize - fromBlockSize) / 2;
+    blockSizes[3] = fromBlockSize + (toBlockSize - fromBlockSize) * 3 / 4;
+    blockSizes[4] = toBlockSize;
+    size_t totalBlockSize = blockSizes[0] + blockSizes[1] + blockSizes[2] + blockSizes[3] + blockSizes[4];
+
+    size_t numBlocks = bufferSize / totalBlockSize;
+    size_t halfBlocks = numBlocks / 2;
+    if (useRandomFromTo) {
+        for (size_t i = 0; i < halfBlocks; i++) {
+            size_t from = rand() % halfBlocks + halfBlocks;
+            size_t to = rand() % halfBlocks;
+            char* fromPtr = buffer + from * totalBlockSize;
+            char* toPtr = buffer + to * totalBlockSize;
+            for (size_t i = 0; i < arraySize(blockSizes); i++) {
+                memcpyFunc(toPtr, fromPtr, blockSizes[i]);
+                fromPtr += blockSizes[i];
+                toPtr += blockSizes[i];
+            }
+        }
+    } else {
+        for (size_t to = 0; to < halfBlocks; to++) {
+            size_t from = to + halfBlocks;
+            char* fromPtr = buffer + from * totalBlockSize;
+            char* toPtr = buffer + to * totalBlockSize;
+            for (size_t i = 0; i < arraySize(blockSizes); i++) {
+                memcpyFunc(toPtr, fromPtr, blockSizes[i]);
+                fromPtr += blockSizes[i];
+                toPtr += blockSizes[i];
+            }
+        }
+    }
+
+    return halfBlocks * totalBlockSize;
 }
 
 void preparePadding(char* padding, const char* name)
@@ -242,7 +287,8 @@ void preparePadding(char* padding, const char* name)
 }
 
 template <typename MemcpyFunc>
-void benchMemcpy(char* block, size_t blockSize, size_t strideSize, const MemcpyFunc& memcpyFunc, const char* memcpyName)
+void benchMemcpy(char* buffer, size_t bufferSize, size_t fromBlockSize, size_t toBlockSize,
+                 const MemcpyFunc& memcpyFunc, const char* memcpyName)
 {
     int64_t timeFreq = getTimeFreq();
     double gbPerSec[3] = {0.0};
@@ -251,7 +297,11 @@ void benchMemcpy(char* block, size_t blockSize, size_t strideSize, const MemcpyF
         int64_t start = getTimeCounter();
         int64_t deltaUsec;
         while (true) {
-            totalBytes += shuffleBlock(block, blockSize, strideSize, memcpyFunc);
+            if (fromBlockSize == toBlockSize) {
+                totalBytes += memcpyBuffer(buffer, bufferSize, fromBlockSize, memcpyFunc);
+            } else {
+                totalBytes += memcpyBufferMulti(buffer, bufferSize, fromBlockSize, toBlockSize, memcpyFunc);
+            }
             deltaUsec = getTimeCounter() - start;
             if (deltaUsec > timeFreq / 2) {
                 break;
@@ -264,211 +314,214 @@ void benchMemcpy(char* block, size_t blockSize, size_t strideSize, const MemcpyF
     char memcpyNamePadding[256];
     preparePadding(memcpyNamePadding, memcpyName);
     if (gbPerSec[0] > 10) {
-        printf("%s:%s block size %d with copy stride %d: %.1f (%.1f - %.1f) Gb/sec\n", memcpyName, memcpyNamePadding,
-               (int) blockSize, (int) strideSize, gbPerSec[1], gbPerSec[0], gbPerSec[2]);
+        printf("%s:%s copy block sizes [%d-%d] in buffer size %d: %.1f (%.1f - %.1f) Gb/sec\n", memcpyName,
+               memcpyNamePadding, (int)fromBlockSize, (int)toBlockSize, (int)bufferSize, gbPerSec[1], gbPerSec[0],
+               gbPerSec[2]);
     } else {
-        printf("%s:%s block size %d with copy stride %d: %.2f (%.2f - %.2f) Gb/sec\n", memcpyName, memcpyNamePadding,
-               (int) blockSize, (int) strideSize, gbPerSec[1], gbPerSec[0], gbPerSec[2]);
+        printf("%s:%s copy block sizes [%d-%d] in buffer size %d: %.2f (%.2f - %.2f) Gb/sec\n", memcpyName,
+               memcpyNamePadding, (int)fromBlockSize, (int)toBlockSize, (int)bufferSize, gbPerSec[1], gbPerSec[0],
+               gbPerSec[2]);
     }
 }
 
-// Gets the next pointer after src aligned to align. If src is already aligned, it is returned.
-template <size_t align, typename T>
-T* alignPtr(T* src)
+int runBench(size_t bufferSize, const size_t* blockSizes, size_t numBlockSizes)
 {
-    static_assert((align & (align - 1)) == 0, "align must be power-of-two");
-    return (T*) (((uintptr_t) src + align - 1) & ~(align - 1));
-}
-
-// Returns true if name is contained in names or names is empty.
-bool containedIn(const char* name, char** names, int numNames)
-{
-    if (numNames == 0) {
-        return true;
+    char* buffer = new char[bufferSize];
+    for (size_t i = 0; i < bufferSize; i++) {
+        buffer[i] = i;
     }
-    for (int i = 0; i < numNames; i++) {
-        if (strcmp(name, names[i]) == 0) {
-            return true;
+
+    for (size_t i = 0; i < numBlockSizes; i++) {
+        size_t blockSize = blockSizes[i];
+        for (size_t i = 0; i < arraySize(memcpyFuncs); i++) {
+            if (memcpyFuncs[i].avxRequired && !isAvxSupported()) {
+                continue;
+            }
+            benchMemcpy(buffer, bufferSize, blockSize, blockSize, memcpyFuncs[i].func, memcpyFuncs[i].name);
         }
+        printf("\n");
     }
-    return false;
+
+    int ret = 0;
+    for (size_t i = 0; i < bufferSize; i++) {
+        ret += buffer[i];
+    }
+    return ret;
 }
 
-#define TEST_MEMCPY(memcpyFunc, memcpyNames, numMemcpyNames) \
-    if (containedIn(#memcpyFunc, memcpyNames, numMemcpyNames)) { \
-        if (!testMemcpyFunc(memcpyFunc, #memcpyFunc)) { \
-            return 1; \
-        } \
+int runBenchMulti(size_t bufferSize, const size_t* blockSizes, size_t numBlockSizes)
+{
+    char* buffer = new char[bufferSize];
+    for (size_t i = 0; i < bufferSize; i++) {
+        buffer[i] = i;
     }
 
-#define BENCH_MEMCPY(block, blockSize, strideSize, memcpyFunc, memcpyNames, numMemcpyNames) \
-    if (containedIn(#memcpyFunc, memcpyNames, numMemcpyNames)) { \
-        benchMemcpy(block, blockSize, strideSize, memcpyFunc, #memcpyFunc); \
+    for (size_t i = 0; i < numBlockSizes; i++) {
+        size_t fromBlockSize = blockSizes[i];
+        size_t toBlockSize = fromBlockSize * 2 + 16;
+        for (size_t i = 0; i < arraySize(memcpyFuncs); i++) {
+            if (memcpyFuncs[i].avxRequired && !isAvxSupported()) {
+                continue;
+            }
+            benchMemcpy(buffer, bufferSize, fromBlockSize, toBlockSize, memcpyFuncs[i].func, memcpyFuncs[i].name);
+        }
+        printf("\n");
     }
+
+    int ret = 0;
+    for (size_t i = 0; i < bufferSize; i++) {
+        ret += buffer[i];
+    }
+    return ret;
+}
+
+// If s starts with prefix, returns the pointer to the part after prefix, otherwise returns NULL.
+const char* stripPrefix(const char* s, const char* prefix)
+{
+    size_t prefixLen = strlen(prefix);
+    if (strncmp(s, prefix, prefixLen) == 0) {
+        return s + prefixLen;
+    } else {
+        return NULL;
+    }
+}
+
+// Usage:
+//   memcpy-test                runs benchmarks for all buffer sizes (L1, L2, MAIN) and all predefined block sizes,
+//                              including multi-sized blocks
+//   memcpy-test l1             runs benchmarks for L1-sized buffer and all predefined block sizes without multi-sized
+//                              blocks
+//   memcpy-test l2_multi       runs benchmarks for L1-sized buffer and all predefined multi-sized blocks
+//   memcpy-test l1_1000        runs benchmark for L1-sized buffer and block size 1000
+//   memcpy-test l2_multi_128   runs benchmark for L2-sized buffer multi-sized block [1000-2016]
+//   memcpy-test test           runs correctness tests for all memcpy implementations
+
+// Guaranteed to fit in L1.
+const int L1_SIZE = 16 * 1024;
+// Guaranteed to fit in L2 but not in L1.
+const int L2_SIZE = 96 * 1024;
+// Guaranteed to not fit in LLC.
+const int MAIN_SIZE = 128 * 1024 * 1024;
+
+size_t L1_BLOCK_SIZES[] = {4, 8, 12, 16, 20, 124, 128, 132, 1020, 1024, 1028,
+                           L1_SIZE / 4 - 4, L1_SIZE / 4, L1_SIZE / 4 + 4, L1_SIZE / 2};
+size_t L2_BLOCK_SIZES[] = {4, 8, 12, 16, 20, 124, 128, 132, 1020, 1024, 1028,
+                           L1_SIZE / 2 - 4, L1_SIZE / 2, L1_SIZE / 2 + 4,
+                           L2_SIZE / 4 - 4, L2_SIZE / 4, L2_SIZE / 4 + 4, L2_SIZE / 2};
+size_t MAIN_BLOCK_SIZES[] = {4, 8, 12, 16, 20, 124, 128, 132, 1020, 1024, 1028,
+                             L1_SIZE / 2 - 4, L1_SIZE / 2, L1_SIZE / 2 + 4,
+                             L2_SIZE / 2 - 4, L2_SIZE / 2, L2_SIZE / 2 + 4,
+                             MAIN_SIZE / 4 - 4, MAIN_SIZE / 4, MAIN_SIZE / 4 + 4, MAIN_SIZE / 2};
 
 int main(int argc, char** argv)
 {
     srand(0);
 
     bool runTest = false;
-    char** memcpyNames = 0;
-    int numMemcpyNames = 0;
+    const char* benchName = NULL;
     if (argc > 1) {
-        if (strcmp(argv[1], "random") == 0) {
-            printf("== Randomized copying enabled\n");
-            useRandomFromTo = true;
-            memcpyNames = argv + 2;
-            numMemcpyNames = argc - 2;
-        } else if (strcmp(argv[1], "test") == 0) {
+        if (strcmp(argv[1], "test") == 0) {
             printf("== Running tests\n");
             runTest = true;
-            memcpyNames = argv + 2;
-            numMemcpyNames = argc - 2;
+        } else if (strcmp(argv[1], "random") == 0) {
+            printf("== Randomized copying enabled\n");
+            useRandomFromTo = true;
+            if (argc > 2) {
+                benchName = argv[2];
+            }
         } else {
-            memcpyNames = argv + 1;
-            numMemcpyNames = argc - 1;
+            benchName = argv[1];
         }
     }
 
-    bool avxSupported = isAvxSupported();
-    if (avxSupported) {
+    if (isAvxSupported()) {
         printf("== AVX supported\n");
     } else {
         printf("== AVX not supported\n");
     }
 
     if (runTest) {
-        TEST_MEMCPY(libcMemcpy, memcpyNames, numMemcpyNames)
-        TEST_MEMCPY(naiveMemcpy, memcpyNames, numMemcpyNames)
-        TEST_MEMCPY(naiveMemcpyAligned, memcpyNames, numMemcpyNames)
-        TEST_MEMCPY(naiveMemcpyUnrolled, memcpyNames, numMemcpyNames)
-        TEST_MEMCPY(naiveSseMemcpy, memcpyNames, numMemcpyNames)
-        TEST_MEMCPY(naiveSseMemcpyAligned, memcpyNames, numMemcpyNames)
-        TEST_MEMCPY(naiveSseMemcpyUnrolled, memcpyNames, numMemcpyNames)
-        TEST_MEMCPY(naiveSseMemcpyUnrolledBody, memcpyNames, numMemcpyNames)
-        TEST_MEMCPY(naiveSseMemcpyUnrolledNT, memcpyNames, numMemcpyNames)
-        if (avxSupported) {
-            TEST_MEMCPY(naiveAvxMemcpy, memcpyNames, numMemcpyNames)
-            TEST_MEMCPY(naiveAvxMemcpyUnrolled, memcpyNames, numMemcpyNames)
+        for (size_t i = 0; i < arraySize(memcpyFuncs); i++) {
+            if (memcpyFuncs[i].avxRequired && !isAvxSupported()) {
+                continue;
+            }
+            if (!testMemcpyFunc(memcpyFuncs[i].func, memcpyFuncs[i].name)) {
+                return 1;
+            }
         }
-        TEST_MEMCPY(repMovsbMemcpy, memcpyNames, numMemcpyNames)
-        TEST_MEMCPY(repMovsqMemcpy, memcpyNames, numMemcpyNames)
-        TEST_MEMCPY(memcpyFromMusl, memcpyNames, numMemcpyNames)
-        TEST_MEMCPY(dispatchingMemcpy, memcpyNames, numMemcpyNames)
         return 0;
     }
 
-    char* block = new char[MAIN_SIZE];
-    for (size_t i = 0; i < MAIN_SIZE; i++) {
-        block[i] = i;
-    }
-
-    const size_t PAGE_STRIDES[] = {4, 8, 12, 16, 20, 124, 128, 132, PAGE_SIZE / 4 - 4, PAGE_SIZE / 4, PAGE_SIZE / 4 + 4,
-                                   PAGE_SIZE / 2};
-    for (size_t i = 0; i < arraySize(PAGE_STRIDES); i++) {
-        size_t blockSize = PAGE_SIZE;
-        size_t strideSize = PAGE_STRIDES[i];
-        char* alignedBlock = alignPtr<PAGE_SIZE>(block);
-        BENCH_MEMCPY(alignedBlock, blockSize, strideSize, libcMemcpy, memcpyNames, numMemcpyNames)
-        BENCH_MEMCPY(alignedBlock, blockSize, strideSize, naiveMemcpy, memcpyNames, numMemcpyNames)
-        BENCH_MEMCPY(alignedBlock, blockSize, strideSize, naiveMemcpyAligned, memcpyNames, numMemcpyNames)
-        BENCH_MEMCPY(alignedBlock, blockSize, strideSize, naiveMemcpyUnrolled, memcpyNames, numMemcpyNames)
-        BENCH_MEMCPY(alignedBlock, blockSize, strideSize, naiveSseMemcpy, memcpyNames, numMemcpyNames)
-        BENCH_MEMCPY(alignedBlock, blockSize, strideSize, naiveSseMemcpyAligned, memcpyNames, numMemcpyNames)
-        BENCH_MEMCPY(alignedBlock, blockSize, strideSize, naiveSseMemcpyUnrolledBody, memcpyNames, numMemcpyNames)
-        BENCH_MEMCPY(alignedBlock, blockSize, strideSize, naiveSseMemcpyUnrolled, memcpyNames, numMemcpyNames)
-        BENCH_MEMCPY(alignedBlock, blockSize, strideSize, naiveSseMemcpyUnrolledNT, memcpyNames, numMemcpyNames)
-        if (avxSupported) {
-            BENCH_MEMCPY(alignedBlock, blockSize, strideSize, naiveAvxMemcpy, memcpyNames, numMemcpyNames)
-            BENCH_MEMCPY(alignedBlock, blockSize, strideSize, naiveAvxMemcpyUnrolled, memcpyNames, numMemcpyNames)
-        }
-        BENCH_MEMCPY(alignedBlock, blockSize, strideSize, repMovsbMemcpy, memcpyNames, numMemcpyNames)
-        BENCH_MEMCPY(alignedBlock, blockSize, strideSize, repMovsqMemcpy, memcpyNames, numMemcpyNames)
-        BENCH_MEMCPY(alignedBlock, blockSize, strideSize, memcpyFromMusl, memcpyNames, numMemcpyNames)
-        BENCH_MEMCPY(alignedBlock, blockSize, strideSize, dispatchingMemcpy, memcpyNames, numMemcpyNames)
-        printf("\n");
-    }
-
-    const size_t L1_STRIDES[] = {4, 8, 12, 16, 20, 124, 128, 132, PAGE_SIZE / 4 - 4, PAGE_SIZE / 4, PAGE_SIZE / 4 + 4,
-                                 L1_SIZE / 4 - 4, L1_SIZE / 4, L1_SIZE / 4 + 4, L1_SIZE / 2};
-    for (size_t i = 0; i < arraySize(L1_STRIDES); i++) {
-        size_t blockSize = L1_SIZE;
-        size_t strideSize = L1_STRIDES[i];
-        BENCH_MEMCPY(block, blockSize, strideSize, libcMemcpy, memcpyNames, numMemcpyNames)
-        BENCH_MEMCPY(block, blockSize, strideSize, naiveMemcpy, memcpyNames, numMemcpyNames)
-        BENCH_MEMCPY(block, blockSize, strideSize, naiveMemcpyAligned, memcpyNames, numMemcpyNames)
-        BENCH_MEMCPY(block, blockSize, strideSize, naiveMemcpyUnrolled, memcpyNames, numMemcpyNames)
-        BENCH_MEMCPY(block, blockSize, strideSize, naiveSseMemcpy, memcpyNames, numMemcpyNames)
-        BENCH_MEMCPY(block, blockSize, strideSize, naiveSseMemcpyAligned, memcpyNames, numMemcpyNames)
-        BENCH_MEMCPY(block, blockSize, strideSize, naiveSseMemcpyUnrolledBody, memcpyNames, numMemcpyNames)
-        BENCH_MEMCPY(block, blockSize, strideSize, naiveSseMemcpyUnrolled, memcpyNames, numMemcpyNames)
-        BENCH_MEMCPY(block, blockSize, strideSize, naiveSseMemcpyUnrolledNT, memcpyNames, numMemcpyNames)
-        if (avxSupported) {
-            BENCH_MEMCPY(block, blockSize, strideSize, naiveAvxMemcpy, memcpyNames, numMemcpyNames)
-            BENCH_MEMCPY(block, blockSize, strideSize, naiveAvxMemcpyUnrolled, memcpyNames, numMemcpyNames)
-        }
-        BENCH_MEMCPY(block, blockSize, strideSize, repMovsbMemcpy, memcpyNames, numMemcpyNames)
-        BENCH_MEMCPY(block, blockSize, strideSize, repMovsqMemcpy, memcpyNames, numMemcpyNames)
-        BENCH_MEMCPY(block, blockSize, strideSize, memcpyFromMusl, memcpyNames, numMemcpyNames)
-        BENCH_MEMCPY(block, blockSize, strideSize, dispatchingMemcpy, memcpyNames, numMemcpyNames)
-        printf("\n");
-    }
-
-    const size_t L2_STRIDES[] = {4, 8, 12, 16, 20, 124, 128, 132, PAGE_SIZE / 4 - 4, PAGE_SIZE / 4, PAGE_SIZE / 4 + 4,
-                                 L1_SIZE / 2 - 4, L1_SIZE / 2, L1_SIZE / 2 + 4, L2_SIZE / 4 - 4, L2_SIZE / 4,
-                                 L2_SIZE / 4 + 4, L2_SIZE / 2};
-    for (size_t i = 0; i < arraySize(L2_STRIDES); i++) {
-        size_t blockSize = L2_SIZE;
-        size_t strideSize = L2_STRIDES[i];
-        BENCH_MEMCPY(block, blockSize, strideSize, libcMemcpy, memcpyNames, numMemcpyNames)
-        BENCH_MEMCPY(block, blockSize, strideSize, naiveMemcpy, memcpyNames, numMemcpyNames)
-        BENCH_MEMCPY(block, blockSize, strideSize, naiveMemcpyAligned, memcpyNames, numMemcpyNames)
-        BENCH_MEMCPY(block, blockSize, strideSize, naiveMemcpyUnrolled, memcpyNames, numMemcpyNames)
-        BENCH_MEMCPY(block, blockSize, strideSize, naiveSseMemcpy, memcpyNames, numMemcpyNames)
-        BENCH_MEMCPY(block, blockSize, strideSize, naiveSseMemcpyAligned, memcpyNames, numMemcpyNames)
-        BENCH_MEMCPY(block, blockSize, strideSize, naiveSseMemcpyUnrolledBody, memcpyNames, numMemcpyNames)
-        BENCH_MEMCPY(block, blockSize, strideSize, naiveSseMemcpyUnrolled, memcpyNames, numMemcpyNames)
-        BENCH_MEMCPY(block, blockSize, strideSize, naiveSseMemcpyUnrolledNT, memcpyNames, numMemcpyNames)
-        if (avxSupported) {
-            BENCH_MEMCPY(block, blockSize, strideSize, naiveAvxMemcpy, memcpyNames, numMemcpyNames)
-            BENCH_MEMCPY(block, blockSize, strideSize, naiveAvxMemcpyUnrolled, memcpyNames, numMemcpyNames)
-        }
-        BENCH_MEMCPY(block, blockSize, strideSize, repMovsbMemcpy, memcpyNames, numMemcpyNames)
-        BENCH_MEMCPY(block, blockSize, strideSize, repMovsqMemcpy, memcpyNames, numMemcpyNames)
-        BENCH_MEMCPY(block, blockSize, strideSize, memcpyFromMusl, memcpyNames, numMemcpyNames)
-        BENCH_MEMCPY(block, blockSize, strideSize, dispatchingMemcpy, memcpyNames, numMemcpyNames)
-        printf("\n");
-    }
-
-    const size_t MAIN_STRIDES[] = {4, 8, 12, 16, 20, 124, 128, 132, PAGE_SIZE / 4 - 4, PAGE_SIZE / 4, PAGE_SIZE / 4 + 4,
-                                   L1_SIZE / 2 - 4, L1_SIZE / 2, L1_SIZE / 2 + 4, L2_SIZE / 2 - 4, L2_SIZE / 2,
-                                   L2_SIZE / 2 + 4, MAIN_SIZE / 4 - 4, MAIN_SIZE / 4, MAIN_SIZE / 4 + 4, MAIN_SIZE / 2};
-    for (size_t i = 0; i < arraySize(MAIN_STRIDES); i++) {
-        size_t blockSize = MAIN_SIZE;
-        size_t strideSize = MAIN_STRIDES[i];
-        BENCH_MEMCPY(block, blockSize, strideSize, libcMemcpy, memcpyNames, numMemcpyNames)
-        BENCH_MEMCPY(block, blockSize, strideSize, naiveMemcpy, memcpyNames, numMemcpyNames)
-        BENCH_MEMCPY(block, blockSize, strideSize, naiveMemcpyAligned, memcpyNames, numMemcpyNames)
-        BENCH_MEMCPY(block, blockSize, strideSize, naiveMemcpyUnrolled, memcpyNames, numMemcpyNames)
-        BENCH_MEMCPY(block, blockSize, strideSize, naiveSseMemcpy, memcpyNames, numMemcpyNames)
-        BENCH_MEMCPY(block, blockSize, strideSize, naiveSseMemcpyAligned, memcpyNames, numMemcpyNames)
-        BENCH_MEMCPY(block, blockSize, strideSize, naiveSseMemcpyUnrolledBody, memcpyNames, numMemcpyNames)
-        BENCH_MEMCPY(block, blockSize, strideSize, naiveSseMemcpyUnrolled, memcpyNames, numMemcpyNames)
-        BENCH_MEMCPY(block, blockSize, strideSize, naiveSseMemcpyUnrolledNT, memcpyNames, numMemcpyNames)
-        if (avxSupported) {
-            BENCH_MEMCPY(block, blockSize, strideSize, naiveAvxMemcpy, memcpyNames, numMemcpyNames)
-            BENCH_MEMCPY(block, blockSize, strideSize, naiveAvxMemcpyUnrolled, memcpyNames, numMemcpyNames)
-        }
-        BENCH_MEMCPY(block, blockSize, strideSize, repMovsbMemcpy, memcpyNames, numMemcpyNames)
-        BENCH_MEMCPY(block, blockSize, strideSize, repMovsqMemcpy, memcpyNames, numMemcpyNames)
-        BENCH_MEMCPY(block, blockSize, strideSize, memcpyFromMusl, memcpyNames, numMemcpyNames)
-        BENCH_MEMCPY(block, blockSize, strideSize, dispatchingMemcpy, memcpyNames, numMemcpyNames)
-        printf("\n");
-    }
-
     int code = 0;
-    for (size_t i = 0; i < MAIN_SIZE; i++) {
-        code += block[i];
+    if (benchName != NULL) {
+        const char* value = NULL;
+        value = stripPrefix(benchName, "l1_multi_");
+        if (value != NULL) {
+            size_t fixedBlockSize = atoi(value);
+            if (fixedBlockSize != 0) {
+                code += runBenchMulti(L1_SIZE, &fixedBlockSize, 1);
+            }
+        }
+        value = stripPrefix(benchName, "l1_");
+        if (value != NULL) {
+            size_t fixedBlockSize = atoi(value);
+            if (fixedBlockSize != 0) {
+                code += runBench(L1_SIZE, &fixedBlockSize, 1);
+            }
+        }
+        value = stripPrefix(benchName, "l2_multi_");
+        if (value != NULL) {
+            size_t fixedBlockSize = atoi(value);
+            if (fixedBlockSize != 0) {
+                code += runBenchMulti(L2_SIZE, &fixedBlockSize, 1);
+            }
+        }
+        value = stripPrefix(benchName, "l2_");
+        if (value != NULL) {
+            size_t fixedBlockSize = atoi(value);
+            if (fixedBlockSize != 0) {
+                code += runBench(L2_SIZE, &fixedBlockSize, 1);
+            }
+        }
+        value = stripPrefix(benchName, "main_multi_");
+        if (value != NULL) {
+            size_t fixedBlockSize = atoi(value);
+            if (fixedBlockSize != 0) {
+                code += runBenchMulti(MAIN_SIZE, &fixedBlockSize, 1);
+            }
+        }
+        value = stripPrefix(benchName, "main_");
+        if (value != NULL) {
+            size_t fixedBlockSize = atoi(value);
+            if (fixedBlockSize != 0) {
+                code += runBench(MAIN_SIZE, &fixedBlockSize, 1);
+            }
+        }
     }
+
+    if (benchName == NULL || strcmp(benchName, "l1") == 0) {
+        code += runBench(L1_SIZE, L1_BLOCK_SIZES, arraySize(L1_BLOCK_SIZES));
+    }
+
+    if (benchName == NULL || strcmp(benchName, "l1_multi") == 0) {
+        code += runBenchMulti(L1_SIZE, L1_BLOCK_SIZES, arraySize(L1_BLOCK_SIZES) - 4);
+    }
+
+    if (benchName == NULL || strcmp(benchName, "l2") == 0) {
+        code += runBench(L2_SIZE, L2_BLOCK_SIZES, arraySize(L2_BLOCK_SIZES));
+    }
+
+    if (benchName == NULL || strcmp(benchName, "l2_multi") == 0) {
+        code += runBenchMulti(L2_SIZE, L2_BLOCK_SIZES, arraySize(L2_BLOCK_SIZES) - 4);
+    }
+
+    if (benchName == NULL || strcmp(benchName, "main") == 0) {
+        code += runBench(MAIN_SIZE, MAIN_BLOCK_SIZES, arraySize(MAIN_BLOCK_SIZES));
+    }
+
+    if (benchName == NULL || strcmp(benchName, "main_multi") == 0) {
+        code += runBenchMulti(MAIN_SIZE, MAIN_BLOCK_SIZES, arraySize(MAIN_BLOCK_SIZES) - 4);
+    }
+
     return code;
 }
