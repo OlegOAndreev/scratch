@@ -601,13 +601,24 @@ void naiveAvxMemcpyUnrolled(char* dst, const char* src, size_t size)
         "  add %%rcx, %%rsi\n"
         "  add %%rcx, %%rdi\n"
         "  neg %%rcx\n"
+        // rdi is aligned, check if rsi is aligned (both movs will be aligned if it is).
+        "  test $63, %%rsi\n"
+        "  jnz 2f\n"
         "1:\n"
+        "  vmovaps (%%rsi, %%rcx), %%ymm0\n"
+        "  vmovaps 32(%%rsi, %%rcx), %%ymm1\n"
+        "  vmovaps %%ymm0, (%%rdi, %%rcx)\n"
+        "  vmovaps %%ymm1, 32(%%rdi, %%rcx)\n"
+        "  add $64, %%rcx\n"
+        "  jnz 1b\n"
+        "  jmp 3f\n"
+        "2:\n"
         "  vmovups (%%rsi, %%rcx), %%ymm0\n"
         "  vmovups 32(%%rsi, %%rcx), %%ymm1\n"
         "  vmovaps %%ymm0, (%%rdi, %%rcx)\n"
         "  vmovaps %%ymm1, 32(%%rdi, %%rcx)\n"
         "  add $64, %%rcx\n"
-        "  jnz 1b\n"
+        "  jnz 2b\n"
         // Copy 32, 16, 8, 4, 2, 1 bytes depending on set bits in rdx.
         "3:\n"
         "  test %%rdx, %%rdx\n"
@@ -649,6 +660,7 @@ void naiveAvxMemcpyUnrolled(char* dst, const char* src, size_t size)
         "  mov (%%rsi, %%rcx), %%al\n"
         "  mov %%al, (%%rdi, %%rcx)\n"
         "2:\n"
+        "  vzeroupper\n"
     : "+S" (src), "+D" (dst), "+d" (size)
     : : "memory", "cc", "rax", "rcx", "r8", "ymm0", "ymm1");
 }
@@ -711,78 +723,11 @@ void memcpyFromMusl(char* dst, const char* src, size_t size)
 
 void dispatchingMemcpyHsw(char* dst, const char* src, size_t size)
 {
-    asm volatile(
-        // rcx = 4-byte aligned size, rdx = rest of size.
-        "  mov %%rdx, %%rcx\n"
-        "  and $-4, %%rcx\n"
-        "  jz 2f\n"
-        "  and $3, %%rdx\n"
-        // Do 8-byte iters, rsi = src end, rdi = dst end.
-        "  add %%rcx, %%rsi\n"
-        "  add %%rcx, %%rdi\n"
-        "  neg %%rcx\n"
-        "1:\n"
-        "  mov (%%rsi, %%rcx), %%eax\n"
-        "  mov %%eax, (%%rdi, %%rcx)\n"
-        "  add $4, %%rcx\n"
-        "  jnz 1b\n"
-        "2:\n"
-        "  test %%rdx, %%rdx\n"
-        "  jz 2f\n"
-        // Do 1-byte iters, rsi = src end, rdi = dst end.
-        "  add %%rdx, %%rsi\n"
-        "  add %%rdx, %%rdi\n"
-        "  neg %%rdx\n"
-        "1:\n"
-        "  mov (%%rsi, %%rdx), %%al\n"
-        "  mov %%al, (%%rdi, %%rdx)\n"
-        "  inc %%rdx\n"
-        "  jnz 1b\n"
-        "2:\n"
-
-
-//        // rcx = size until the start of the 8-byte aligned dst part.
-//        "  mov %%rdi, %%rcx\n"
-//        "  neg %%rcx\n"
-//        "  and $7, %%rcx\n"
-//        "  jz 2f\n"
-//        "  sub %%rcx, %%rdx\n"
-//        // Do 1-byte iters to align dst, rsi = src end, rdi = dst end.
-//        "  add %%rcx, %%rsi\n"
-//        "  add %%rcx, %%rdi\n"
-//        "  neg %%rcx\n"
-//        "1:\n"
-//        "  mov (%%rsi, %%rcx), %%al\n"
-//        "  mov %%al, (%%rdi, %%rcx)\n"
-//        "  inc %%rcx\n"
-//        "  jnz 1b\n"
-//        // Do 8-byte iters, rsi = src end, rdi = dst end.
-//        "2:\n"
-//        "  mov %%rdx, %%rcx\n"
-//        "  and $-8, %%rcx\n"
-//        "  jz 3f\n"
-//        "  and $7, %%rdx\n"
-//        "  add %%rcx, %%rsi\n"
-//        "  add %%rcx, %%rdi\n"
-//        "  neg %%rcx\n"
-//        "1:\n"
-//        "  mov (%%rsi, %%rcx), %%rax\n"
-//        "  mov %%rax, (%%rdi, %%rcx)\n"
-//        "  add $8, %%rcx\n"
-//        "  jnz 1b\n"
-//        "3:\n"
-//        "  test %%rdx, %%rdx\n"
-//        "  jz 2f\n"
-//        // Do the rest of 1-byte iters, rsi = src end, rdi = dst end.
-//        "  add %%rdx, %%rsi\n"
-//        "  add %%rdx, %%rdi\n"
-//        "  neg %%rdx\n"
-//        "1:\n"
-//        "  mov (%%rsi, %%rdx), %%al\n"
-//        "  mov %%al, (%%rdi, %%rdx)\n"
-//        "  inc %%rdx\n"
-//        "  jnz 1b\n"
-//        "2:\n"
-    : "+S" (src), "+D" (dst), "+d" (size)
-    : : "memory", "cc", "rax", "rcx");
+    if (size < 16384) {
+        naiveAvxMemcpyUnrolled(dst, src, size);
+    } else if (size < 4 * 1024 * 1024) {
+        repMovsbMemcpy(dst, src, size);
+    } else {
+        naiveSseMemcpyUnrolledNT(dst, src, size);
+    }
 }
