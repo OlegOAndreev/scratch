@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <stdlib.h>
+#include <string.h>
 
 #if defined(__APPLE__)
 
@@ -33,25 +34,25 @@ void dispatchingMemcpyHsw(char* dst, const char* src, size_t size);
     { memcpyFunc, #memcpyFunc, avxRequired }
 
 struct {
-    void (*func)(char* dst, const char* src, size_t size);
+    void (* func)(char* dst, const char* src, size_t size);
     const char* name;
     bool avxRequired;
 } memcpyFuncs[] = {
+    DECLARE_MEMCPY_FUNC(dispatchingMemcpyHsw, true),
     DECLARE_MEMCPY_FUNC(libcMemcpy, false),
-//    DECLARE_MEMCPY_FUNC(naiveMemcpy, false),
-//    DECLARE_MEMCPY_FUNC(naiveMemcpyAligned, false),
-//    DECLARE_MEMCPY_FUNC(naiveMemcpyUnrolled, false),
+    DECLARE_MEMCPY_FUNC(naiveMemcpy, false),
+    DECLARE_MEMCPY_FUNC(naiveMemcpyAligned, false),
+    DECLARE_MEMCPY_FUNC(naiveMemcpyUnrolled, false),
 //    DECLARE_MEMCPY_FUNC(naiveSseMemcpy, false),
-//    DECLARE_MEMCPY_FUNC(naiveSseMemcpyAligned, false),
-//    DECLARE_MEMCPY_FUNC(naiveSseMemcpyUnrolledBody, false),
-//    DECLARE_MEMCPY_FUNC(naiveSseMemcpyUnrolled, false),
+    DECLARE_MEMCPY_FUNC(naiveSseMemcpyAligned, false),
+    DECLARE_MEMCPY_FUNC(naiveSseMemcpyUnrolledBody, false),
+    DECLARE_MEMCPY_FUNC(naiveSseMemcpyUnrolled, false),
 //    DECLARE_MEMCPY_FUNC(naiveSseMemcpyUnrolledNT, false),
-    DECLARE_MEMCPY_FUNC(naiveAvxMemcpy, false),
-    DECLARE_MEMCPY_FUNC(naiveAvxMemcpyUnrolled, false),
+//    DECLARE_MEMCPY_FUNC(naiveAvxMemcpy, true),
+    DECLARE_MEMCPY_FUNC(naiveAvxMemcpyUnrolled, true),
 //    DECLARE_MEMCPY_FUNC(repMovsbMemcpy, false),
 //    DECLARE_MEMCPY_FUNC(repMovsqMemcpy, false),
 //    DECLARE_MEMCPY_FUNC(memcpyFromMusl, false),
-//    DECLARE_MEMCPY_FUNC(dispatchingMemcpyHsw, false),
 };
 
 
@@ -242,36 +243,14 @@ size_t memcpyBufferMulti(char* buffer, size_t bufferSize, size_t fromBlockSize, 
     blockSizes[2] = fromBlockSize + (toBlockSize - fromBlockSize) / 2;
     blockSizes[3] = fromBlockSize + (toBlockSize - fromBlockSize) * 3 / 4;
     blockSizes[4] = toBlockSize;
-    size_t totalBlockSize = blockSizes[0] + blockSizes[1] + blockSizes[2] + blockSizes[3] + blockSizes[4];
 
-    size_t numBlocks = bufferSize / totalBlockSize;
-    size_t halfBlocks = numBlocks / 2;
-    if (useRandomFromTo) {
-        for (size_t i = 0; i < halfBlocks; i++) {
-            size_t from = rand() % halfBlocks + halfBlocks;
-            size_t to = rand() % halfBlocks;
-            char* fromPtr = buffer + from * totalBlockSize;
-            char* toPtr = buffer + to * totalBlockSize;
-            for (size_t i = 0; i < arraySize(blockSizes); i++) {
-                memcpyFunc(toPtr, fromPtr, blockSizes[i]);
-                fromPtr += blockSizes[i];
-                toPtr += blockSizes[i];
-            }
-        }
-    } else {
-        for (size_t to = 0; to < halfBlocks; to++) {
-            size_t from = to + halfBlocks;
-            char* fromPtr = buffer + from * totalBlockSize;
-            char* toPtr = buffer + to * totalBlockSize;
-            for (size_t i = 0; i < arraySize(blockSizes); i++) {
-                memcpyFunc(toPtr, fromPtr, blockSizes[i]);
-                fromPtr += blockSizes[i];
-                toPtr += blockSizes[i];
-            }
-        }
+    size_t total = 0;
+
+    for (size_t i = 0; i < arraySize(blockSizes); i++) {
+        total += memcpyBuffer(buffer, bufferSize, blockSizes[i], memcpyFunc);
     }
 
-    return halfBlocks * totalBlockSize;
+    return total;
 }
 
 void preparePadding(char* padding, const char* name)
@@ -297,11 +276,7 @@ void benchMemcpy(char* buffer, size_t bufferSize, size_t fromBlockSize, size_t t
         int64_t start = getTimeCounter();
         int64_t deltaUsec;
         while (true) {
-            if (fromBlockSize == toBlockSize) {
-                totalBytes += memcpyBuffer(buffer, bufferSize, fromBlockSize, memcpyFunc);
-            } else {
-                totalBytes += memcpyBufferMulti(buffer, bufferSize, fromBlockSize, toBlockSize, memcpyFunc);
-            }
+            totalBytes += memcpyBufferMulti(buffer, bufferSize, fromBlockSize, toBlockSize, memcpyFunc);
             deltaUsec = getTimeCounter() - start;
             if (deltaUsec > timeFreq / 2) {
                 break;
