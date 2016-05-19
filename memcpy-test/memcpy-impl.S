@@ -562,106 +562,6 @@ _naiveAvxMemcpyUnrolled:
     mov %al, (%rdi, %rcx)
 2:  ret
 
-.global _naiveAvxMemcpyUnrolled2
-_naiveAvxMemcpyUnrolled2:
-    cmp $64, %rdx
-    jb 3f
-    /* rcx = size until the start of the 32-byte aligned dst part */
-    mov %rdi, %rcx
-    neg %rcx
-    and $31, %rcx
-    jz 2f
-    sub %rcx, %rdx
-    /* Copy 1, 2, 4, 8, 16 bytes depending on set bits in rcx */
-    xor %r8, %r8
-    test $1, %cl
-    jz 1f
-    mov (%rsi), %al
-    mov %al, (%rdi)
-    inc %r8
-1:  test $2, %cl
-    jz 1f
-    mov (%rsi, %r8), %ax
-    mov %ax, (%rdi, %r8)
-    add $2, %r8
-1:  test $4, %cl
-    jz 1f
-    mov (%rsi, %r8), %eax
-    mov %eax, (%rdi, %r8)
-    add $4, %r8
-1:  test $8, %cl
-    jz 1f
-    mov (%rsi, %r8), %rax
-    mov %rax, (%rdi, %r8)
-    add $8, %r8
-1:  test $16, %cl
-    jz 1f
-    movups (%rsi, %r8), %xmm0
-    movaps %xmm0, (%rdi, %r8)
-    add $16, %r8
-1:  add %r8, %rsi
-    add %r8, %rdi
-2:  mov %rdx, %rcx
-    and $-64, %rcx
-    jz 3f
-    /* Do 64-byte iters, rsi = src end, rdi = dst end */
-    and $63, %rdx
-    add %rcx, %rsi
-    add %rcx, %rdi
-    neg %rcx
-    /* rdi is aligned, check if rsi is aligned (both movs will be aligned if it is) */
-    test $63, %rsi
-    jnz 2f
-1:  vmovaps (%rsi, %rcx), %ymm0
-    vmovaps 32(%rsi, %rcx), %ymm1
-    vmovaps %ymm0, (%rdi, %rcx)
-    vmovaps %ymm1, 32(%rdi, %rcx)
-    add $64, %rcx
-    jnz 1b
-    jmp 3f
-2:  vmovups (%rsi, %rcx), %ymm0
-    vmovups 32(%rsi, %rcx), %ymm1
-    vmovaps %ymm0, (%rdi, %rcx)
-    vmovaps %ymm1, 32(%rdi, %rcx)
-    add $64, %rcx
-    jnz 2b
-    /* Copy 32, 16, 8, 4, 2, 1 bytes depending on set bits in rdx */
-3:  vzeroupper
-    test %rdx, %rdx
-    jz 2f
-    xor %rcx, %rcx
-    test $32, %rdx
-    jz 1f
-    vmovups (%rsi), %ymm0
-    vmovups %ymm0, (%rdi)
-    add $32, %rcx
-    vzeroupper
-1:  test $16, %dl
-    jz 1f
-    movups (%rsi, %rcx), %xmm0
-    movups %xmm0, (%rdi, %rcx)
-    add $16, %rcx
-1:  test $8, %dl
-    jz 1f
-    mov (%rsi, %rcx), %rax
-    mov %rax, (%rdi, %rcx)
-    add $8, %rcx
-1:  test $4, %dl
-    jz 1f
-    mov (%rsi, %rcx), %eax
-    mov %eax, (%rdi, %rcx)
-    add $4, %rcx
-1:  test $2, %dl
-    jz 1f
-    mov (%rsi, %rcx), %ax
-    mov %ax, (%rdi, %rcx)
-    add $2, %rcx
-1:  test $1, %dl
-    jz 2f
-    mov (%rsi, %rcx), %al
-    mov %al, (%rdi, %rcx)
-2:  ret
-
 .global _repMovsbMemcpy
 _repMovsbMemcpy:
     mov %rdx, %rcx
@@ -710,3 +610,97 @@ _dispatchingMemcpyHsw:
     cmp $0x400000, %rdx
     jb _repMovsbMemcpy
     jmp _naiveSseMemcpyUnrolledNT
+
+
+/* Copy of memcpy from Facebook folly: https://github.com/facebook/folly/blob/master/folly/memcpy.S, non-avx
+   parts stripped. */
+.global _folly_memcpy_short
+_folly_memcpy_short:
+    //        if (length == 0) return;
+    test      %edx, %edx
+    jz        .LEND
+
+    movzbl    (%rsi), %ecx
+    //        if (length - 4 < 0) goto LS4;
+    sub       $4, %edx
+    jb        .LS4
+
+    mov       (%rsi), %ecx
+    mov       (%rsi, %rdx), %edi
+    mov       %ecx, (%rax)
+    mov       %edi, (%rax, %rdx)
+.LEND:
+    rep
+    ret
+    nop
+
+.LS4:
+    //        At this point, length can be 1 or 2 or 3, and $cl contains
+    //        the first byte.
+    mov       %cl, (%rax)
+    //        if (length - 4 + 2 < 0) return;
+    add       $2, %edx
+    jnc       .LEND
+
+    //        length is 2 or 3 here. In either case, just copy the last
+    //        two bytes.
+    movzwl    (%rsi, %rdx), %ecx
+    mov       %cx, (%rax, %rdx)
+    ret
+
+.align    16
+.global    _folly_memcpy
+_folly_memcpy:
+    mov       %rdx, %rcx
+    mov       %rdi, %rax
+    cmp       $8, %rdx
+    jb        _folly_memcpy_short
+
+    mov       -8(%rsi, %rdx), %r8
+    mov       (%rsi), %r9
+    mov       %r8, -8(%rdi, %rdx)
+    and       $24, %rcx
+    jz        .L32
+
+    mov       %r9, (%rdi)
+    mov       %rcx, %r8
+    sub       $16, %rcx
+    jb        .LT32
+    vmovdqu   (%rsi, %rcx), %xmm1
+    vmovdqu   %xmm1, (%rdi, %rcx)
+    //        Test if there are 32-byte groups
+.LT32:
+    add       %r8, %rsi
+    and       $-32, %rdx
+    jnz       .L32_adjDI
+    ret
+
+    .align    16
+.L32_adjDI:
+    add       %r8, %rdi
+.L32:
+    vmovdqu   (%rsi), %ymm0
+    shr       $6, %rdx
+    jnc       .L64_32read
+    vmovdqu   %ymm0, (%rdi)
+    lea       32(%rsi), %rsi
+    jnz       .L64_adjDI
+    vzeroupper
+    ret
+
+.L64_adjDI:
+    add       $32, %rdi
+
+.L64:
+    vmovdqu   (%rsi), %ymm0
+
+.L64_32read:
+    vmovdqu   32(%rsi), %ymm1
+    add       $64, %rsi
+    vmovdqu   %ymm0, (%rdi)
+    vmovdqu   %ymm1, 32(%rdi)
+    add       $64, %rdi
+    dec       %rdx
+    jnz       .L64
+    vzeroupper
+    ret
