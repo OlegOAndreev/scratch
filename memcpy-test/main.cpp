@@ -32,7 +32,7 @@ void naiveSseMemcpyUnrolled(char* dst, const char* src, size_t size);
 void naiveSseMemcpyUnrolledNT(char* dst, const char* src, size_t size);
 void naiveAvxMemcpy(char* dst, const char* src, size_t size);
 void naiveAvxMemcpyUnrolled(char* dst, const char* src, size_t size);
-void naiveAvxMemcpyUnrolled2(char* dst, const char* src, size_t size);
+void naiveAvxMemcpyUnrolledV2(char* dst, const char* src, size_t size);
 void repMovsbMemcpy(char* dst, const char* src, size_t size);
 void repMovsqMemcpy(char* dst, const char* src, size_t size);
 void memcpyFromMusl(char* dst, const char* src, size_t size);
@@ -61,6 +61,7 @@ struct {
 //    DECLARE_MEMCPY_FUNC(naiveSseMemcpyUnrolledNT, false),
 //    DECLARE_MEMCPY_FUNC(naiveAvxMemcpy, true),
     DECLARE_MEMCPY_FUNC(naiveAvxMemcpyUnrolled, true),
+    DECLARE_MEMCPY_FUNC(naiveAvxMemcpyUnrolledV2, true),
 //    DECLARE_MEMCPY_FUNC(repMovsbMemcpy, false),
 //    DECLARE_MEMCPY_FUNC(repMovsqMemcpy, false),
 //    DECLARE_MEMCPY_FUNC(memcpyFromMusl, false),

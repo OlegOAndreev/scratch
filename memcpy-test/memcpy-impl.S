@@ -34,7 +34,7 @@ _naiveMemcpy:
     add %rdx, %rsi
     add %rdx, %rdi
     neg %rdx
-1:  mov (%rsi, %rdx), %al
+1:  movzbl (%rsi, %rdx), %eax
     mov %al, (%rdi, %rdx)
     inc %rdx
     jnz 1b
@@ -55,7 +55,7 @@ _naiveMemcpyAligned:
     add %rcx, %rsi
     add %rcx, %rdi
     neg %rcx
-1:  mov (%rsi, %rcx), %al
+1:  movzbl (%rsi, %rcx), %eax
     mov %al, (%rdi, %rcx)
     inc %rcx
     jnz 1b
@@ -78,7 +78,7 @@ _naiveMemcpyAligned:
     add %rdx, %rsi
     add %rdx, %rdi
     neg %rdx
-1:  mov (%rsi, %rdx), %al
+1:  movzbl (%rsi, %rdx), %eax
     mov %al, (%rdi, %rdx)
     inc %rdx
     jnz 1b
@@ -129,12 +129,12 @@ _naiveMemcpyUnrolled:
     add $4, %rcx
 1:  test $2, %dl
     jz 1f
-    mov (%rsi, %rcx), %ax
+    movzwl (%rsi, %rcx), %eax
     mov %ax, (%rdi, %rcx)
     add $2, %rcx
 1:  test $1, %dl
     jz 2f
-    mov (%rsi, %rcx), %al
+    movzbl (%rsi, %rcx), %eax
     mov %al, (%rdi, %rcx)
 2:  ret
 
@@ -159,7 +159,7 @@ _naiveSseMemcpy:
     add %rdx, %rsi
     add %rdx, %rdi
     neg %rdx
-1:  mov (%rsi, %rdx), %al
+1:  movzbl (%rsi, %rdx), %eax
     mov %al, (%rdi, %rdx)
     inc %rdx
     jnz 1b
@@ -181,7 +181,7 @@ _naiveSseMemcpyAligned:
     add %rcx, %rsi
     add %rcx, %rdi
     neg %rcx
-1:  mov (%rsi, %rcx), %al
+1:  movzbl (%rsi, %rcx), %eax
     mov %al, (%rdi, %rcx)
     inc %rcx
     jnz 1b
@@ -203,7 +203,7 @@ _naiveSseMemcpyAligned:
     add %rdx, %rsi
     add %rdx, %rdi
     neg %rdx
-1:  mov (%rsi, %rdx), %al
+1:  movzbl (%rsi, %rdx), %eax
     mov %al, (%rdi, %rdx)
     inc %rdx
     jnz 1b
@@ -225,7 +225,7 @@ _naiveSseMemcpyUnrolledBody:
     add %rcx, %rsi
     add %rcx, %rdi
     neg %rcx
-1:  mov (%rsi, %rcx), %al
+1:  movzbl (%rsi, %rcx), %eax
     mov %al, (%rdi, %rcx)
     inc %rcx
     jnz 1b
@@ -249,7 +249,7 @@ _naiveSseMemcpyUnrolledBody:
     add %rdx, %rsi
     add %rdx, %rdi
     neg %rdx
-1:  mov (%rsi, %rdx), %al
+1:  movzbl (%rsi, %rdx), %eax
     mov %al, (%rdi, %rdx)
     inc %rdx
     jnz 1b
@@ -271,12 +271,12 @@ _naiveSseMemcpyUnrolled:
     xor %r8, %r8
     test $1, %cl
     jz 1f
-    mov (%rsi), %al
+    movzbl (%rsi), %eax
     mov %al, (%rdi)
     inc %r8
 1:  test $2, %cl
     jz 1f
-    mov (%rsi, %r8), %ax
+    movzwl (%rsi, %r8), %eax
     mov %ax, (%rdi, %r8)
     add $2, %r8
 1:  test $4, %cl
@@ -326,12 +326,12 @@ _naiveSseMemcpyUnrolled:
     add $4, %rcx
 1:  test $2, %dl
     jz 1f
-    mov (%rsi, %rcx), %ax
+    movzwl (%rsi, %rcx), %eax
     mov %ax, (%rdi, %rcx)
     add $2, %rcx
 1:  test $1, %dl
     jz 2f
-    mov (%rsi, %rcx), %al
+    movzbl (%rsi, %rcx), %eax
     mov %al, (%rdi, %rcx)
 2:  ret
 
@@ -351,12 +351,12 @@ _naiveSseMemcpyUnrolledNT:
     xor %r8, %r8
     test $1, %cl
     jz 1f
-    mov (%rsi), %al
+    movzbl (%rsi), %eax
     mov %al, (%rdi)
     inc %r8
 1:  test $2, %cl
     jz 1f
-    mov (%rsi, %r8), %ax
+    movzwl (%rsi, %r8), %eax
     mov %ax, (%rdi, %r8)
     add $2, %r8
 1:  test $4, %cl
@@ -407,12 +407,12 @@ _naiveSseMemcpyUnrolledNT:
     add $4, %rcx
 1:  test $2, %dl
     jz 1f
-    mov (%rsi, %rcx), %ax
+    movzwl (%rsi, %rcx), %eax
     mov %ax, (%rdi, %rcx)
     add $2, %rcx
 1:  test $1, %dl
     jz 2f
-    mov (%rsi, %rcx), %al
+    movzbl (%rsi, %rcx), %eax
     mov %al, (%rdi, %rcx)
 2:  ret
 
@@ -431,7 +431,7 @@ _naiveAvxMemcpy:
     add %rcx, %rsi
     add %rcx, %rdi
     neg %rcx
-1:  mov (%rsi, %rcx), %al
+1:  movzbl (%rsi, %rcx), %eax
     mov %al, (%rdi, %rcx)
     inc %rcx
     jnz 1b
@@ -454,7 +454,7 @@ _naiveAvxMemcpy:
     add %rdx, %rsi
     add %rdx, %rdi
     neg %rdx
-1:  mov (%rsi, %rdx), %al
+1:  movzbl (%rsi, %rdx), %eax
     mov %al, (%rdi, %rdx)
     inc %rdx
     jnz 1b
@@ -476,12 +476,12 @@ _naiveAvxMemcpyUnrolled:
     xor %r8, %r8
     test $1, %cl
     jz 1f
-    mov (%rsi), %al
+    movzbl (%rsi), %eax
     mov %al, (%rdi)
     inc %r8
 1:  test $2, %cl
     jz 1f
-    mov (%rsi, %r8), %ax
+    movzwl (%rsi, %r8), %eax
     mov %ax, (%rdi, %r8)
     add $2, %r8
 1:  test $4, %cl
@@ -553,12 +553,114 @@ _naiveAvxMemcpyUnrolled:
     add $4, %rcx
 1:  test $2, %dl
     jz 1f
-    mov (%rsi, %rcx), %ax
+    movzwl (%rsi, %rcx), %eax
     mov %ax, (%rdi, %rcx)
     add $2, %rcx
 1:  test $1, %dl
     jz 2f
-    mov (%rsi, %rcx), %al
+    movzbl (%rsi, %rcx), %eax
+    mov %al, (%rdi, %rcx)
+2:  ret
+
+/* The basic unrolled AVX memcpy: aligns dst with unrolled copies, does 64-byte copies per loop, then unrolled
+   copies the rest. */
+.global _naiveAvxMemcpyUnrolledV2
+_naiveAvxMemcpyUnrolledV2:
+    cmp $64, %rdx
+    jb 3f
+    /* rcx = size until the start of the 32-byte aligned dst part */
+    mov %rdi, %rcx
+    neg %rcx
+    and $31, %rcx
+    jz 2f
+    sub %rcx, %rdx
+    /* Copy 1, 2, 4, 8, 16 bytes depending on set bits in rcx */
+    xor %r8, %r8
+    test $1, %cl
+    jz 1f
+    movzbl (%rsi), %eax
+    mov %al, (%rdi)
+    inc %r8
+1:  test $2, %cl
+    jz 1f
+    movzwl (%rsi, %r8), %eax
+    mov %ax, (%rdi, %r8)
+    add $2, %r8
+1:  test $4, %cl
+    jz 1f
+    mov (%rsi, %r8), %eax
+    mov %eax, (%rdi, %r8)
+    add $4, %r8
+1:  test $8, %cl
+    jz 1f
+    mov (%rsi, %r8), %rax
+    mov %rax, (%rdi, %r8)
+    add $8, %r8
+1:  test $16, %cl
+    jz 1f
+    movups (%rsi, %r8), %xmm0
+    movaps %xmm0, (%rdi, %r8)
+    add $16, %r8
+1:  add %r8, %rsi
+    add %r8, %rdi
+2:  mov %rdx, %rcx
+    and $-64, %rcx
+    jz 3f
+    /* Do 64-byte iters, rsi = src end, rdi = dst end */
+    and $63, %rdx
+    add %rcx, %rsi
+    add %rcx, %rdi
+    neg %rcx
+    /* rdi is aligned, check if rsi is aligned (both movs will be aligned if it is) */
+    test $63, %rsi
+    jnz 2f
+1:  vmovaps (%rsi, %rcx), %ymm0
+    vmovaps 32(%rsi, %rcx), %ymm1
+    vmovaps %ymm0, (%rdi, %rcx)
+    vmovaps %ymm1, 32(%rdi, %rcx)
+    add $64, %rcx
+    jnz 1b
+    jmp 3f
+2:  vmovups (%rsi, %rcx), %ymm0
+    vmovups 32(%rsi, %rcx), %ymm1
+    vmovaps %ymm0, (%rdi, %rcx)
+    vmovaps %ymm1, 32(%rdi, %rcx)
+    add $64, %rcx
+    jnz 2b
+    /* Copy 32, 16, 8, 4, 2, 1 bytes depending on set bits in rdx */
+3:  vzeroupper
+    test %rdx, %rdx
+    jz 2f
+    xor %rcx, %rcx
+    test $32, %rdx
+    jz 1f
+    vmovups (%rsi), %ymm0
+    vmovups %ymm0, (%rdi)
+    add $32, %rcx
+    vzeroupper
+1:  test $16, %dl
+    jz 1f
+    movups (%rsi, %rcx), %xmm0
+    movups %xmm0, (%rdi, %rcx)
+    add $16, %rcx
+1:  test $8, %dl
+    jz 1f
+    mov (%rsi, %rcx), %rax
+    mov %rax, (%rdi, %rcx)
+    add $8, %rcx
+1:  test $4, %dl
+    jz 1f
+    mov (%rsi, %rcx), %eax
+    mov %eax, (%rdi, %rcx)
+    add $4, %rcx
+1:  test $2, %dl
+    jz 1f
+    movzwl (%rsi, %rcx), %eax
+    mov %ax, (%rdi, %rcx)
+    add $2, %rcx
+1:  test $1, %dl
+    jz 2f
+    movzbl (%rsi, %rcx), %eax
     mov %al, (%rdi, %rcx)
 2:  ret
 
