@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -19,27 +20,23 @@ void libcMemcpy(char* dst, const char* src, size_t size)
     memcpy(dst, src, size);
 }
 
-extern "C" {
-
-bool isAvxSupported();
-void naiveMemcpy(char* dst, const char* src, size_t size);
-void naiveMemcpyAligned(char* dst, const char* src, size_t size);
-void naiveMemcpyUnrolled(char* dst, const char* src, size_t size);
-void naiveSseMemcpy(char* dst, const char* src, size_t size);
-void naiveSseMemcpyAligned(char* dst, const char* src, size_t size);
-void naiveSseMemcpyUnrolledBody(char* dst, const char* src, size_t size);
-void naiveSseMemcpyUnrolled(char* dst, const char* src, size_t size);
-void naiveSseMemcpyUnrolledV2(char* dst, const char* src, size_t size);
-void naiveSseMemcpyUnrolledNT(char* dst, const char* src, size_t size);
-void naiveAvxMemcpy(char* dst, const char* src, size_t size);
-void naiveAvxMemcpyUnrolled(char* dst, const char* src, size_t size);
-void naiveAvxMemcpyUnrolledV2(char* dst, const char* src, size_t size);
-void repMovsbMemcpy(char* dst, const char* src, size_t size);
-void repMovsqMemcpy(char* dst, const char* src, size_t size);
-void memcpyFromMusl(char* dst, const char* src, size_t size);
-void folly_memcpy(char* dst, const char* src, size_t size);
-
-}
+bool isAvxSupported() asm("_isAvxSupported");
+void naiveMemcpy(char* dst, const char* src, size_t size) asm("_naiveMemcpy");
+void naiveMemcpyAligned(char* dst, const char* src, size_t size) asm("_naiveMemcpyAligned");
+void naiveMemcpyUnrolled(char* dst, const char* src, size_t size) asm("_naiveMemcpyUnrolled");
+void naiveSseMemcpy(char* dst, const char* src, size_t size) asm("_naiveSseMemcpy");
+void naiveSseMemcpyAligned(char* dst, const char* src, size_t size) asm("_naiveSseMemcpyAligned");
+void naiveSseMemcpyUnrolledBody(char* dst, const char* src, size_t size) asm("_naiveSseMemcpyUnrolledBody");
+void naiveSseMemcpyUnrolled(char* dst, const char* src, size_t size) asm("_naiveSseMemcpyUnrolled");
+void naiveSseMemcpyUnrolledV2(char* dst, const char* src, size_t size) asm("_naiveSseMemcpyUnrolledV2");
+void naiveSseMemcpyUnrolledNT(char* dst, const char* src, size_t size) asm("_naiveSseMemcpyUnrolledNT");
+void naiveAvxMemcpy(char* dst, const char* src, size_t size) asm("_naiveAvxMemcpy");
+void naiveAvxMemcpyUnrolled(char* dst, const char* src, size_t size) asm("_naiveAvxMemcpyUnrolled");
+void naiveAvxMemcpyUnrolledV2(char* dst, const char* src, size_t size) asm("_naiveAvxMemcpyUnrolledV2");
+void repMovsbMemcpy(char* dst, const char* src, size_t size) asm("_repMovsbMemcpy");
+void repMovsqMemcpy(char* dst, const char* src, size_t size) asm("_repMovsqMemcpy");
+void memcpyFromMusl(char* dst, const char* src, size_t size) asm("_memcpyFromMusl");
+void folly_memcpy(char* dst, const char* src, size_t size) asm("_folly_memcpy");
 
 #define DECLARE_MEMCPY_FUNC(memcpyFunc, avxRequired) \
     { memcpyFunc, #memcpyFunc, avxRequired }
