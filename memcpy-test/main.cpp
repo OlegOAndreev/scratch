@@ -36,7 +36,6 @@ void naiveAvxMemcpyUnrolledV2(char* dst, const char* src, size_t size);
 void repMovsbMemcpy(char* dst, const char* src, size_t size);
 void repMovsqMemcpy(char* dst, const char* src, size_t size);
 void memcpyFromMusl(char* dst, const char* src, size_t size);
-void dispatchingMemcpyHsw(char* dst, const char* src, size_t size);
 void folly_memcpy(char* dst, const char* src, size_t size);
 
 }
@@ -49,22 +48,21 @@ struct {
     const char* name;
     bool avxRequired;
 } memcpyFuncs[] = {
-//    DECLARE_MEMCPY_FUNC(dispatchingMemcpyHsw, true),
     DECLARE_MEMCPY_FUNC(libcMemcpy, false),
-//    DECLARE_MEMCPY_FUNC(naiveMemcpy, false),
-//    DECLARE_MEMCPY_FUNC(naiveMemcpyAligned, false),
-//    DECLARE_MEMCPY_FUNC(naiveMemcpyUnrolled, false),
-//    DECLARE_MEMCPY_FUNC(naiveSseMemcpy, false),
-//    DECLARE_MEMCPY_FUNC(naiveSseMemcpyAligned, false),
-//    DECLARE_MEMCPY_FUNC(naiveSseMemcpyUnrolledBody, false),
-//    DECLARE_MEMCPY_FUNC(naiveSseMemcpyUnrolled, false),
-//    DECLARE_MEMCPY_FUNC(naiveSseMemcpyUnrolledNT, false),
-//    DECLARE_MEMCPY_FUNC(naiveAvxMemcpy, true),
+    DECLARE_MEMCPY_FUNC(naiveMemcpy, false),
+    DECLARE_MEMCPY_FUNC(naiveMemcpyAligned, false),
+    DECLARE_MEMCPY_FUNC(naiveMemcpyUnrolled, false),
+    DECLARE_MEMCPY_FUNC(naiveSseMemcpy, false),
+    DECLARE_MEMCPY_FUNC(naiveSseMemcpyAligned, false),
+    DECLARE_MEMCPY_FUNC(naiveSseMemcpyUnrolledBody, false),
+    DECLARE_MEMCPY_FUNC(naiveSseMemcpyUnrolled, false),
+    DECLARE_MEMCPY_FUNC(naiveSseMemcpyUnrolledNT, false),
+    DECLARE_MEMCPY_FUNC(naiveAvxMemcpy, true),
     DECLARE_MEMCPY_FUNC(naiveAvxMemcpyUnrolled, true),
     DECLARE_MEMCPY_FUNC(naiveAvxMemcpyUnrolledV2, true),
-//    DECLARE_MEMCPY_FUNC(repMovsbMemcpy, false),
-//    DECLARE_MEMCPY_FUNC(repMovsqMemcpy, false),
-//    DECLARE_MEMCPY_FUNC(memcpyFromMusl, false),
+    DECLARE_MEMCPY_FUNC(repMovsbMemcpy, false),
+    DECLARE_MEMCPY_FUNC(repMovsqMemcpy, false),
+    DECLARE_MEMCPY_FUNC(memcpyFromMusl, false),
     DECLARE_MEMCPY_FUNC(folly_memcpy, true),
 };
 
