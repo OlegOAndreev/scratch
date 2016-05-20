@@ -349,6 +349,107 @@ _naiveSseMemcpyUnrolled:
     mov %al, (%rdi, %rcx)
 2:  ret
 
+
+/* The basic unrolled SSE memcpy: aligns dst with unaligned (overlapping) copies, does 32-byte copies per loop,
+   then does unaligned copies of the rest. Dramatically reduces the number of branches compared to
+   naiveSseMemcpyUnrolled. */
+.p2align 4
+.global _naiveSseMemcpyUnrolledV2
+_naiveSseMemcpyUnrolledV2:
+    cmp $32, %rdx
+    ja 3f
+
+    /* Copy [17-32], [9-16], [5-8] via two pairs of movs, the 1-4 bytes via single movs with branches. */
+1:  cmp $16, %dl
+    jbe 1f
+    /* rdx = [17-32] */
+    movups (%rsi), %xmm0
+    movups -16(%rsi, %rdx), %xmm1
+    movups %xmm0, (%rdi)
+    movups %xmm1, -16(%rdi, %rdx)
+    ret
+
+1:  cmp $8, %dl
+    jbe 1f
+    /* rdx = [9-16] */
+    mov (%rsi), %rax
+    mov -8(%rsi, %rdx), %rcx
+    mov %rax, (%rdi)
+    mov %rcx, -8(%rdi, %rdx)
+    ret
+
+1:  cmp $4, %dl
+    je 1f
+    jb 2f
+    /* rdx = [5-8] */
+    mov (%rsi), %eax
+    mov -4(%rsi, %rdx), %ecx
+    mov %eax, (%rdi)
+    mov %ecx, -4(%rdi, %rdx)
+    ret
+
+1:  test $4, %dl
+    jz 1f
+    mov (%rsi), %eax
+    mov %eax, (%rdi)
+    ret
+
+2:  test $2, %dl
+    jz 1f
+    movzwl -2(%rsi, %rdx), %eax
+    mov %ax, -2(%rdi, %rdx)
+1:  test $1, %dl
+    jz 1f
+    movzbl (%rsi), %eax
+    mov %al, (%rdi)
+1:  ret
+
+    /* Align the dst on 16-byte */
+3:  mov %rdi, %rcx
+    neg %rcx
+    and $15, %rcx
+    /* rcx = size until the start of the 16-byte aligned dst part */
+    jz 1f
+
+    sub %rcx, %rdx
+    /* We have at least 32 bytes, copy the first 16 one (including rcx bytes). */
+    movups (%rsi), %xmm0
+    movups %xmm0, (%rdi)
+    add %rcx, %rsi
+    add %rcx, %rdi
+
+1:  mov %rdx, %rcx
+    and $-32, %rcx
+    jz 3f
+    /* Do 32-byte iters, rsi = end of 32-aligned src, rdi = end of 64-aligned dst, rcx = negated 32-aligned
+       number of bytes, rdx = rest of bytes to copy. */
+    and $31, %rdx
+    add %rcx, %rsi
+    add %rcx, %rdi
+    neg %rcx
+
+    /* Main loop */
+    .p2align 4
+1:  movups (%rsi, %rcx), %xmm0
+    movups 16(%rsi, %rcx), %xmm1
+    movaps %xmm0, (%rdi, %rcx)
+    movaps %xmm1, 16(%rdi, %rcx)
+    add $32, %rcx
+    jnz 1b
+
+    /* Copy the rest rdx [0-31] bytes. We have at least 32 bytes, copy in at most two movs. */
+3:  test %rdx, %rdx
+    jz 1f
+
+    movups -16(%rsi, %rdx), %xmm0
+    movups %xmm0, -16(%rdi, %rdx)
+    cmp $16, %rdx
+    jbe 1f
+
+    movups -32(%rsi, %rdx), %xmm0
+    movups %xmm0, -32(%rdi, %rdx)
+1:  ret
+
 /* The basic unrolled SSE memcpy with non-temporal moves: aligns dst with unrolled copies, does 32-byte copies per loop,
    then unrolled copies the rest. */
 .p2align 4

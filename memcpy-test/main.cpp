@@ -29,6 +29,7 @@ void naiveSseMemcpy(char* dst, const char* src, size_t size);
 void naiveSseMemcpyAligned(char* dst, const char* src, size_t size);
 void naiveSseMemcpyUnrolledBody(char* dst, const char* src, size_t size);
 void naiveSseMemcpyUnrolled(char* dst, const char* src, size_t size);
+void naiveSseMemcpyUnrolledV2(char* dst, const char* src, size_t size);
 void naiveSseMemcpyUnrolledNT(char* dst, const char* src, size_t size);
 void naiveAvxMemcpy(char* dst, const char* src, size_t size);
 void naiveAvxMemcpyUnrolled(char* dst, const char* src, size_t size);
@@ -56,6 +57,7 @@ struct {
     DECLARE_MEMCPY_FUNC(naiveSseMemcpyAligned, false),
     DECLARE_MEMCPY_FUNC(naiveSseMemcpyUnrolledBody, false),
     DECLARE_MEMCPY_FUNC(naiveSseMemcpyUnrolled, false),
+    DECLARE_MEMCPY_FUNC(naiveSseMemcpyUnrolledV2, false),
     DECLARE_MEMCPY_FUNC(naiveSseMemcpyUnrolledNT, false),
     DECLARE_MEMCPY_FUNC(naiveAvxMemcpy, true),
     DECLARE_MEMCPY_FUNC(naiveAvxMemcpyUnrolled, true),
