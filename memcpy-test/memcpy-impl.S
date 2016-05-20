@@ -4,12 +4,13 @@
 .global _isAvxSupported
 _isAvxSupported:
     push %rbx
-    mov $1, %eax
+    mov $1, %rax
     cpuid
     /* Test if osxsave and avx bits are set */
+    xor %rax, %rax
     and $0x18000000, %ecx
     cmp $0x18000000, %ecx
-    sete %ah
+    sete %al
     pop %rbx
     ret
 
