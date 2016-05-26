@@ -1,3 +1,4 @@
+#include <functional>
 #include <memory>
 #include <stdio.h>
 #include <stdlib.h>
@@ -136,10 +137,32 @@ OpInterface* makeOpInterfaceImpl(Op op)
     }
 }
 
+using FunctionImpl = std::function<int(int)>;
+
+FunctionImpl makeFunctionImpl(Op op)
+{
+    switch (op) {
+    case Op::OP_1:
+        return FunctionImpl([] (int value) { return processOp(value, Op::OP_1); });
+    case Op::OP_2:
+        return FunctionImpl([] (int value) { return processOp(value, Op::OP_2); });
+    case Op::OP_3:
+        return FunctionImpl([] (int value) { return processOp(value, Op::OP_3); });
+    case Op::OP_4:
+        return FunctionImpl([] (int value) { return processOp(value, Op::OP_4); });
+    case Op::OP_5:
+        return FunctionImpl([] (int value) { return processOp(value, Op::OP_5); });
+    case Op::OP_6:
+        return FunctionImpl([] (int value) { return processOp(value, Op::OP_6); });
+    default:
+        return FunctionImpl();
+    }
+}
+
 int main(int argc, char** argv)
 {
     srand(0);
-    
+
     size_t dataSize;
     if (argc == 1) {
         dataSize = 10000000;
@@ -154,11 +177,13 @@ int main(int argc, char** argv)
     std::vector<int> data;
     std::vector<Op> ops;
     std::vector<std::unique_ptr<OpInterface>> impls;
+    std::vector<FunctionImpl> functionImpls;
     for (size_t i = 0; i < dataSize; i++) {
         data.push_back(rand() % 100000);
         Op op = (Op)(rand() % (int)Op::OP_MAX);
         ops.push_back(op);
         impls.emplace_back(makeOpInterfaceImpl(op));
+        functionImpls.emplace_back(makeFunctionImpl(op));
     }
 
     int64_t timeStart = getTimeCounter();
@@ -175,18 +200,24 @@ int main(int argc, char** argv)
         switchcode += processOp(data[i], ops[i]);
     }
     printf("Run %d switches in %d msec\n", (int)dataSize, (int)((getTimeCounter() - timeStart) * 1000 / getTimeFreq()));
-    
+
     timeStart = getTimeCounter();
     int vcode = 0;
     for (size_t i = 0; i < dataSize; i++) {
         vcode += impls[i]->process(data[i]);
     }
     printf("Run %d vcalls in %d msec\n", (int)dataSize, (int)((getTimeCounter() - timeStart) * 1000 / getTimeFreq()));
-    
-    if (vcode != switchcode) {
+
+    timeStart = getTimeCounter();
+    int functioncode = 0;
+    for (size_t i = 0; i < dataSize; i++) {
+        functioncode += functionImpls[i](data[i]);
+    }
+    printf("Run %d std::functions in %d msec\n", (int)dataSize, (int)((getTimeCounter() - timeStart) * 1000 / getTimeFreq()));
+
+    if (vcode != switchcode || vcode != functioncode) {
         printf("ERROR, RESULTS UNEQUAL\n");
     }
-    
 
-    return simplecode + switchcode + vcode;
+    return simplecode + switchcode + vcode + functioncode;
 }
