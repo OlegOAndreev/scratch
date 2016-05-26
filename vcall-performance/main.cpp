@@ -263,26 +263,51 @@ int main(int argc, char** argv)
 
     printf("Running on %d elements (repeating %d times)\n", (int)dataSize, kRepeatCount);
     std::vector<unsigned> data;
-    // We do both benchmarks with one implementation/op and varying implementations/ops.
-    std::vector<Op> ops;
-    std::vector<Op> sameOps;
-    std::vector<std::unique_ptr<OpInterface>> impls;
-    std::vector<std::unique_ptr<OpInterface>> sameImpls;
-    std::vector<FunctionImpl> functionImpls;
-    std::vector<FunctionImpl> sameFunctionImpls;
-    std::vector<std::unique_ptr<FunctionImpl>> functionImplPtrs;
-    std::vector<std::unique_ptr<FunctionImpl>> sameFunctionImplPtrs;
+    data.reserve(dataSize);
     for (size_t i = 0; i < dataSize; i++) {
         data.push_back(rand() % 100000);
+    }
+    // We do both benchmarks with one implementation/op and varying implementations/ops.
+    std::vector<Op> ops;
+    ops.reserve(dataSize);
+    for (size_t i = 0; i < dataSize; i++) {
         Op op = (Op)(rand() % (unsigned)Op::OP_MAX);
         ops.push_back(op);
+    }
+    std::vector<Op> sameOps;
+    sameOps.reserve(dataSize);
+    for (size_t i = 0; i < dataSize; i++) {
         sameOps.push_back(Op::OP_6);
-        impls.emplace_back(makeOpInterfaceImpl(op));
-        sameImpls.emplace_back(makeOpInterfaceImpl(Op::OP_6));
-        functionImpls.emplace_back(makeFunctionImpl(op));
-        sameFunctionImpls.emplace_back(makeFunctionImpl(Op::OP_6));
-        functionImplPtrs.emplace_back(new FunctionImpl(makeFunctionImpl(op)));
-        sameFunctionImplPtrs.emplace_back(new FunctionImpl(makeFunctionImpl(Op::OP_6)));
+    }
+    std::vector<std::unique_ptr<OpInterface>> impls;
+    impls.reserve(dataSize);
+    for (size_t i = 0; i < dataSize; i++) {
+        impls.emplace_back(makeOpInterfaceImpl(ops[i]));
+    }
+    std::vector<std::unique_ptr<OpInterface>> sameImpls;
+    sameImpls.reserve(dataSize);
+    for (size_t i = 0; i < dataSize; i++) {
+        sameImpls.emplace_back(makeOpInterfaceImpl(sameOps[i]));
+    }
+    std::vector<FunctionImpl> functionImpls;
+    functionImpls.reserve(dataSize);
+    for (size_t i = 0; i < dataSize; i++) {
+        functionImpls.emplace_back(makeFunctionImpl(ops[i]));
+    }
+    std::vector<FunctionImpl> sameFunctionImpls;
+    sameFunctionImpls.reserve(dataSize);
+    for (size_t i = 0; i < dataSize; i++) {
+        sameFunctionImpls.emplace_back(makeFunctionImpl(sameOps[i]));
+    }
+    std::vector<std::unique_ptr<FunctionImpl>> functionImplPtrs;
+    functionImplPtrs.reserve(dataSize);
+    for (size_t i = 0; i < dataSize; i++) {
+        functionImplPtrs.emplace_back(new FunctionImpl(makeFunctionImpl(ops[i])));
+    }
+    std::vector<std::unique_ptr<FunctionImpl>> sameFunctionImplPtrs;
+    sameFunctionImplPtrs.reserve(dataSize);
+    for (size_t i = 0; i < dataSize; i++) {
+        sameFunctionImplPtrs.emplace_back(new FunctionImpl(makeFunctionImpl(sameOps[i])));
     }
     printf("Finished init\n");
 
