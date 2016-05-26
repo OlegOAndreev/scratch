@@ -159,90 +159,90 @@ FunctionImpl makeFunctionImpl(Op op)
     }
 }
 
-int kRepeatCount = 50;
-
-unsigned runSimpleFor(unsigned* data, size_t dataSize)
+unsigned runSimpleFor(unsigned* data, size_t dataSize, int repeatCount)
 {
     int ret = 0;
     int64_t timeStart = getTimeCounter();
     // A very simple (vectorized) loop to make a baseline.
-    for (int i = 0; i < kRepeatCount; i++) {
+    for (int i = 0; i < repeatCount; i++) {
         for (size_t i = 0; i < dataSize; i++) {
             ret += data[i] * 7;
         }
     }
-    printf("Run %d simple iters in %d msec\n", (int)dataSize * kRepeatCount,
+    printf("Run %d simple iters in %d msec\n", (int)dataSize * repeatCount,
         (int)((getTimeCounter() - timeStart) * 1000 / getTimeFreq()));
     return ret;
 }
 
-unsigned runFor(unsigned* data, size_t dataSize, Op op)
+unsigned runFor(unsigned* data, size_t dataSize, Op op, int repeatCount)
 {
     int ret = 0;
     int64_t timeStart = getTimeCounter();
     // A very simple (vectorized) loop to make a baseline.
-    for (int i = 0; i < kRepeatCount; i++) {
+    for (int i = 0; i < repeatCount; i++) {
         for (size_t i = 0; i < dataSize; i++) {
             ret += processOp(data[i], op);
         }
     }
-    printf("Run %d iters in %d msec\n", (int)dataSize * kRepeatCount,
+    printf("Run %d iters in %d msec\n", (int)dataSize * repeatCount,
         (int)((getTimeCounter() - timeStart) * 1000 / getTimeFreq()));
     return ret;
 }
 
-unsigned runSwitchFor(unsigned* data, size_t dataSize, Op* ops, bool same)
+unsigned runSwitchFor(unsigned* data, size_t dataSize, Op* ops, int repeatCount, bool same)
 {
     unsigned ret = 0;
     int64_t timeStart = getTimeCounter();
-    for (int i = 0; i < kRepeatCount; i++) {
+    for (int i = 0; i < repeatCount; i++) {
         for (size_t i = 0; i < dataSize; i++) {
             ret += processOp(data[i], ops[i]);
         }
     }
-    printf("Run %d %s switches in %d msec\n", (int)dataSize * kRepeatCount, same ? "same" : "varying",
+    printf("Run %d %s switches in %d msec\n", (int)dataSize * repeatCount, same ? "same" : "varying",
         (int)((getTimeCounter() - timeStart) * 1000 / getTimeFreq()));
     return ret;
 }
 
-unsigned runInterfaceImplFor(unsigned* data, size_t dataSize, std::unique_ptr<OpInterface>* impls, bool same)
+unsigned runInterfaceImplFor(unsigned* data, size_t dataSize, std::unique_ptr<OpInterface>* impls,
+        int repeatCount, bool same)
 {
     unsigned ret = 0;
     int64_t timeStart = getTimeCounter();
-    for (int i = 0; i < kRepeatCount; i++) {
+    for (int i = 0; i < repeatCount; i++) {
         for (size_t i = 0; i < dataSize; i++) {
             ret += impls[i]->process(data[i]);
         }
     }
-    printf("Run %d %s vcalls in %d msec\n", (int)dataSize * kRepeatCount, same ? "same" : "varying",
+    printf("Run %d %s vcalls in %d msec\n", (int)dataSize * repeatCount, same ? "same" : "varying",
         (int)((getTimeCounter() - timeStart) * 1000 / getTimeFreq()));
     return ret;
 }
 
-unsigned runFunctionFor(unsigned* data, size_t dataSize, FunctionImpl* functionImpls, bool same)
+unsigned runFunctionFor(unsigned* data, size_t dataSize, FunctionImpl* functionImpls, int repeatCount, bool same)
 {
     unsigned ret = 0;
     int64_t timeStart = getTimeCounter();
-    for (int i = 0; i < kRepeatCount; i++) {
+    for (int i = 0; i < repeatCount; i++) {
         for (size_t i = 0; i < dataSize; i++) {
             ret += functionImpls[i](data[i]);
         }
     }
-    printf("Run %d %s std::functions in %d msec\n", (int)dataSize * kRepeatCount, same ? "same" : "varying",
+    printf("Run %d %s std::functions in %d msec\n", (int)dataSize * repeatCount, same ? "same" : "varying",
         (int)((getTimeCounter() - timeStart) * 1000 / getTimeFreq()));
     return ret;
 }
 
-unsigned runFunctionPtrFor(unsigned* data, size_t dataSize, std::unique_ptr<FunctionImpl>* functionImpls, bool same)
+unsigned runFunctionPtrFor(unsigned* data, size_t dataSize, std::unique_ptr<FunctionImpl>* functionImpls,
+        int repeatCount, bool same)
 {
     unsigned ret = 0;
     int64_t timeStart = getTimeCounter();
-    for (int i = 0; i < kRepeatCount; i++) {
+    for (int i = 0; i < repeatCount; i++) {
         for (size_t i = 0; i < dataSize; i++) {
             ret += (*functionImpls[i])(data[i]);
         }
     }
-    printf("Run %d %s std::function ptrs in %d msec\n", (int)dataSize * kRepeatCount, same ? "same" : "varying",
+    printf("Run %d %s std::function ptrs in %d msec\n", (int)dataSize * repeatCount, same ? "same" : "varying",
         (int)((getTimeCounter() - timeStart) * 1000 / getTimeFreq()));
     return ret;
 }
@@ -252,16 +252,22 @@ int main(int argc, char** argv)
     srand(0);
 
     size_t dataSize;
+    int repeatCount;
     if (argc == 1) {
-        dataSize = 10000000;
+        dataSize = 1000000;
+        repeatCount = 50;
     } else if (argc == 2) {
         dataSize = atoi(argv[1]);
+        repeatCount = 50;
+    } else if (argc == 3) {
+        dataSize = atoi(argv[1]);
+        repeatCount = atoi(argv[2]);
     } else {
-        printf("Usage: %s [data size]\n", argv[0]);
+        printf("Usage: %s [data size [repeat count]]\n", argv[0]);
         return 1;
     }
 
-    printf("Running on %d elements (repeating %d times)\n", (int)dataSize, kRepeatCount);
+    printf("Running on %d elements (repeating %d times)\n", (int)dataSize, repeatCount);
     std::vector<unsigned> data;
     data.reserve(dataSize);
     for (size_t i = 0; i < dataSize; i++) {
@@ -311,21 +317,21 @@ int main(int argc, char** argv)
     }
     printf("Finished init\n");
 
-    unsigned simpleResult = runSimpleFor(data.data(), dataSize);
-    unsigned forResult = runFor(data.data(), dataSize, Op::OP_6);
-    unsigned switchResult = runSwitchFor(data.data(), dataSize, sameOps.data(), true);
-    unsigned interfaceResult = runInterfaceImplFor(data.data(), dataSize, sameImpls.data(), true);
-    unsigned functionResult = runFunctionFor(data.data(), dataSize, sameFunctionImpls.data(), true);
-    unsigned functionPtrResult = runFunctionPtrFor(data.data(), dataSize, sameFunctionImplPtrs.data(), true);
+    unsigned simpleResult = runSimpleFor(data.data(), dataSize, repeatCount);
+    unsigned forResult = runFor(data.data(), dataSize, Op::OP_6, repeatCount);
+    unsigned switchResult = runSwitchFor(data.data(), dataSize, sameOps.data(), repeatCount, true);
+    unsigned interfaceResult = runInterfaceImplFor(data.data(), dataSize, sameImpls.data(), repeatCount, true);
+    unsigned functionResult = runFunctionFor(data.data(), dataSize, sameFunctionImpls.data(), repeatCount, true);
+    unsigned functionPtrResult = runFunctionPtrFor(data.data(), dataSize, sameFunctionImplPtrs.data(), repeatCount, true);
     if (simpleResult != forResult || simpleResult != switchResult || simpleResult != interfaceResult
         || simpleResult != functionResult || simpleResult != functionPtrResult) {
         printf("ERROR: Different results\n");
     }
 
-    switchResult = runSwitchFor(data.data(), dataSize, ops.data(), false);
-    interfaceResult = runInterfaceImplFor(data.data(), dataSize, impls.data(), false);
-    functionResult = runFunctionFor(data.data(), dataSize, functionImpls.data(), false);
-    functionPtrResult = runFunctionPtrFor(data.data(), dataSize, functionImplPtrs.data(), false);
+    switchResult = runSwitchFor(data.data(), dataSize, ops.data(), repeatCount, false);
+    interfaceResult = runInterfaceImplFor(data.data(), dataSize, impls.data(), repeatCount, false);
+    functionResult = runFunctionFor(data.data(), dataSize, functionImpls.data(), repeatCount, false);
+    functionPtrResult = runFunctionPtrFor(data.data(), dataSize, functionImplPtrs.data(), repeatCount, false);
     if (switchResult != interfaceResult || switchResult != functionResult || switchResult != functionPtrResult) {
         printf("ERROR: Different results\n");
     }
