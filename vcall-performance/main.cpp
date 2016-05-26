@@ -44,7 +44,7 @@ enum class Op
     OP_MAX
 };
 
-int processOp(int value, Op op)
+unsigned processOp(unsigned value, Op op)
 {
     switch (op) {
     case Op::OP_1:
@@ -66,12 +66,12 @@ int processOp(int value, Op op)
 
 struct OpInterface
 {
-    virtual int process(int value) const = 0;
+    virtual unsigned process(unsigned value) const = 0;
 };
 
 struct OpInterfaceImpl1 : public OpInterface
 {
-    int process(int value) const override
+    unsigned process(unsigned value) const override
     {
         return value * 2;
     }
@@ -79,7 +79,7 @@ struct OpInterfaceImpl1 : public OpInterface
 
 struct OpInterfaceImpl2 : public OpInterface
 {
-    int process(int value) const override
+    unsigned process(unsigned value) const override
     {
         return value * 3;
     }
@@ -87,7 +87,7 @@ struct OpInterfaceImpl2 : public OpInterface
 
 struct OpInterfaceImpl3 : public OpInterface
 {
-    int process(int value) const override
+    unsigned process(unsigned value) const override
     {
         return value / 4;
     }
@@ -95,7 +95,7 @@ struct OpInterfaceImpl3 : public OpInterface
 
 struct OpInterfaceImpl4 : public OpInterface
 {
-    int process(int value) const override
+    unsigned process(unsigned value) const override
     {
         return value * 5;
     }
@@ -103,7 +103,7 @@ struct OpInterfaceImpl4 : public OpInterface
 
 struct OpInterfaceImpl5 : public OpInterface
 {
-    int process(int value) const override
+    unsigned process(unsigned value) const override
     {
         return value * 6;
     }
@@ -111,7 +111,7 @@ struct OpInterfaceImpl5 : public OpInterface
 
 struct OpInterfaceImpl6 : public OpInterface
 {
-    int process(int value) const override
+    unsigned process(unsigned value) const override
     {
         return value * 7;
     }
@@ -137,7 +137,7 @@ OpInterface* makeOpInterfaceImpl(Op op)
     }
 }
 
-using FunctionImpl = std::function<int(int)>;
+using FunctionImpl = std::function<unsigned(unsigned)>;
 
 FunctionImpl makeFunctionImpl(Op op)
 {
@@ -159,6 +159,94 @@ FunctionImpl makeFunctionImpl(Op op)
     }
 }
 
+int kRepeatCount = 50;
+
+unsigned runSimpleFor(unsigned* data, size_t dataSize)
+{
+    int ret = 0;
+    int64_t timeStart = getTimeCounter();
+    // A very simple (vectorized) loop to make a baseline.
+    for (int i = 0; i < kRepeatCount; i++) {
+        for (size_t i = 0; i < dataSize; i++) {
+            ret += data[i] * 7;
+        }
+    }
+    printf("Run %d simple iters in %d msec\n", (int)dataSize * kRepeatCount,
+        (int)((getTimeCounter() - timeStart) * 1000 / getTimeFreq()));
+    return ret;
+}
+
+unsigned runFor(unsigned* data, size_t dataSize, Op op)
+{
+    int ret = 0;
+    int64_t timeStart = getTimeCounter();
+    // A very simple (vectorized) loop to make a baseline.
+    for (int i = 0; i < kRepeatCount; i++) {
+        for (size_t i = 0; i < dataSize; i++) {
+            ret += processOp(data[i], op);
+        }
+    }
+    printf("Run %d iters in %d msec\n", (int)dataSize * kRepeatCount,
+        (int)((getTimeCounter() - timeStart) * 1000 / getTimeFreq()));
+    return ret;
+}
+
+unsigned runSwitchFor(unsigned* data, size_t dataSize, Op* ops, bool same)
+{
+    unsigned ret = 0;
+    int64_t timeStart = getTimeCounter();
+    for (int i = 0; i < kRepeatCount; i++) {
+        for (size_t i = 0; i < dataSize; i++) {
+            ret += processOp(data[i], ops[i]);
+        }
+    }
+    printf("Run %d %s switches in %d msec\n", (int)dataSize * kRepeatCount, same ? "same" : "varying",
+        (int)((getTimeCounter() - timeStart) * 1000 / getTimeFreq()));
+    return ret;
+}
+
+unsigned runInterfaceImplFor(unsigned* data, size_t dataSize, std::unique_ptr<OpInterface>* impls, bool same)
+{
+    unsigned ret = 0;
+    int64_t timeStart = getTimeCounter();
+    for (int i = 0; i < kRepeatCount; i++) {
+        for (size_t i = 0; i < dataSize; i++) {
+            ret += impls[i]->process(data[i]);
+        }
+    }
+    printf("Run %d %s vcalls in %d msec\n", (int)dataSize * kRepeatCount, same ? "same" : "varying",
+        (int)((getTimeCounter() - timeStart) * 1000 / getTimeFreq()));
+    return ret;
+}
+
+unsigned runFunctionFor(unsigned* data, size_t dataSize, FunctionImpl* functionImpls, bool same)
+{
+    unsigned ret = 0;
+    int64_t timeStart = getTimeCounter();
+    for (int i = 0; i < kRepeatCount; i++) {
+        for (size_t i = 0; i < dataSize; i++) {
+            ret += functionImpls[i](data[i]);
+        }
+    }
+    printf("Run %d %s std::functions in %d msec\n", (int)dataSize * kRepeatCount, same ? "same" : "varying",
+        (int)((getTimeCounter() - timeStart) * 1000 / getTimeFreq()));
+    return ret;
+}
+
+unsigned runFunctionPtrFor(unsigned* data, size_t dataSize, std::unique_ptr<FunctionImpl>* functionImpls, bool same)
+{
+    unsigned ret = 0;
+    int64_t timeStart = getTimeCounter();
+    for (int i = 0; i < kRepeatCount; i++) {
+        for (size_t i = 0; i < dataSize; i++) {
+            ret += (*functionImpls[i])(data[i]);
+        }
+    }
+    printf("Run %d %s std::function ptrs in %d msec\n", (int)dataSize * kRepeatCount, same ? "same" : "varying",
+        (int)((getTimeCounter() - timeStart) * 1000 / getTimeFreq()));
+    return ret;
+}
+
 int main(int argc, char** argv)
 {
     srand(0);
@@ -173,51 +261,49 @@ int main(int argc, char** argv)
         return 1;
     }
 
-    printf("Running on %d elements\n", (int)dataSize);
-    std::vector<int> data;
+    printf("Running on %d elements (repeating %d times)\n", (int)dataSize, kRepeatCount);
+    std::vector<unsigned> data;
+    // We do both benchmarks with one implementation/op and varying implementations/ops.
     std::vector<Op> ops;
+    std::vector<Op> sameOps;
     std::vector<std::unique_ptr<OpInterface>> impls;
+    std::vector<std::unique_ptr<OpInterface>> sameImpls;
     std::vector<FunctionImpl> functionImpls;
+    std::vector<FunctionImpl> sameFunctionImpls;
+    std::vector<std::unique_ptr<FunctionImpl>> functionImplPtrs;
+    std::vector<std::unique_ptr<FunctionImpl>> sameFunctionImplPtrs;
     for (size_t i = 0; i < dataSize; i++) {
         data.push_back(rand() % 100000);
-        Op op = (Op)(rand() % (int)Op::OP_MAX);
+        Op op = (Op)(rand() % (unsigned)Op::OP_MAX);
         ops.push_back(op);
+        sameOps.push_back(Op::OP_6);
         impls.emplace_back(makeOpInterfaceImpl(op));
+        sameImpls.emplace_back(makeOpInterfaceImpl(Op::OP_6));
         functionImpls.emplace_back(makeFunctionImpl(op));
+        sameFunctionImpls.emplace_back(makeFunctionImpl(Op::OP_6));
+        functionImplPtrs.emplace_back(new FunctionImpl(makeFunctionImpl(op)));
+        sameFunctionImplPtrs.emplace_back(new FunctionImpl(makeFunctionImpl(Op::OP_6)));
+    }
+    printf("Finished init\n");
+
+    unsigned simpleResult = runSimpleFor(data.data(), dataSize);
+    unsigned forResult = runFor(data.data(), dataSize, Op::OP_6);
+    unsigned switchResult = runSwitchFor(data.data(), dataSize, sameOps.data(), true);
+    unsigned interfaceResult = runInterfaceImplFor(data.data(), dataSize, sameImpls.data(), true);
+    unsigned functionResult = runFunctionFor(data.data(), dataSize, sameFunctionImpls.data(), true);
+    unsigned functionPtrResult = runFunctionPtrFor(data.data(), dataSize, sameFunctionImplPtrs.data(), true);
+    if (simpleResult != forResult || simpleResult != switchResult || simpleResult != interfaceResult
+        || simpleResult != functionResult || simpleResult != functionPtrResult) {
+        printf("ERROR: Different results\n");
     }
 
-    int64_t timeStart = getTimeCounter();
-    int simplecode = 0;
-    // A very simple (vectorized) loop to make a baseline.
-    for (size_t i = 0; i < dataSize; i++) {
-        simplecode += processOp(data[i], Op::OP_6);
-    }
-    printf("Run %d iters in %d msec\n", (int)dataSize, (int)((getTimeCounter() - timeStart) * 1000 / getTimeFreq()));
-
-    timeStart = getTimeCounter();
-    int switchcode = 0;
-    for (size_t i = 0; i < dataSize; i++) {
-        switchcode += processOp(data[i], ops[i]);
-    }
-    printf("Run %d switches in %d msec\n", (int)dataSize, (int)((getTimeCounter() - timeStart) * 1000 / getTimeFreq()));
-
-    timeStart = getTimeCounter();
-    int vcode = 0;
-    for (size_t i = 0; i < dataSize; i++) {
-        vcode += impls[i]->process(data[i]);
-    }
-    printf("Run %d vcalls in %d msec\n", (int)dataSize, (int)((getTimeCounter() - timeStart) * 1000 / getTimeFreq()));
-
-    timeStart = getTimeCounter();
-    int functioncode = 0;
-    for (size_t i = 0; i < dataSize; i++) {
-        functioncode += functionImpls[i](data[i]);
-    }
-    printf("Run %d std::functions in %d msec\n", (int)dataSize, (int)((getTimeCounter() - timeStart) * 1000 / getTimeFreq()));
-
-    if (vcode != switchcode || vcode != functioncode) {
-        printf("ERROR, RESULTS UNEQUAL\n");
+    switchResult = runSwitchFor(data.data(), dataSize, ops.data(), false);
+    interfaceResult = runInterfaceImplFor(data.data(), dataSize, impls.data(), false);
+    functionResult = runFunctionFor(data.data(), dataSize, functionImpls.data(), false);
+    functionPtrResult = runFunctionPtrFor(data.data(), dataSize, functionImplPtrs.data(), false);
+    if (switchResult != interfaceResult || switchResult != functionResult || switchResult != functionPtrResult) {
+        printf("ERROR: Different results\n");
     }
 
-    return simplecode + switchcode + vcode + functioncode;
+    return simpleResult + switchResult + interfaceResult + functionResult + functionPtrResult;
 }
