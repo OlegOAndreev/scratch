@@ -33,6 +33,7 @@ void naiveSseMemcpyUnrolledNT(char* dst, const char* src, size_t size) asm("_nai
 void naiveAvxMemcpy(char* dst, const char* src, size_t size) asm("_naiveAvxMemcpy");
 void naiveAvxMemcpyUnrolled(char* dst, const char* src, size_t size) asm("_naiveAvxMemcpyUnrolled");
 void naiveAvxMemcpyUnrolledV2(char* dst, const char* src, size_t size) asm("_naiveAvxMemcpyUnrolledV2");
+void naiveAvxMemcpyUnrolledNT(char* dst, const char* src, size_t size) asm("_naiveAvxMemcpyUnrolledNT");
 void repMovsbMemcpy(char* dst, const char* src, size_t size) asm("_repMovsbMemcpy");
 void repMovsqMemcpy(char* dst, const char* src, size_t size) asm("_repMovsqMemcpy");
 void memcpyFromMusl(char* dst, const char* src, size_t size) asm("_memcpyFromMusl");
@@ -47,22 +48,23 @@ struct {
     bool avxRequired;
 } memcpyFuncs[] = {
     DECLARE_MEMCPY_FUNC(libcMemcpy, false),
-    DECLARE_MEMCPY_FUNC(naiveMemcpy, false),
-    DECLARE_MEMCPY_FUNC(naiveMemcpyAligned, false),
-    DECLARE_MEMCPY_FUNC(naiveMemcpyUnrolled, false),
-    DECLARE_MEMCPY_FUNC(naiveSseMemcpy, false),
-    DECLARE_MEMCPY_FUNC(naiveSseMemcpyAligned, false),
-    DECLARE_MEMCPY_FUNC(naiveSseMemcpyUnrolledBody, false),
-    DECLARE_MEMCPY_FUNC(naiveSseMemcpyUnrolled, false),
+//    DECLARE_MEMCPY_FUNC(naiveMemcpy, false),
+//    DECLARE_MEMCPY_FUNC(naiveMemcpyAligned, false),
+//    DECLARE_MEMCPY_FUNC(naiveMemcpyUnrolled, false),
+//    DECLARE_MEMCPY_FUNC(naiveSseMemcpy, false),
+//    DECLARE_MEMCPY_FUNC(naiveSseMemcpyAligned, false),
+//    DECLARE_MEMCPY_FUNC(naiveSseMemcpyUnrolledBody, false),
+//    DECLARE_MEMCPY_FUNC(naiveSseMemcpyUnrolled, false),
     DECLARE_MEMCPY_FUNC(naiveSseMemcpyUnrolledV2, false),
     DECLARE_MEMCPY_FUNC(naiveSseMemcpyUnrolledNT, false),
-    DECLARE_MEMCPY_FUNC(naiveAvxMemcpy, true),
-    DECLARE_MEMCPY_FUNC(naiveAvxMemcpyUnrolled, true),
+//    DECLARE_MEMCPY_FUNC(naiveAvxMemcpy, true),
+//    DECLARE_MEMCPY_FUNC(naiveAvxMemcpyUnrolled, true),
     DECLARE_MEMCPY_FUNC(naiveAvxMemcpyUnrolledV2, true),
+    DECLARE_MEMCPY_FUNC(naiveAvxMemcpyUnrolledNT, true),
     DECLARE_MEMCPY_FUNC(repMovsbMemcpy, false),
     DECLARE_MEMCPY_FUNC(repMovsqMemcpy, false),
     DECLARE_MEMCPY_FUNC(memcpyFromMusl, false),
-    DECLARE_MEMCPY_FUNC(folly_memcpy, true),
+//    DECLARE_MEMCPY_FUNC(folly_memcpy, true),
 };
 
 

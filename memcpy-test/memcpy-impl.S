@@ -451,51 +451,83 @@ _naiveSseMemcpyUnrolledV2:
     movups %xmm0, -32(%rdi, %rdx)
 1:  ret
 
-/* The basic unrolled SSE memcpy with non-temporal moves: aligns dst with unrolled copies, does 32-byte copies per loop,
-   then unrolled copies the rest. */
+/* A version of naiveSseMemcpyUnrolledV2 with non-temporal stores. */
 .p2align 4
 .global _naiveSseMemcpyUnrolledNT
 _naiveSseMemcpyUnrolledNT:
     cmp $32, %rdx
-    jb 3f
-    /* rcx = size until the start of the 16-byte aligned dst part. */
-    mov %rdi, %rcx
-    neg %rcx
-    and $15, %rcx
-    jz 2f
-    sub %rcx, %rdx
-    /* Copy 1, 2, 4, 8 bytes depending on set bits in rcx. */
-    xor %r8, %r8
-    test $1, %cl
+    ja 3f
+
+    /* Copy [17-32], [9-16], [5-8] via two pairs of movs, the 1-4 bytes via single movs with branches. */
+1:  cmp $16, %dl
+    jbe 1f
+    /* rdx = [17-32] */
+    movups (%rsi), %xmm0
+    movups -16(%rsi, %rdx), %xmm1
+    movups %xmm0, (%rdi)
+    movups %xmm1, -16(%rdi, %rdx)
+    ret
+
+1:  cmp $8, %dl
+    jbe 1f
+    /* rdx = [9-16] */
+    mov (%rsi), %rax
+    mov -8(%rsi, %rdx), %rcx
+    mov %rax, (%rdi)
+    mov %rcx, -8(%rdi, %rdx)
+    ret
+
+1:  cmp $4, %dl
+    je 1f
+    jb 2f
+    /* rdx = [5-8] */
+    mov (%rsi), %eax
+    mov -4(%rsi, %rdx), %ecx
+    mov %eax, (%rdi)
+    mov %ecx, -4(%rdi, %rdx)
+    ret
+
+1:  test $4, %dl
+    jz 1f
+    mov (%rsi), %eax
+    mov %eax, (%rdi)
+    ret
+
+2:  test $2, %dl
+    jz 1f
+    movzwl -2(%rsi, %rdx), %eax
+    mov %ax, -2(%rdi, %rdx)
+1:  test $1, %dl
     jz 1f
     movzbl (%rsi), %eax
     mov %al, (%rdi)
-    inc %r8
-1:  test $2, %cl
+1:  ret
+
+    /* Align the dst on 16-byte */
+3:  mov %rdi, %rcx
+    neg %rcx
+    and $15, %rcx
+    /* rcx = size until the start of the 16-byte aligned dst part */
     jz 1f
-    movzwl (%rsi, %r8), %eax
-    mov %ax, (%rdi, %r8)
-    add $2, %r8
-1:  test $4, %cl
-    jz 1f
-    mov (%rsi, %r8), %eax
-    mov %eax, (%rdi, %r8)
-    add $4, %r8
-1:  test $8, %cl
-    jz 1f
-    mov (%rsi, %r8), %rax
-    mov %rax, (%rdi, %r8)
-    add $8, %r8
-1:  add %r8, %rsi
-    add %r8, %rdi
-2:  mov %rdx, %rcx
+
+    sub %rcx, %rdx
+    /* We have at least 32 bytes, copy the first 16 one (including rcx bytes). */
+    movups (%rsi), %xmm0
+    movups %xmm0, (%rdi)
+    add %rcx, %rsi
+    add %rcx, %rdi
+
+1:  mov %rdx, %rcx
     and $-32, %rcx
     jz 3f
-    /* Do 32-byte iters, rsi = src end, rdi = dst end. */
+    /* Do 32-byte iters, rsi = end of 32-aligned src, rdi = end of 64-aligned dst, rcx = negated 32-aligned
+       number of bytes, rdx = rest of bytes to copy. */
     and $31, %rdx
     add %rcx, %rsi
     add %rcx, %rdi
     neg %rcx
+
+    /* Main loop */
     .p2align 4
 1:  movups (%rsi, %rcx), %xmm0
     movups 16(%rsi, %rcx), %xmm1
@@ -504,35 +536,19 @@ _naiveSseMemcpyUnrolledNT:
     add $32, %rcx
     jnz 1b
     sfence
-    /* Copy 16, 8, 4, 2, 1 bytes depending on set bits in rdx. */
+
+    /* Copy the rest rdx [0-31] bytes. We have at least 32 bytes, copy in at most two movs. */
 3:  test %rdx, %rdx
-    jz 2f
-    xor %rcx, %rcx
-    test $16, %dl
     jz 1f
-    movups (%rsi), %xmm0
-    movups %xmm0, (%rdi)
-    add $16, %rcx
-1:  test $8, %dl
-    jz 1f
-    mov (%rsi, %rcx), %rax
-    mov %rax, (%rdi, %rcx)
-    add $8, %rcx
-1:  test $4, %dl
-    jz 1f
-    mov (%rsi, %rcx), %eax
-    mov %eax, (%rdi, %rcx)
-    add $4, %rcx
-1:  test $2, %dl
-    jz 1f
-    movzwl (%rsi, %rcx), %eax
-    mov %ax, (%rdi, %rcx)
-    add $2, %rcx
-1:  test $1, %dl
-    jz 2f
-    movzbl (%rsi, %rcx), %eax
-    mov %al, (%rdi, %rcx)
-2:  ret
+
+    movups -16(%rsi, %rdx), %xmm0
+    movups %xmm0, -16(%rdi, %rdx)
+    cmp $16, %rdx
+    jbe 1f
+
+    movups -32(%rsi, %rdx), %xmm0
+    movups %xmm0, -32(%rdi, %rdx)
+1:  ret
 
 /* The basic AVX memcpy: aligns the dst with 1-byte copies, does 32-byte copies, then 1-byte copies the rest. */
 .p2align 4
@@ -770,6 +786,116 @@ _naiveAvxMemcpyUnrolledV2:
     vmovaps %ymm1, 32(%rdi, %rcx)
     add $64, %rcx
     jnz 1b
+
+    /* Copy the rest rdx [0-63] bytes. We have at least 64 bytes, copy in at most two movs. */
+3:  test %rdx, %rdx
+    jz 1f
+
+    vmovups -32(%rsi, %rdx), %ymm0
+    vmovups %ymm0, -32(%rdi, %rdx)
+    cmp $32, %rdx
+    jbe 1f
+
+    vmovups -64(%rsi, %rdx), %ymm0
+    vmovups %ymm0, -64(%rdi, %rdx)
+1:  vzeroupper
+    ret
+
+/* A version of naiveAvxMemcpyUnrolledV2 with non-temporal stores. */
+.p2align 4
+.global _naiveAvxMemcpyUnrolledNT
+_naiveAvxMemcpyUnrolledNT:
+    cmp $64, %rdx
+    ja 3f
+
+    /* Copy [33-64], [17-32], [9-16], [5-8] via two pairs of movs, the 1-4 bytes via single movs with branches. */
+    cmp $32, %dl
+    jbe 1f
+    /* rdx = [33-64] */
+    vmovups (%rsi), %ymm0
+    vmovups -32(%rsi, %rdx), %ymm1
+    vmovups %ymm0, (%rdi)
+    vmovups %ymm1, -32(%rdi, %rdx)
+    vzeroupper
+    ret
+
+1:  cmp $16, %dl
+    jbe 1f
+    /* rdx = [17-32] */
+    movups (%rsi), %xmm0
+    movups -16(%rsi, %rdx), %xmm1
+    movups %xmm0, (%rdi)
+    movups %xmm1, -16(%rdi, %rdx)
+    ret
+
+1:  cmp $8, %dl
+    jbe 1f
+    /* rdx = [9-16] */
+    mov (%rsi), %rax
+    mov -8(%rsi, %rdx), %rcx
+    mov %rax, (%rdi)
+    mov %rcx, -8(%rdi, %rdx)
+    ret
+
+1:  cmp $4, %dl
+    je 1f
+    jb 2f
+    /* rdx = [5-8] */
+    mov (%rsi), %eax
+    mov -4(%rsi, %rdx), %ecx
+    mov %eax, (%rdi)
+    mov %ecx, -4(%rdi, %rdx)
+    ret
+
+1:  test $4, %dl
+    jz 1f
+    mov (%rsi), %eax
+    mov %eax, (%rdi)
+    ret
+
+2:  test $2, %dl
+    jz 1f
+    movzwl -2(%rsi, %rdx), %eax
+    mov %ax, -2(%rdi, %rdx)
+1:  test $1, %dl
+    jz 1f
+    movzbl (%rsi), %eax
+    mov %al, (%rdi)
+1:  ret
+
+    /* Align the dst on 32-byte */
+3:  mov %rdi, %rcx
+    neg %rcx
+    and $31, %rcx
+    /* rcx = size until the start of the 32-byte aligned dst part */
+    jz 1f
+
+    sub %rcx, %rdx
+    /* We have at least 64 bytes, copy the first 32 one (including rcx bytes). */
+    vmovups (%rsi), %ymm0
+    vmovups %ymm0, (%rdi)
+    add %rcx, %rsi
+    add %rcx, %rdi
+
+1:  mov %rdx, %rcx
+    and $-64, %rcx
+    jz 3f
+    /* Do 64-byte iters, rsi = end of 64-aligned src, rdi = end of 64-aligned dst, rcx = negated 64-aligned
+       number of bytes, rdx = rest of bytes to copy. */
+    and $63, %rdx
+    add %rcx, %rsi
+    add %rcx, %rdi
+    neg %rcx
+
+    /* Main loop */
+    .p2align 4
+1:  vmovups (%rsi, %rcx), %ymm0
+    vmovups 32(%rsi, %rcx), %ymm1
+    vmovntps %ymm0, (%rdi, %rcx)
+    vmovntps %ymm1, 32(%rdi, %rcx)
+    add $64, %rcx
+    jnz 1b
+    sfence
 
     /* Copy the rest rdx [0-63] bytes. We have at least 64 bytes, copy in at most two movs. */
 3:  test %rdx, %rdx
