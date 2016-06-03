@@ -12,7 +12,8 @@
 #endif
 
 // If true, randomizes the positions of memory to copy from and to (substantially slows things down).
-bool useRandomFromTo = false;
+bool useRandomFrom = false;
+bool useRandomTo = false;
 
 
 void libcMemcpy(char* dst, const char* src, size_t size)
@@ -227,9 +228,19 @@ size_t memcpyBuffer(char* buffer, size_t bufferSize, size_t blockSize, const Mem
     size_t numBlocks = bufferSize / blockSize;
     // halfBlocks * blockSize * 2 <= numBlocks * blockSize <= bufferSize, so everything stays in bounds.
     size_t halfBlocks = numBlocks / 2;
-    if (useRandomFromTo) {
+    if (useRandomFrom && useRandomTo) {
         for (size_t i = 0; i < halfBlocks; i++) {
             size_t from = rand() % halfBlocks + halfBlocks;
+            size_t to = rand() % halfBlocks;
+            memcpyFunc(buffer + to * blockSize, buffer + from * blockSize, blockSize);
+        }
+    } else if (useRandomFrom) {
+        for (size_t to = 0; to < halfBlocks; to++) {
+            size_t from = rand() % halfBlocks + halfBlocks;
+            memcpyFunc(buffer + to * blockSize, buffer + from * blockSize, blockSize);
+        }
+    } else if (useRandomTo) {
+        for (size_t from = halfBlocks; from < numBlocks; from++) {
             size_t to = rand() % halfBlocks;
             memcpyFunc(buffer + to * blockSize, buffer + from * blockSize, blockSize);
         }
@@ -412,7 +423,20 @@ int main(int argc, char** argv)
             runTest = true;
         } else if (strcmp(argv[1], "random") == 0) {
             printf("== Randomized copying enabled\n");
-            useRandomFromTo = true;
+            useRandomFrom = true;
+            useRandomTo = true;
+            if (argc > 2) {
+                benchName = argv[2];
+            }
+        } else if (strcmp(argv[1], "random-from") == 0) {
+            printf("== Randomized gather copying enabled\n");
+            useRandomFrom = true;
+            if (argc > 2) {
+                benchName = argv[2];
+            }
+        } else if (strcmp(argv[1], "random-to") == 0) {
+            printf("== Randomized scatter copying enabled\n");
+            useRandomTo = true;
             if (argc > 2) {
                 benchName = argv[2];
             }
