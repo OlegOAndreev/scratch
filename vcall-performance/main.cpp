@@ -1,5 +1,6 @@
 #include <functional>
 #include <memory>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -9,6 +10,10 @@
 #include <sys/time.h>
 #elif defined(__linux__)
 #include <time.h>
+#elif defined(_WIN32)
+#include <windows.h>
+#else
+#error "Unsupported OS"
 #endif
 
 int64_t getTimeCounter()
@@ -21,6 +26,12 @@ int64_t getTimeCounter()
     timespec tp;
     clock_gettime(CLOCK_MONOTONIC, &tp);
     return tp.tv_sec * 1000000000ULL + tp.tv_nsec;
+#elif defined(_WIN32)
+    LARGE_INTEGER li;
+    QueryPerformanceCounter(&li);
+    return li.QuadPart;
+#else
+#error "Unsupported OS"
 #endif
 }
 
@@ -30,6 +41,12 @@ int64_t getTimeFreq()
     return 1000000;
 #elif defined(__linux__)
     return 1000000000;
+#elif defined(_WIN32)
+    LARGE_INTEGER li;
+    QueryPerformanceFrequency(&li);
+    return li.QuadPart;
+#else
+#error "Unsupported OS"
 #endif
 }
 
@@ -164,7 +181,7 @@ unsigned runSimpleFor(unsigned* data, size_t dataSize, int repeatCount)
     int ret = 0;
     int64_t timeStart = getTimeCounter();
     // A very simple (vectorized) loop to make a baseline.
-    for (int i = 0; i < repeatCount; i++) {
+    for (int k = 0; k < repeatCount; k++) {
         for (size_t i = 0; i < dataSize; i++) {
             ret += data[i] * 7;
         }
@@ -179,7 +196,7 @@ unsigned runFor(unsigned* data, size_t dataSize, Op op, int repeatCount)
     int ret = 0;
     int64_t timeStart = getTimeCounter();
     // A very simple (vectorized) loop to make a baseline.
-    for (int i = 0; i < repeatCount; i++) {
+    for (int k = 0; k < repeatCount; k++) {
         for (size_t i = 0; i < dataSize; i++) {
             ret += processOp(data[i], op);
         }
@@ -193,7 +210,7 @@ unsigned runSwitchFor(unsigned* data, size_t dataSize, Op* ops, int repeatCount,
 {
     unsigned ret = 0;
     int64_t timeStart = getTimeCounter();
-    for (int i = 0; i < repeatCount; i++) {
+    for (int k = 0; k < repeatCount; k++) {
         for (size_t i = 0; i < dataSize; i++) {
             ret += processOp(data[i], ops[i]);
         }
@@ -208,7 +225,7 @@ unsigned runInterfaceImplFor(unsigned* data, size_t dataSize, std::unique_ptr<Op
 {
     unsigned ret = 0;
     int64_t timeStart = getTimeCounter();
-    for (int i = 0; i < repeatCount; i++) {
+    for (int k = 0; k < repeatCount; k++) {
         for (size_t i = 0; i < dataSize; i++) {
             ret += impls[i]->process(data[i]);
         }
@@ -222,7 +239,7 @@ unsigned runFunctionFor(unsigned* data, size_t dataSize, FunctionImpl* functionI
 {
     unsigned ret = 0;
     int64_t timeStart = getTimeCounter();
-    for (int i = 0; i < repeatCount; i++) {
+    for (int k = 0; k < repeatCount; k++) {
         for (size_t i = 0; i < dataSize; i++) {
             ret += functionImpls[i](data[i]);
         }
@@ -237,7 +254,7 @@ unsigned runFunctionPtrFor(unsigned* data, size_t dataSize, std::unique_ptr<Func
 {
     unsigned ret = 0;
     int64_t timeStart = getTimeCounter();
-    for (int i = 0; i < repeatCount; i++) {
+    for (int k = 0; k < repeatCount; k++) {
         for (size_t i = 0; i < dataSize; i++) {
             ret += (*functionImpls[i])(data[i]);
         }
