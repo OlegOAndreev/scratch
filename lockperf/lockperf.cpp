@@ -1,72 +1,133 @@
 #include <algorithm>
 #include <atomic>
-#include <chrono>
-#include <cstdint>
-#include <cstdio>
-#include <cstdlib>
-#include <cstring>
 #include <mutex>
 #include <random>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <thread>
 #include <vector>
+
+#if defined(__APPLE__)
+#include <dispatch/dispatch.h>
+#include <sys/time.h>
 #include <unistd.h>
+#elif defined(__linux__)
+#include <semaphore.h>
+#include <time.h>
+#include <unistd.h>
+#elif defined(_WIN32)
+#include <windows.h>
+#else
+#error "Unsupported OS"
+#endif
 
 const size_t CACHE_LINE_WIDTH = 64;
 
-namespace chrono = std::chrono;
+int64_t getTimeCounter()
+{
+#if defined(__APPLE__)
+    timeval tp;
+    gettimeofday(&tp, nullptr);
+    return tp.tv_sec * 1000000ULL + tp.tv_usec;
+#elif defined(__linux__)
+    timespec tp;
+    clock_gettime(CLOCK_MONOTONIC, &tp);
+    return tp.tv_sec * 1000000000ULL + tp.tv_nsec;
+#elif defined(_WIN32)
+    LARGE_INTEGER li;
+    QueryPerformanceCounter(&li);
+    return li.QuadPart;
+#else
+#error "Unsupported OS"
+#endif
+}
+
+int64_t getTimeFreq()
+{
+#if defined(__APPLE__)
+    return 1000000;
+#elif defined(__linux__)
+    return 1000000000;
+#elif defined(_WIN32)
+    LARGE_INTEGER li;
+    QueryPerformanceFrequency(&li);
+    return li.QuadPart;
+#else
+#error "Unsupported OS"
+#endif
+}
 
 #if defined(__linux__)
-
-#include <semaphore.h>
-
 struct Semaphore
 {
     sem_t sema;
-
-    Semaphore()
-    {
-        sem_init(&sema, 0, 0);
-    }
-
-    void post()
-    {
-        sem_post(&sema);
-    }
-
-    void wait()
-    {
-        sem_wait(&sema);
-    }
+    Semaphore() { sem_init(&sema, 0, 0); }
+    ~Semaphore() { sem_destroy(&sema); }
+    void post() { sem_post(&sema); }
+    void wait() { sem_wait(&sema); }
 };
-
 #elif defined(__APPLE__)
-
-#include <dispatch/dispatch.h>
-
 struct Semaphore
 {
     dispatch_semaphore_t sema;
-
-    Semaphore()
-    {
-        sema = dispatch_semaphore_create(0);
-    }
-
-    void post()
-    {
-        dispatch_semaphore_signal(sema);
-    }
-
-    void wait()
-    {
-        dispatch_semaphore_wait(sema, ~uint64_t(0));
-    }
+    Semaphore() { sema = dispatch_semaphore_create(0); }
+    ~Semaphore() { dispatch_release(sema); }
+    void post() { dispatch_semaphore_signal(sema); }
+    void wait() { dispatch_semaphore_wait(sema, ~uint64_t(0)); }
 };
-
+#elif defined(_WIN32)
+struct Semaphore
+{
+    HANDLE sema;
+    Semaphore() { sema = CreateSemaphore(NULL, 0, MAXLONG, NULL); }
+    ~Semaphore() { CloseHandle(sema); }
+    void post() { ReleaseSemaphore(sema, 1, NULL); }
+    void wait() { WaitForSingleObject(sema, INFINITE); }
+};
 #else
+#error "Unsupported OS"
+#endif
 
-#error Specify a Semaphore implementation
-
+#if defined(_WIN32) && defined(__GNUC__)
+// MinGW ships without std::thread and std::mutex support, add a partial implementation of those.
+namespace std {
+    class mutex
+    {
+    public:
+        mutex() { InitializeCriticalSection(&cs); }
+        ~mutex() { DeleteCriticalSection(&cs); }
+        void lock() { EnterCriticalSection(&cs); }
+        void unlock() { LeaveCriticalSection(&cs); }
+        
+    private:
+        CRITICAL_SECTION cs;
+    };
+    
+    class thread
+    {
+    public:
+        thread() : handle(0) {}
+        thread(const thread& other) = delete;
+        thread(thread&& other) : handle(other.handle) { other.handle = 0; }
+        template<class Function, class... Args>
+        explicit thread(Function&& f, Args&&... args) { handle = (HANDLE)_beginthreadex(NULL, 0, threadFunc, new ThreadFunction(f, args...), 0, NULL); }
+        ~thread() { if (handle != 0) abort(); }
+        thread& operator=(const thread&) = delete;
+        thread& operator=(thread&& other) { if (handle != 0) abort(); handle = other.handle; other.handle = 0; }
+        void join() { WaitForSingleObject(handle, INFINITE); CloseHandle(handle); handle = 0; }
+    private:
+        HANDLE handle;
+        using ThreadFunction = std::function<void(void)>;
+        static unsigned __stdcall threadFunc(void* arg)
+        {
+            std::unique_ptr<ThreadFunction> func((ThreadFunction*)arg);
+            (*func)();
+            return 0;
+        }
+    };
+} // namespace std
 #endif
 
 struct MutexLock
@@ -86,7 +147,8 @@ struct MutexLock
 };
 
 // The idea taken from http://preshing.com/20150316/semaphores-are-surprisingly-versatile/
-struct SemaphoreLock {
+struct SemaphoreLock
+{
     std::atomic<size_t> count;
     Semaphore semaphore;
 
@@ -117,6 +179,7 @@ struct SemaphoreLock {
     }
 };
 
+#if !defined(_MSC_VER)
 struct PauseBackoff
 {
     static void backoff()
@@ -132,12 +195,19 @@ struct NopBackoff
         __asm __volatile("nop");
     }
 };
+#endif
 
 struct SchedBackoff
 {
     static void backoff()
     {
+#if defined(__APPLE__) || defined(__linux__)
         sched_yield();
+#elif defined(_WIN32)
+        SwitchToThread();
+#else
+#error "Unsupported OS"
+#endif
     }
 };
 
@@ -145,7 +215,13 @@ struct SleepBackoff
 {
     static void backoff()
     {
+#if defined(__APPLE__) || defined(__linux__)
         usleep(0);
+#elif defined(_WIN32)
+        Sleep(0);
+#else
+#error "Unsupported OS"
+#endif
     }
 };
 
@@ -156,15 +232,28 @@ struct EmptyBackoff
     }
 };
 
+// MSVC disallows zero-sized arrays in the middle of structs.
+template <size_t alignment>
+struct PaddedAtomic
+{
+    std::atomic<size_t> v;
+    char padding[alignment - sizeof(size_t)];
+};
+
+template <>
+struct PaddedAtomic<sizeof(size_t)>
+{
+    std::atomic<size_t> v;
+};
+
 template <typename Backoff, size_t alignment, bool withLoad>
 struct SpinLock
 {
-    std::atomic<size_t> flag;
-    char padding[alignment - sizeof(size_t)];
+    PaddedAtomic<alignment> flag;
 
     SpinLock()
-        : flag(0)
     {
+        flag.v = 0;
     }
 
     int lock()
@@ -172,11 +261,11 @@ struct SpinLock
         int retryCount = 0;
         while (true) {
             size_t expected = 0;
-            if (flag.compare_exchange_weak(expected, 1, std::memory_order_acq_rel)) {
+            if (flag.v.compare_exchange_weak(expected, 1, std::memory_order_acq_rel)) {
                 break;
             }
             if (withLoad) {
-                while (flag.load(std::memory_order_acquire) != 0) {
+                while (flag.v.load(std::memory_order_acquire) != 0) {
                     Backoff::backoff();
                     retryCount++;
                 }
@@ -190,28 +279,27 @@ struct SpinLock
 
     void unlock()
     {
-        flag.store(0, std::memory_order_release);
+        flag.v.store(0, std::memory_order_release);
     }
 };
 
 template <typename Backoff, size_t alignment>
 struct TicketLock
 {
-    std::atomic<size_t> in;
-    char padding[alignment - sizeof(size_t)];
-    std::atomic<size_t> out;
+    PaddedAtomic<alignment> in;
+    PaddedAtomic<alignment> out;
 
     TicketLock()
-        : in(0)
-        , out(0)
     {
+        in.v = 0;
+        out.v = 0;
     }
 
     int lock()
     {
         int retryCount = 0;
-        size_t ticket = in.fetch_add(1, std::memory_order_acquire);
-        while (out.load(std::memory_order_acquire) != ticket) {
+        size_t ticket = in.v.fetch_add(1, std::memory_order_acquire);
+        while (out.v.load(std::memory_order_acquire) != ticket) {
             Backoff::backoff();
             retryCount++;
         }
@@ -220,7 +308,7 @@ struct TicketLock
 
     void unlock()
     {
-        out.fetch_add(1, std::memory_order_release);
+        out.v.fetch_add(1, std::memory_order_release);
     }
 };
 
@@ -291,27 +379,25 @@ struct LockingWorkData
 
 struct LockFreeWorkData
 {
-    std::atomic<size_t> inputIndex;
-    char padding1[CACHE_LINE_WIDTH - sizeof(size_t)];
+    PaddedAtomic<CACHE_LINE_WIDTH> inputIndex;
     std::vector<unsigned> input;
+    char padding1[CACHE_LINE_WIDTH - sizeof(size_t)];
+
+    PaddedAtomic<CACHE_LINE_WIDTH> outputIndex;
+    std::vector<unsigned> output;
     char padding2[CACHE_LINE_WIDTH - sizeof(size_t)];
 
-    std::atomic<size_t> outputIndex;
-    char padding3[CACHE_LINE_WIDTH - sizeof(size_t)];
-    std::vector<unsigned> output;
-    char padding4[CACHE_LINE_WIDTH - sizeof(size_t)];
-
     LockFreeWorkData(const std::vector<unsigned>& sourceInput)
-        : inputIndex(sourceInput.size())
-        , input(sourceInput)
-        , outputIndex(0)
     {
+        input = sourceInput;
+        inputIndex.v = sourceInput.size();
+        outputIndex.v = 0;
         output.resize(input.size());
     }
 
     bool popInput(unsigned& param, size_t& index, uint64_t& /*retryCount*/)
     {
-        size_t curIndex = inputIndex.fetch_sub(1, std::memory_order_relaxed);
+        size_t curIndex = inputIndex.v.fetch_sub(1, std::memory_order_relaxed);
         // The index can become underflow. This loop is generally a bad code, but we want to simulate
         // the popping from the back of input vector that LockingWorkData does.
         if (curIndex > 0 && curIndex <= input.size()) {
@@ -325,7 +411,7 @@ struct LockFreeWorkData
 
     void pushOutput(unsigned* values, size_t numValues, uint64_t& /*retryCount*/)
     {
-        size_t curIndex = outputIndex.fetch_add(numValues, std::memory_order_relaxed);
+        size_t curIndex = outputIndex.v.fetch_add(numValues, std::memory_order_relaxed);
         memmove(output.data() + curIndex, values, numValues * sizeof(*values));
     }
 };
@@ -441,7 +527,7 @@ void runIteration(int numThreads, const std::vector<unsigned>& input, unsigned t
         });
     }
 
-    chrono::system_clock::time_point start = chrono::system_clock::now();
+    int64_t startTime = getTimeCounter();
     for (int i = 0; i < numThreads; i++) {
         startSemaphore.post();
     }
@@ -449,7 +535,7 @@ void runIteration(int numThreads, const std::vector<unsigned>& input, unsigned t
         thread.join();
     }
 
-    stats.timeMs = (uint64_t)chrono::duration_cast<chrono::milliseconds>(chrono::system_clock::now() - start).count();
+    stats.timeMs = (getTimeCounter() - startTime) * 1000 / getTimeFreq();
 
     for (int i = 0; i < numThreads; i++) {
         stats.avgRunLength += threadStats[i].avgRunLength;
@@ -458,7 +544,10 @@ void runIteration(int numThreads, const std::vector<unsigned>& input, unsigned t
     stats.avgRunLength /= numThreads;
 
     // Check that we've successfully completed all work items.
-    unsigned outputValue = std::accumulate(data.output.begin(), data.output.end(), 0);
+    unsigned outputValue = 0;
+    for (unsigned& v : data.output) {
+        outputValue += v;
+    }
     if (outputValue != targetValue) {
         printf("ERROR: Target value %u, output value %u, exiting.\n", targetValue, outputValue);
         exit(1);
@@ -503,17 +592,17 @@ int main(int argc, char** argv)
 {
     // Descriptions of args:
     //  * numThreads: self-descriptive;
+    //  * workAmount: the average length of work simulation loop in doWork will be workAmount ^ 2
+    //    (use 1 for trivial one-iteration loops, use 5 for 25 iteration loops, 10 for 1000 loops).
     //  * inputSize: all threads get trivial pieces of work from preallocated array, inputSize is the length of
     //    that array;
-    //  * workAmount: the average length of work simulation loop in doWork will be workAmount ^ 2
-    //    (use 1 for trivial one-iteration loops, use 5 for 125 iteration loops, 10 for 1000 loops).
-    if (argc != 4) {
-        printf("Usage: %s numThreads inputSize workAmount\n", argv[0]);
+    if (argc != 3 && argc != 4) {
+        printf("Usage: %s numThreads workAmount [inputSize]\n", argv[0]);
         return 1;
     }
     int numThreads = atoi(argv[1]);
-    int inputSize = atoi(argv[2]);
-    unsigned workAmount = atoi(argv[3]);
+    unsigned workAmount = atoi(argv[2]);
+    int inputSize = (argc == 4) ? atoi(argv[3]) : 20000000 / (workAmount * workAmount);
 
     printf("Num threads: %d, input %d-%d size %d\n", numThreads, workAmount - 1, workAmount + 1, inputSize);
 
@@ -522,16 +611,23 @@ int main(int argc, char** argv)
     }
     run<LockFreeWorkData>("lock-free", numThreads, inputSize, workAmount);
     run<LockingWorkData<SpinLock<EmptyBackoff, CACHE_LINE_WIDTH, true>>>("spinlock", numThreads, inputSize, workAmount);
+#if !defined(_MSC_VER)
     run<LockingWorkData<SpinLock<PauseBackoff, CACHE_LINE_WIDTH, true>>>("spinlock+pause", numThreads, inputSize, workAmount);
     run<LockingWorkData<SpinLock<NopBackoff, CACHE_LINE_WIDTH, true>>>("spinlock+nop", numThreads, inputSize, workAmount);
+#endif
     run<LockingWorkData<SpinLock<SchedBackoff, CACHE_LINE_WIDTH, true>>>("spinlock+yield", numThreads, inputSize, workAmount);
     run<LockingWorkData<SpinLock<SleepBackoff, CACHE_LINE_WIDTH, true>>>("spinlock+sleep", numThreads, inputSize, workAmount);
     run<LockingWorkData<SpinLock<EmptyBackoff, CACHE_LINE_WIDTH, false>>>("spinlock,no load loop", numThreads, inputSize, workAmount);
+#if !defined(_MSC_VER)
     run<LockingWorkData<SpinLock<PauseBackoff, CACHE_LINE_WIDTH, false>>>("spinlock+pause,no load loop", numThreads, inputSize, workAmount);
+#endif
     run<LockingWorkData<SpinLock<EmptyBackoff, sizeof(size_t), true>>>("spinlock,unaligned", numThreads, inputSize, workAmount);
+#if !defined(_MSC_VER)
     run<LockingWorkData<SpinLock<PauseBackoff, sizeof(size_t), true>>>("spinlock+pause,unaligned", numThreads, inputSize, workAmount);
+#endif
     run<LockingWorkData<TicketLock<EmptyBackoff, CACHE_LINE_WIDTH>>>("ticketlock", numThreads, inputSize, workAmount);
     run<LockingWorkData<TicketLock<EmptyBackoff, sizeof(size_t)>>>("ticketlock,unaligned", numThreads, inputSize, workAmount);
+    // std::mutex is horribly slow on OS X, skip it altogether
 #if !defined(__APPLE__)
     run<LockingWorkData<MutexLock>>("std::mutex", numThreads, inputSize, workAmount);
 #endif
