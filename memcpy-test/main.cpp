@@ -1,27 +1,79 @@
 #include <algorithm>
 #include <stdio.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
 #if defined(__APPLE__)
-
 #include <sys/time.h>
-
 #elif defined(__linux__)
 #include <time.h>
+#elif defined(_WIN32)
+#include <windows.h>
+#else
+#error "Unsupported OS"
 #endif
 
 // If true, randomizes the positions of memory to copy from and to (substantially slows things down).
 bool useRandomFrom = false;
 bool useRandomTo = false;
 
+int64_t getTimeCounter()
+{
+#if defined(__APPLE__)
+    timeval tp;
+    gettimeofday(&tp, nullptr);
+    return tp.tv_sec * 1000000ULL + tp.tv_usec;
+#elif defined(__linux__)
+    timespec tp;
+    clock_gettime(CLOCK_MONOTONIC, &tp);
+    return tp.tv_sec * 1000000000ULL + tp.tv_nsec;
+#elif defined(_WIN32)
+    LARGE_INTEGER li;
+    QueryPerformanceCounter(&li);
+    return li.QuadPart;
+#else
+#error "Unsupported OS"
+#endif
+}
+
+int64_t getTimeFreq()
+{
+#if defined(__APPLE__)
+    return 1000000;
+#elif defined(__linux__)
+    return 1000000000;
+#elif defined(_WIN32)
+    LARGE_INTEGER li;
+    QueryPerformanceFrequency(&li);
+    return li.QuadPart;
+#else
+#error "Unsupported OS"
+#endif
+}
+
+template <typename T, size_t N>
+size_t arraySize(T(&)[N])
+{
+    return N;
+}
 
 void libcMemcpy(char* dst, const char* src, size_t size)
 {
     memcpy(dst, src, size);
 }
 
+// MSVC cannot compile the asm source anyway, use it only to verify MinGW results.
+#if !defined(_MSC_VER)
 bool isAvxSupported() asm("_isAvxSupported");
+#else
+bool isAvxSupported()
+{
+    return false;
+}
+#endif
+
+#if !defined(_MSC_VER)
 void naiveMemcpy(char* dst, const char* src, size_t size) asm("_naiveMemcpy");
 void naiveMemcpyAligned(char* dst, const char* src, size_t size) asm("_naiveMemcpyAligned");
 void naiveMemcpyUnrolled(char* dst, const char* src, size_t size) asm("_naiveMemcpyUnrolled");
@@ -39,6 +91,7 @@ void repMovsbMemcpy(char* dst, const char* src, size_t size) asm("_repMovsbMemcp
 void repMovsqMemcpy(char* dst, const char* src, size_t size) asm("_repMovsqMemcpy");
 void memcpyFromMusl(char* dst, const char* src, size_t size) asm("_memcpyFromMusl");
 void folly_memcpy(char* dst, const char* src, size_t size) asm("_folly_memcpy");
+#endif
 
 #define DECLARE_MEMCPY_FUNC(memcpyFunc, avxRequired) \
     { memcpyFunc, #memcpyFunc, avxRequired }
@@ -48,7 +101,8 @@ struct {
     const char* name;
     bool avxRequired;
 } memcpyFuncs[] = {
-    DECLARE_MEMCPY_FUNC(libcMemcpy, false),
+//    DECLARE_MEMCPY_FUNC(libcMemcpy, false),
+#if !defined(_MSC_VER)
 //    DECLARE_MEMCPY_FUNC(naiveMemcpy, false),
 //    DECLARE_MEMCPY_FUNC(naiveMemcpyAligned, false),
 //    DECLARE_MEMCPY_FUNC(naiveMemcpyUnrolled, false),
@@ -57,15 +111,16 @@ struct {
 //    DECLARE_MEMCPY_FUNC(naiveSseMemcpyUnrolledBody, false),
 //    DECLARE_MEMCPY_FUNC(naiveSseMemcpyUnrolled, false),
     DECLARE_MEMCPY_FUNC(naiveSseMemcpyUnrolledV2, false),
-    DECLARE_MEMCPY_FUNC(naiveSseMemcpyUnrolledNT, false),
+//    DECLARE_MEMCPY_FUNC(naiveSseMemcpyUnrolledNT, false),
 //    DECLARE_MEMCPY_FUNC(naiveAvxMemcpy, true),
 //    DECLARE_MEMCPY_FUNC(naiveAvxMemcpyUnrolled, true),
-    DECLARE_MEMCPY_FUNC(naiveAvxMemcpyUnrolledV2, true),
-    DECLARE_MEMCPY_FUNC(naiveAvxMemcpyUnrolledNT, true),
-    DECLARE_MEMCPY_FUNC(repMovsbMemcpy, false),
-    DECLARE_MEMCPY_FUNC(repMovsqMemcpy, false),
-    DECLARE_MEMCPY_FUNC(memcpyFromMusl, false),
+//    DECLARE_MEMCPY_FUNC(naiveAvxMemcpyUnrolledV2, true),
+//    DECLARE_MEMCPY_FUNC(naiveAvxMemcpyUnrolledNT, true),
+//    DECLARE_MEMCPY_FUNC(repMovsbMemcpy, false),
+//    DECLARE_MEMCPY_FUNC(repMovsqMemcpy, false),
+//    DECLARE_MEMCPY_FUNC(memcpyFromMusl, false),
 //    DECLARE_MEMCPY_FUNC(folly_memcpy, true),
+#endif
 };
 
 
@@ -193,34 +248,6 @@ bool testMemcpyFunc(const MemcpyFunc& memcpyFunc, const char* memcpyName)
     return true;
 }
 
-int64_t getTimeCounter()
-{
-#if defined(__APPLE__)
-    timeval tp;
-    gettimeofday(&tp, nullptr);
-    return tp.tv_sec * 1000000ULL + tp.tv_usec;
-#elif defined(__linux__)
-    timespec tp;
-    clock_gettime(CLOCK_MONOTONIC, &tp);
-    return tp.tv_sec * 1000000000ULL + tp.tv_nsec;
-#endif
-}
-
-int64_t getTimeFreq()
-{
-#if defined(__APPLE__)
-    return 1000000;
-#elif defined(__linux__)
-    return 1000000000;
-#endif
-}
-
-template <typename T, size_t N>
-size_t arraySize(T(&)[N])
-{
-    return N;
-}
-
 // Take batches of size blockSize from one half of the block and copy them (randomly or not) to the other half.
 template <typename MemcpyFunc>
 size_t memcpyBuffer(char* buffer, size_t bufferSize, size_t blockSize, const MemcpyFunc& memcpyFunc)
@@ -326,7 +353,7 @@ int runBench(size_t bufferSize, const size_t* blockSizes, size_t numBlockSizes)
 {
     char* buffer = new char[bufferSize];
     for (size_t i = 0; i < bufferSize; i++) {
-        buffer[i] = i;
+        buffer[i] = (char)i;
     }
 
     for (size_t i = 0; i < numBlockSizes; i++) {
@@ -351,7 +378,7 @@ int runBenchMulti(size_t bufferSize, const size_t* blockSizes, size_t numBlockSi
 {
     char* buffer = new char[bufferSize];
     for (size_t i = 0; i < bufferSize; i++) {
-        buffer[i] = i;
+        buffer[i] = (char)i;
     }
 
     for (size_t i = 0; i < numBlockSizes; i++) {

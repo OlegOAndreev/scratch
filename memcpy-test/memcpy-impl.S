@@ -1,5 +1,27 @@
 .text
 
+/* The easiest way to fix cross-platform differences, albeit not the fastest one */
+#ifdef _WIN32
+
+#define PROLOGUE \
+	push %rsi; \
+	push %rdi; \
+	mov %rcx, %rdi; \
+	mov %rdx, %rsi; \
+	mov %r8, %rdx; \
+	mov %r9, %rcx
+
+#define EPILOGUE \
+	pop %rdi; \
+	pop %rsi
+
+#else
+
+#define PROLOGUE
+#define EPILOGUE
+
+#endif
+
 .p2align 4
 .global _isAvxSupported
 _isAvxSupported:
@@ -18,6 +40,7 @@ _isAvxSupported:
 .p2align 4
 .global _naiveMemcpy
 _naiveMemcpy:
+	PROLOGUE
     /* rcx = 8-byte aligned size, rdx = rest of size */
     mov %rdx, %rcx
     and $-8, %rcx
@@ -42,12 +65,14 @@ _naiveMemcpy:
     mov %al, (%rdi, %rdx)
     inc %rdx
     jnz 1b
+2:  EPILOGUE
     ret
 
 // The basic unaligned memcpy: aligns the dst with 1-byte copies, does 8-byte copies, then 1-byte copies the rest. */
 .p2align 4
 .global _naiveMemcpyAligned
 _naiveMemcpyAligned:
+    PROLOGUE
     cmp $8, %rdx
     jb 3f
     /* rcx = size until the start of the 8-byte aligned dst part. */
@@ -87,12 +112,14 @@ _naiveMemcpyAligned:
     mov %al, (%rdi, %rdx)
     inc %rdx
     jnz 1b
-2:  ret
+2:  EPILOGUE
+    ret
 
 /* The unrolled memcpy: unrolled 8-byte copies (32 per loop), then unrolled copies the rest. */
 .p2align 4
 .global _naiveMemcpyUnrolled
 _naiveMemcpyUnrolled:
+    PROLOGUE
     /* rcx = 32-byte aligned size, rdx = rest of size. */
     mov %rdx, %rcx
     and $-32, %rcx
@@ -143,12 +170,14 @@ _naiveMemcpyUnrolled:
     jz 2f
     movzbl (%rsi, %rcx), %eax
     mov %al, (%rdi, %rcx)
-2:  ret
+2:  EPILOGUE
+    ret
 
 /* The basic SSE memcpy: aligns the dst with 1-byte copies, does 16-byte copies, then 1-byte copies the rest. */
 .p2align 4
 .global _naiveSseMemcpy
 _naiveSseMemcpy:
+    PROLOGUE
     mov %rdx, %rcx
     and $-16, %rcx
     jz 3f
@@ -172,13 +201,15 @@ _naiveSseMemcpy:
     mov %al, (%rdi, %rdx)
     inc %rdx
     jnz 1b
-2:  ret
+2:  EPILOGUE
+    ret
 
 /* The basic SSE memcpy with alignment: aligns the dst with 1-byte copies, does 16-byte copies, then 1-byte copies
    the rest. */
 .p2align 4
 .global _naiveSseMemcpyAligned
 _naiveSseMemcpyAligned:
+    PROLOGUE
     cmp $16, %rdx
     jb 3f
     /* rcx = size until the start of the 16-byte aligned dst part. */
@@ -218,13 +249,15 @@ _naiveSseMemcpyAligned:
     mov %al, (%rdi, %rdx)
     inc %rdx
     jnz 1b
-2:  ret
+2:  EPILOGUE
+    ret
 
 /* The basic SSE memcpy with unrolled body: aligns the dst with 1-byte copies, does 32-byte copies per loop, then
    1-byte copies the rest. */
 .p2align 4
 .global _naiveSseMemcpyUnrolledBody
 _naiveSseMemcpyUnrolledBody:
+    PROLOGUE
     cmp $32, %rdx
     jb 3f
     /* rcx = size until the start of the 16-byte aligned dst part. */
@@ -266,13 +299,15 @@ _naiveSseMemcpyUnrolledBody:
     mov %al, (%rdi, %rdx)
     inc %rdx
     jnz 1b
-2:  ret
+2:  EPILOGUE
+    ret
 
 /* The basic unrolled SSE memcpy: aligns dst with unrolled copies, does 32-byte copies per loop, then unrolled
    copies the rest. */
 .p2align 4
 .global _naiveSseMemcpyUnrolled
 _naiveSseMemcpyUnrolled:
+    PROLOGUE
     cmp $32, %rdx
     jb 3f
     /* rcx = size until the start of the 16-byte aligned dst part. */
@@ -348,7 +383,8 @@ _naiveSseMemcpyUnrolled:
     jz 2f
     movzbl (%rsi, %rcx), %eax
     mov %al, (%rdi, %rcx)
-2:  ret
+2:  EPILOGUE
+    ret
 
 
 /* The basic unrolled SSE memcpy: aligns dst with unaligned (overlapping) copies, does 32-byte copies per loop,
@@ -357,6 +393,7 @@ _naiveSseMemcpyUnrolled:
 .p2align 4
 .global _naiveSseMemcpyUnrolledV2
 _naiveSseMemcpyUnrolledV2:
+    PROLOGUE
     cmp $32, %rdx
     ja 3f
 
@@ -368,6 +405,7 @@ _naiveSseMemcpyUnrolledV2:
     movups -16(%rsi, %rdx), %xmm1
     movups %xmm0, (%rdi)
     movups %xmm1, -16(%rdi, %rdx)
+    EPILOGUE
     ret
 
 1:  cmp $8, %dl
@@ -377,6 +415,7 @@ _naiveSseMemcpyUnrolledV2:
     mov -8(%rsi, %rdx), %rcx
     mov %rax, (%rdi)
     mov %rcx, -8(%rdi, %rdx)
+    EPILOGUE
     ret
 
 1:  cmp $4, %dl
@@ -387,12 +426,14 @@ _naiveSseMemcpyUnrolledV2:
     mov -4(%rsi, %rdx), %ecx
     mov %eax, (%rdi)
     mov %ecx, -4(%rdi, %rdx)
+    EPILOGUE
     ret
 
 1:  test $4, %dl
     jz 1f
     mov (%rsi), %eax
     mov %eax, (%rdi)
+    EPILOGUE
     ret
 
 2:  test $2, %dl
@@ -403,7 +444,8 @@ _naiveSseMemcpyUnrolledV2:
     jz 1f
     movzbl (%rsi), %eax
     mov %al, (%rdi)
-1:  ret
+1:  EPILOGUE
+    ret
 
     /* Align the dst on 16-byte */
 3:  mov %rdi, %rcx
@@ -422,7 +464,7 @@ _naiveSseMemcpyUnrolledV2:
 1:  mov %rdx, %rcx
     and $-32, %rcx
     jz 3f
-    /* Do 32-byte iters, rsi = end of 32-aligned src, rdi = end of 64-aligned dst, rcx = negated 32-aligned
+    /* Do 32-byte iters, rsi = end of 32-aligned src, rdi = end of 32-aligned dst, rcx = negated 32-aligned
        number of bytes, rdx = rest of bytes to copy. */
     and $31, %rdx
     add %rcx, %rsi
@@ -449,12 +491,14 @@ _naiveSseMemcpyUnrolledV2:
 
     movups -32(%rsi, %rdx), %xmm0
     movups %xmm0, -32(%rdi, %rdx)
-1:  ret
+1:  EPILOGUE
+    ret
 
 /* A version of naiveSseMemcpyUnrolledV2 with non-temporal stores. */
 .p2align 4
 .global _naiveSseMemcpyUnrolledNT
 _naiveSseMemcpyUnrolledNT:
+    PROLOGUE
     cmp $32, %rdx
     ja 3f
 
@@ -466,6 +510,7 @@ _naiveSseMemcpyUnrolledNT:
     movups -16(%rsi, %rdx), %xmm1
     movups %xmm0, (%rdi)
     movups %xmm1, -16(%rdi, %rdx)
+    EPILOGUE
     ret
 
 1:  cmp $8, %dl
@@ -475,6 +520,7 @@ _naiveSseMemcpyUnrolledNT:
     mov -8(%rsi, %rdx), %rcx
     mov %rax, (%rdi)
     mov %rcx, -8(%rdi, %rdx)
+    EPILOGUE
     ret
 
 1:  cmp $4, %dl
@@ -485,12 +531,14 @@ _naiveSseMemcpyUnrolledNT:
     mov -4(%rsi, %rdx), %ecx
     mov %eax, (%rdi)
     mov %ecx, -4(%rdi, %rdx)
+    EPILOGUE
     ret
 
 1:  test $4, %dl
     jz 1f
     mov (%rsi), %eax
     mov %eax, (%rdi)
+    EPILOGUE
     ret
 
 2:  test $2, %dl
@@ -501,7 +549,8 @@ _naiveSseMemcpyUnrolledNT:
     jz 1f
     movzbl (%rsi), %eax
     mov %al, (%rdi)
-1:  ret
+1:  EPILOGUE
+    ret
 
     /* Align the dst on 16-byte */
 3:  mov %rdi, %rcx
@@ -548,12 +597,14 @@ _naiveSseMemcpyUnrolledNT:
 
     movups -32(%rsi, %rdx), %xmm0
     movups %xmm0, -32(%rdi, %rdx)
-1:  ret
+1:  EPILOGUE
+    ret
 
 /* The basic AVX memcpy: aligns the dst with 1-byte copies, does 32-byte copies, then 1-byte copies the rest. */
 .p2align 4
 .global _naiveAvxMemcpy
 _naiveAvxMemcpy:
+    PROLOGUE
     cmp $32, %rdx
     jb 3f
     /* rcx = size until the start of the 32-byte aligned dst part. */
@@ -594,13 +645,15 @@ _naiveAvxMemcpy:
     mov %al, (%rdi, %rdx)
     inc %rdx
     jnz 1b
-2:  ret
+2:  EPILOGUE
+    ret
 
 /* The basic unrolled AVX memcpy: aligns dst with unrolled copies, does 64-byte copies per loop, then unrolled
    copies the rest. */
 .p2align 4
 .global _naiveAvxMemcpyUnrolled
 _naiveAvxMemcpyUnrolled:
+    PROLOGUE
     cmp $64, %rdx
     jb 3f
     /* rcx = size until the start of the 32-byte aligned dst part */
@@ -688,7 +741,8 @@ _naiveAvxMemcpyUnrolled:
     jz 2f
     movzbl (%rsi, %rcx), %eax
     mov %al, (%rdi, %rcx)
-2:  ret
+2:  EPILOGUE
+    ret
 
 /* The basic unrolled AVX memcpy: aligns dst with unaligned (overlapping) copies, does 64-byte copies per loop,
    then does unaligned copies of the rest. Dramatically reduces the number of branches compared to
@@ -696,6 +750,7 @@ _naiveAvxMemcpyUnrolled:
 .p2align 4
 .global _naiveAvxMemcpyUnrolledV2
 _naiveAvxMemcpyUnrolledV2:
+    PROLOGUE
     cmp $64, %rdx
     ja 3f
 
@@ -708,6 +763,7 @@ _naiveAvxMemcpyUnrolledV2:
     vmovups %ymm0, (%rdi)
     vmovups %ymm1, -32(%rdi, %rdx)
     vzeroupper
+    EPILOGUE
     ret
 
 1:  cmp $16, %dl
@@ -717,6 +773,7 @@ _naiveAvxMemcpyUnrolledV2:
     movups -16(%rsi, %rdx), %xmm1
     movups %xmm0, (%rdi)
     movups %xmm1, -16(%rdi, %rdx)
+    EPILOGUE
     ret
 
 1:  cmp $8, %dl
@@ -726,6 +783,7 @@ _naiveAvxMemcpyUnrolledV2:
     mov -8(%rsi, %rdx), %rcx
     mov %rax, (%rdi)
     mov %rcx, -8(%rdi, %rdx)
+    EPILOGUE
     ret
 
 1:  cmp $4, %dl
@@ -736,12 +794,14 @@ _naiveAvxMemcpyUnrolledV2:
     mov -4(%rsi, %rdx), %ecx
     mov %eax, (%rdi)
     mov %ecx, -4(%rdi, %rdx)
+    EPILOGUE
     ret
 
 1:  test $4, %dl
     jz 1f
     mov (%rsi), %eax
     mov %eax, (%rdi)
+    EPILOGUE
     ret
 
 2:  test $2, %dl
@@ -752,7 +812,8 @@ _naiveAvxMemcpyUnrolledV2:
     jz 1f
     movzbl (%rsi), %eax
     mov %al, (%rdi)
-1:  ret
+1:  EPILOGUE
+    ret
 
     /* Align the dst on 32-byte */
 3:  mov %rdi, %rcx
@@ -799,12 +860,14 @@ _naiveAvxMemcpyUnrolledV2:
     vmovups -64(%rsi, %rdx), %ymm0
     vmovups %ymm0, -64(%rdi, %rdx)
 1:  vzeroupper
+    EPILOGUE
     ret
 
 /* A version of naiveAvxMemcpyUnrolledV2 with non-temporal stores. */
 .p2align 4
 .global _naiveAvxMemcpyUnrolledNT
 _naiveAvxMemcpyUnrolledNT:
+    PROLOGUE
     cmp $64, %rdx
     ja 3f
 
@@ -817,6 +880,7 @@ _naiveAvxMemcpyUnrolledNT:
     vmovups %ymm0, (%rdi)
     vmovups %ymm1, -32(%rdi, %rdx)
     vzeroupper
+    EPILOGUE
     ret
 
 1:  cmp $16, %dl
@@ -826,6 +890,7 @@ _naiveAvxMemcpyUnrolledNT:
     movups -16(%rsi, %rdx), %xmm1
     movups %xmm0, (%rdi)
     movups %xmm1, -16(%rdi, %rdx)
+    EPILOGUE
     ret
 
 1:  cmp $8, %dl
@@ -835,6 +900,7 @@ _naiveAvxMemcpyUnrolledNT:
     mov -8(%rsi, %rdx), %rcx
     mov %rax, (%rdi)
     mov %rcx, -8(%rdi, %rdx)
+    EPILOGUE
     ret
 
 1:  cmp $4, %dl
@@ -845,12 +911,14 @@ _naiveAvxMemcpyUnrolledNT:
     mov -4(%rsi, %rdx), %ecx
     mov %eax, (%rdi)
     mov %ecx, -4(%rdi, %rdx)
+    EPILOGUE
     ret
 
 1:  test $4, %dl
     jz 1f
     mov (%rsi), %eax
     mov %eax, (%rdi)
+    EPILOGUE
     ret
 
 2:  test $2, %dl
@@ -861,7 +929,8 @@ _naiveAvxMemcpyUnrolledNT:
     jz 1f
     movzbl (%rsi), %eax
     mov %al, (%rdi)
-1:  ret
+1:  EPILOGUE
+    ret
 
     /* Align the dst on 32-byte */
 3:  mov %rdi, %rcx
@@ -909,20 +978,24 @@ _naiveAvxMemcpyUnrolledNT:
     vmovups -64(%rsi, %rdx), %ymm0
     vmovups %ymm0, -64(%rdi, %rdx)
 1:  vzeroupper
+    EPILOGUE
     ret
 
 /* A simple rep movsb version */
 .p2align 4
 .global _repMovsbMemcpy
 _repMovsbMemcpy:
+    PROLOGUE
     mov %rdx, %rcx
     rep movsb
+    EPILOGUE
     ret
 
 /* A simple rep movsq + rep movsb version */
 .p2align 4
 .global _repMovsqMemcpy
 _repMovsqMemcpy:
+    PROLOGUE
     mov %rdx, %rcx
     shr $3, %rcx
     jz 1f
@@ -930,12 +1003,14 @@ _repMovsqMemcpy:
     rep movsq
 1:  mov %rdx, %rcx
     rep movsb
+    EPILOGUE
     ret
 
 /* A copy of memcpy from musl src/string/x86_64/memcpy.s */
 .p2align 4
 .global _memcpyFromMusl
 _memcpyFromMusl:
+    PROLOGUE
     mov %rdi, %rax
     cmp $8, %rdx
     jc 1f
@@ -954,7 +1029,8 @@ _memcpyFromMusl:
 2:  movsb
     dec %edx
     jnz 2b
-1:  ret
+1:  EPILOGUE
+    ret
 
 /* Copy of memcpy from Facebook folly: https://github.com/facebook/folly/blob/master/folly/memcpy.S, non-avx
    parts stripped. */
@@ -974,6 +1050,7 @@ _folly_memcpy_short:
     mov       %ecx, (%rax)
     mov       %edi, (%rax, %rdx)
 .LEND:
+    EPILOGUE
     rep
     ret
     nop
@@ -990,11 +1067,13 @@ _folly_memcpy_short:
     //        two bytes.
     movzwl    (%rsi, %rdx), %ecx
     mov       %cx, (%rax, %rdx)
+    EPILOGUE
     ret
 
 .align    16
 .global    _folly_memcpy
 _folly_memcpy:
+    PROLOGUE
     mov       %rdx, %rcx
     mov       %rdi, %rax
     cmp       $8, %rdx
@@ -1017,6 +1096,7 @@ _folly_memcpy:
     add       %r8, %rsi
     and       $-32, %rdx
     jnz       .L32_adjDI
+    EPILOGUE
     ret
 
     .align    16
@@ -1030,6 +1110,7 @@ _folly_memcpy:
     lea       32(%rsi), %rsi
     jnz       .L64_adjDI
     vzeroupper
+    EPILOGUE
     ret
 
 .L64_adjDI:
@@ -1047,4 +1128,5 @@ _folly_memcpy:
     dec       %rdx
     jnz       .L64
     vzeroupper
+    EPILOGUE
     ret
