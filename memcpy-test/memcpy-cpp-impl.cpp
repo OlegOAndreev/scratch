@@ -154,10 +154,10 @@ void naiveAvxMemcpyUnrolledV2Cpp(char* dst, const char* src, size_t size)
         // Copy [33-64], [17-32], [9-16], [5-8] via two load/stores, the 1-4 bytes via single
         // load/stores with branches.
         if (size > 32) {
-            __m128 y0 = load_f128(src);
-            __m128 y1 = load_f128(src + size - 32);
-            store_f128(dst, y0);
-            store_f128(dst + size - 32, y1);
+            __m256 y0 = load_f256(src);
+            __m256 y1 = load_f256(src + size - 32);
+            store_f256(dst, y0);
+            store_f256(dst + size - 32, y1);
             _mm256_zeroupper();
         } else if (size > 16) {
             // Copy the first 16 bytes and the last 16 bytes (potentially overlapping).
