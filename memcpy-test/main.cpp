@@ -69,10 +69,12 @@ bool isAvxSupported() asm("_isAvxSupported");
 #else
 bool isAvxSupported()
 {
-    return false;
+    return true;
 }
 #endif
 
+void naiveSseMemcpyUnrolledV2Cpp(char* dst, const char* src, size_t size);
+void naiveAvxMemcpyUnrolledV2Cpp(char* dst, const char* src, size_t size);
 #if !defined(_MSC_VER)
 void naiveMemcpy(char* dst, const char* src, size_t size) asm("_naiveMemcpy");
 void naiveMemcpyAligned(char* dst, const char* src, size_t size) asm("_naiveMemcpyAligned");
@@ -101,7 +103,9 @@ struct {
     const char* name;
     bool avxRequired;
 } memcpyFuncs[] = {
-//    DECLARE_MEMCPY_FUNC(libcMemcpy, false),
+    DECLARE_MEMCPY_FUNC(libcMemcpy, false),
+    DECLARE_MEMCPY_FUNC(naiveSseMemcpyUnrolledV2Cpp, false),
+    DECLARE_MEMCPY_FUNC(naiveAvxMemcpyUnrolledV2Cpp, true),
 #if !defined(_MSC_VER)
 //    DECLARE_MEMCPY_FUNC(naiveMemcpy, false),
 //    DECLARE_MEMCPY_FUNC(naiveMemcpyAligned, false),
@@ -114,7 +118,7 @@ struct {
 //    DECLARE_MEMCPY_FUNC(naiveSseMemcpyUnrolledNT, false),
 //    DECLARE_MEMCPY_FUNC(naiveAvxMemcpy, true),
 //    DECLARE_MEMCPY_FUNC(naiveAvxMemcpyUnrolled, true),
-//    DECLARE_MEMCPY_FUNC(naiveAvxMemcpyUnrolledV2, true),
+    DECLARE_MEMCPY_FUNC(naiveAvxMemcpyUnrolledV2, true),
 //    DECLARE_MEMCPY_FUNC(naiveAvxMemcpyUnrolledNT, true),
 //    DECLARE_MEMCPY_FUNC(repMovsbMemcpy, false),
 //    DECLARE_MEMCPY_FUNC(repMovsqMemcpy, false),
