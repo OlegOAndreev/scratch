@@ -65,6 +65,7 @@ struct Semaphore
 {
     sem_t sema;
     Semaphore() { sem_init(&sema, 0, 0); }
+    Semaphore(unsigned value) { sem_init(&sema, 0, value); }
     ~Semaphore() { sem_destroy(&sema); }
     void post() { sem_post(&sema); }
     void wait() { sem_wait(&sema); }
@@ -74,6 +75,7 @@ struct Semaphore
 {
     dispatch_semaphore_t sema;
     Semaphore() { sema = dispatch_semaphore_create(0); }
+    Semaphore(unsigned value) { sema = dispatch_semaphore_create(value); }
     ~Semaphore() { dispatch_release(sema); }
     void post() { dispatch_semaphore_signal(sema); }
     void wait() { dispatch_semaphore_wait(sema, ~uint64_t(0)); }
@@ -83,6 +85,7 @@ struct Semaphore
 {
     HANDLE sema;
     Semaphore() { sema = CreateSemaphore(NULL, 0, MAXLONG, NULL); }
+    Semaphore(unsigned value) { sema = CreateSemaphore(NULL, value, MAXLONG, NULL); }
     ~Semaphore() { CloseHandle(sema); }
     void post() { ReleaseSemaphore(sema, 1, NULL); }
     void wait() { WaitForSingleObject(sema, INFINITE); }
@@ -131,9 +134,11 @@ namespace std {
 } // namespace std
 #endif
 
+template<size_t alignment>
 struct MutexLock
 {
     std::mutex mtx;
+    char padding[alignment - sizeof(std::mutex)];
 
     int lock()
     {
@@ -147,13 +152,70 @@ struct MutexLock
     }
 };
 
-// The idea taken from http://preshing.com/20150316/semaphores-are-surprisingly-versatile/
+template<size_t alignment>
 struct SemaphoreLock
+{
+    Semaphore semaphore;
+    char padding[alignment - sizeof(Semaphore)];
+
+    SemaphoreLock()
+        : semaphore(1)
+    {
+    }
+
+    int lock()
+    {
+        semaphore.wait();
+        return 0;
+    }
+
+    void unlock()
+    {
+        semaphore.post();
+    }
+};
+
+// The idea taken from http://preshing.com/20150316/semaphores-are-surprisingly-versatile/
+struct PaddedBenaphoreLock
+{
+    std::atomic<size_t> count;
+    char padding1[CACHE_LINE_WIDTH - sizeof(size_t)];
+    Semaphore semaphore;
+    char padding2[CACHE_LINE_WIDTH - sizeof(Semaphore)];
+
+    PaddedBenaphoreLock()
+        : count(0)
+    {
+    }
+
+    int lock()
+    {
+        for (int spins = 0; spins < 1000; spins++) {
+            size_t expected = 0;
+            if (count.compare_exchange_weak(expected, 1, std::memory_order_acq_rel)) {
+                return spins;
+            }
+        }
+        if (count.fetch_add(1, std::memory_order_acq_rel) > 0) {
+            semaphore.wait();
+        }
+        return 1000;
+    }
+
+    void unlock()
+    {
+        if (count.fetch_sub(1, std::memory_order_release) > 1) {
+            semaphore.post();
+        }
+    }
+};
+
+struct BenaphoreLock
 {
     std::atomic<size_t> count;
     Semaphore semaphore;
 
-    SemaphoreLock()
+    BenaphoreLock()
         : count(0)
     {
     }
@@ -635,9 +697,13 @@ int main(int argc, char** argv)
     run<LockingWorkData<TicketLock<EmptyBackoff, sizeof(size_t)>>>("ticketlock,unaligned", method, numThreads, inputSize, workAmount);
     // std::mutex is horribly slow on OS X, skip it altogether
 #if !defined(__APPLE__)
-    run<LockingWorkData<MutexLock>>("std::mutex", method, numThreads, inputSize, workAmount);
+    run<LockingWorkData<MutexLock<CACHE_LINE_WIDTH>>>("std::mutex", method, numThreads, inputSize, workAmount);
+    run<LockingWorkData<MutexLock<sizeof(std::mutex)>>>("std::mutex,unaligned", method, numThreads, inputSize, workAmount);
 #endif
-    run<LockingWorkData<SemaphoreLock>>("semaphore", method, numThreads, inputSize, workAmount);
+    run<LockingWorkData<SemaphoreLock<CACHE_LINE_WIDTH>>>("semaphore", method, numThreads, inputSize, workAmount);
+    run<LockingWorkData<SemaphoreLock<sizeof(Semaphore)>>>("semaphore,unaligned", method, numThreads, inputSize, workAmount);
+    run<LockingWorkData<PaddedBenaphoreLock>>("benaphore", method, numThreads, inputSize, workAmount);
+    run<LockingWorkData<BenaphoreLock>>("benaphore,unaligned", method, numThreads, inputSize, workAmount);
 
     return 0;
 }
