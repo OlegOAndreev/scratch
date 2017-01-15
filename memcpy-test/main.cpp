@@ -120,7 +120,7 @@ struct {
 //    DECLARE_MEMCPY_FUNC(naiveAvxMemcpyUnrolled, true),
     DECLARE_MEMCPY_FUNC(naiveAvxMemcpyUnrolledV2, true),
 //    DECLARE_MEMCPY_FUNC(naiveAvxMemcpyUnrolledNT, true),
-//    DECLARE_MEMCPY_FUNC(repMovsbMemcpy, false),
+    DECLARE_MEMCPY_FUNC(repMovsbMemcpy, false),
 //    DECLARE_MEMCPY_FUNC(repMovsqMemcpy, false),
 //    DECLARE_MEMCPY_FUNC(memcpyFromMusl, false),
 //    DECLARE_MEMCPY_FUNC(folly_memcpy, true),

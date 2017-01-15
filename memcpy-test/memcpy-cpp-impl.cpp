@@ -1,6 +1,13 @@
 #include <immintrin.h>
 #include <stdint.h>
 
+#if defined(WITH_IACA_SUPPORT)
+#include <iacaMarks.h>
+#else
+#define IACA_START
+#define IACA_END
+#endif
+
 #if defined(__GNUC__)
 #define FORCE_INLINE __attribute__((always_inline)) inline
 
@@ -80,6 +87,7 @@ FORCE_INLINE size_t toAlignPtr(char* p)
 // A C++ reimplementation of naiveSseMemcpyUnrolledV2.
 void naiveSseMemcpyUnrolledV2Cpp(char* dst, const char* src, size_t size)
 {
+    IACA_START
     if (size <= 32) {
         // Copy [17-32], [9-16], [5-8] via two load/stores, the 1-4 bytes via single load/stores with branches.
         if (size > 16) {
@@ -145,11 +153,13 @@ void naiveSseMemcpyUnrolledV2Cpp(char* dst, const char* src, size_t size)
         store_f128(lastDst, xlast0);
         store_f128(lastDst + 16, xlast1);
     }
+    IACA_END
 }
 
 // A C++ reimplementation of naiveAvxMemcpyUnrolledV2.
 void naiveAvxMemcpyUnrolledV2Cpp(char* dst, const char* src, size_t size)
 {
+    IACA_START
     if (size <= 64) {
         // Copy [33-64], [17-32], [9-16], [5-8] via two load/stores, the 1-4 bytes via single
         // load/stores with branches.
@@ -223,4 +233,5 @@ void naiveAvxMemcpyUnrolledV2Cpp(char* dst, const char* src, size_t size)
         store_f256(lastDst + 32, ylast1);
         _mm256_zeroupper();
     }
+    IACA_END
 }
