@@ -9,6 +9,6 @@ pkg_search_module(SDL2 REQUIRED sdl2)
 include_directories(${SDL2_INCLUDE_DIRS})
 link_directories(${SDL2_LIBRARY_DIRS})
 
-add_executable(${PROJECT_NAME} main.cpp)
+add_executable(${PROJECT_NAME} gamepad-id.cpp)
 
 target_link_libraries(${PROJECT_NAME} ${SDL2_LIBRARIES})
