@@ -107,7 +107,7 @@ void startItimerHandler(int which, int frequency, SigHandlerFunction handler)
             break;
     }
 
-    struct sigaction sa = {};
+    struct sigaction sa;
     memset(&sa, 0, sizeof(sa));
     sa.sa_sigaction = handler;
     sa.sa_flags = SA_RESTART | SA_SIGINFO;
@@ -143,7 +143,7 @@ void startPosixTimerHandler(clockid_t clockId, int frequency, SigHandlerFunction
 {
     int signo = SIGPROF;
 
-    struct sigaction sa = {};
+    struct sigaction sa;
     memset(&sa, 0, sizeof(sa));
     sa.sa_sigaction = handler;
     sa.sa_flags = SA_RESTART | SA_SIGINFO;
