@@ -7,18 +7,24 @@
 #if defined(__APPLE__)
 #include <pthread.h>
 #include <signal.h>
+#include <sys/select.h>
 #include <sys/time.h>
 #elif defined(__linux__)
 #include <pthread.h>
+#include <sched.h>
 #include <signal.h>
 #include <time.h>
 #include <unistd.h>
+#include <sys/prctl.h>
+#include <sys/select.h>
 #include <sys/syscall.h>
 #include <sys/time.h>
 #include <sys/timerfd.h>
 #else
 #error "Unsupported OS"
 #endif
+
+int dummy = 0;
 
 #if 0
 void getStackTrace(void** stack, ucontext_t* ucontext)
@@ -176,8 +182,6 @@ void stopPosixTimer()
     timer_delete(timerId);
 }
 #endif
-
-int dummy = 0;
 
 void dummyCircularMove(char* dst, const char* src, size_t size, size_t stride)
 {
@@ -340,105 +344,183 @@ void spinningSleep(int nsec)
     }
 }
 
-void testSleepAccuracy(int nsec)
+template <typename SleepF>
+void testSleepAccuracy(SleepF sleepf)
 {
-    size_t numIterations = 1000000000 / nsec;
-    uint64_t start = clockGetNsec(CLOCK_MONOTONIC);
+    const int nsecs[] = { 10000, 1000, 100 };
 
-    struct timespec ts;
-    ts.tv_sec = 0;
-    ts.tv_nsec = nsec;
-    for (size_t i = 0; i < numIterations; i++) {
-        nanosleep(&ts, nullptr);
-    }
-    printf("Nanosleep slept %d instead of %d nsec\n",
-           (int)((clockGetNsec(CLOCK_MONOTONIC) - start) / numIterations), nsec);
-
-    start = clockGetNsec(CLOCK_MONOTONIC);
-    for (size_t i = 0; i < numIterations; i++) {
-        spinningSleep(nsec);
-    }
-    printf("Spinning sleep slept %d instead of %d nsec\n",
-           (int)((clockGetNsec(CLOCK_MONOTONIC) - start) / numIterations), nsec);
-
-#if defined(__linux__)
-    for (size_t i = 0; i < numIterations; i++) {
-        ts.tv_nsec = clockGetNsec(CLOCK_MONOTONIC) + nsec;
-        clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &ts, nullptr);
-    }
-    printf("Clock_nanosleep slept %d instead of %d nsec\n",
-           (int)((clockGetNsec(CLOCK_MONOTONIC) - start) / numIterations), nsec);
-
-    int timerFd = timerfd_create(CLOCK_MONOTONIC, 0);
-    if (timerFd == -1) {
-        printf("Failed to create timerfd\n");
-        exit(1);
-    }
-    itimerspec itspec;
-    itspec.it_interval.tv_sec = 0;
-    itspec.it_interval.tv_nsec = nsec;
-    itspec.it_value = itspec.it_interval;
-    if (timerfd_settime(timerFd, 0, &itspec, nullptr) == -1) {
-        printf("Failed to set timerfd\n");
-        exit(1);
-    }
-
-    start = clockGetNsec(CLOCK_MONOTONIC);
-    for (size_t i = 0; i < numIterations; i++) {
-        uint64_t buf;
-        if (read(timerFd, &buf, sizeof(buf)) == -1) {
-            printf("Failed to read timerfd\n");
-            exit(1);
+    static const size_t NUM_ITERATIONS = 10000;
+    int* deltas = new int[NUM_ITERATIONS];
+    for (int nsec : nsecs) {
+        uint64_t start = clockGetNsec(CLOCK_MONOTONIC);
+        for (size_t i = 0; i < NUM_ITERATIONS; i++) {
+            sleepf(nsec);
         }
+        uint64_t end = clockGetNsec(CLOCK_MONOTONIC);
+
+        for (size_t i = 0; i < NUM_ITERATIONS; i++) {
+            uint64_t startIter = clockGetNsec(CLOCK_MONOTONIC);
+            sleepf(nsec);
+            deltas[i] = clockGetNsec(CLOCK_MONOTONIC) - startIter;
+        }
+        std::sort(deltas, deltas + NUM_ITERATIONS);
+        printf("Slept %d instead of %d nsec, p0 %d, p50 %d, p95 %d, p99 %d, p100 %d nsec\n",
+               (int)((end - start) / NUM_ITERATIONS), nsec, deltas[0], deltas[NUM_ITERATIONS / 2],
+                deltas[NUM_ITERATIONS * 95 / 100], deltas[NUM_ITERATIONS * 99 / 100],
+                deltas[NUM_ITERATIONS - 1]);
     }
-    printf("Timerfd slept %d instead of %d nsec\n",
-           (int)((clockGetNsec(CLOCK_MONOTONIC) - start) / numIterations), nsec);
-    close(timerFd);
-#endif
+    delete[] deltas;
 }
 
-int main()
+int doSleepAccuracy = 1 << 0;
+int doClockResolution = 1 << 1;
+int doSignalResolution = 1 << 2;
+
+void doMain(int doMask)
 {
-    printf("\nTesting sleep accuracy\n");
+    if (doMask & doSleepAccuracy) {
+        printf("\nTesting sleep accuracy\n");
 
-    printf("Testing 0.1 msec sleep accuracy\n");
-    testSleepAccuracy(100000);
-    printf("Testing 10 microsec sleep accuracy\n");
-    testSleepAccuracy(10000);
-    printf("Testing 1 microsec sleep accuracy\n");
-    testSleepAccuracy(1000);
+        printf("Testing nanosleep sleep accuracy\n");
+        testSleepAccuracy([](int nsec) {
+            struct timespec ts;
+            ts.tv_sec = 0;
+            ts.tv_nsec = nsec;
+            nanosleep(&ts, nullptr);
+        });
 
-    printf("\nTesting clock resolutions\n");
+        printf("Testing pselect sleep accuracy\n");
+        testSleepAccuracy([](int nsec) {
+            struct timespec tv;
+            tv.tv_sec = 0;
+            tv.tv_nsec = nsec;
+            pselect(0, nullptr, nullptr, nullptr, &tv, nullptr);
+        });
 
-    printf("Testing CLOCK_MONOTONIC resolution\n");
-    testClockResolution(CLOCK_MONOTONIC);
-    printf("Testing CLOCK_PROCESS_CPUTIME_ID resolution\n");
-    testClockResolution(CLOCK_PROCESS_CPUTIME_ID);
+        printf("Testing spinning sleep accuracy\n");
+        testSleepAccuracy([](int nsec) {
+            spinningSleep(nsec);
+        });
 
-    printf("\nTesting profiling signal resolutions\n");
-
-    int freqs[] = { 10, 50, 100, 300, 900, 1000, 2000, 10000 };
-    printf("Testing ITIMER_REAL with simple handler\n");
-    for (int freq : freqs) {
-        tryItimer(ITIMER_REAL, freq, simpleSigHandler);
-    }
-    printf("Testing ITIMER_PROF with simple handler\n");
-    for (int freq : freqs) {
-        tryItimer(ITIMER_PROF, freq, simpleSigHandler);
-    }
-    printf("Testing ITIMER_VIRTUAL with simple handler\n");
-    for (int freq : freqs) {
-        tryItimer(ITIMER_VIRTUAL, freq, simpleSigHandler);
-    }
 #if defined(__linux__)
-    printf("Testing CLOCK_MONOTONIC with simple handler\n");
-    for (int freq : freqs) {
-        tryPosixTimer(CLOCK_MONOTONIC, freq, simpleSigHandler);
+        printf("Testing CLOCK_MONOTONIC relative clock_nanosleep sleep accuracy\n");
+        testSleepAccuracy([](int nsec) {
+            struct timespec ts;
+            ts.tv_sec = 0;
+            ts.tv_nsec = nsec;
+            clock_nanosleep(CLOCK_MONOTONIC, 0, &ts, nullptr);
+        });
+
+        printf("Testing CLOCK_MONOTONIC absolute clock_nanosleep sleep accuracy\n");
+        testSleepAccuracy([](int nsec) {
+            struct timespec ts;
+            clock_gettime(CLOCK_MONOTONIC, &ts);
+            ts.tv_nsec += nsec;
+            clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &ts, nullptr);
+        });
+
+        int timerfd = timerfd_create(CLOCK_MONOTONIC, 0);
+        if (timerfd == -1) {
+            printf("Failed to create timerfd\n");
+            exit(1);
+        }
+
+        printf("Testing CLOCK_MONOTONIC timerfd sleep accuracy\n");
+        testSleepAccuracy([=](int nsec) {
+            itimerspec itspec;
+            itspec.it_interval.tv_sec = 0;
+            itspec.it_interval.tv_nsec = nsec;
+            itspec.it_value = itspec.it_interval;
+            if (timerfd_settime(timerfd, 0, &itspec, nullptr) == -1) {
+                printf("Failed to set timerfd\n");
+                exit(1);
+            }
+            uint64_t buf;
+            if (read(timerfd, &buf, sizeof(buf)) == -1) {
+                printf("Failed to read timerfd\n");
+                exit(1);
+            }
+        });
+        close(timerfd);
+#endif
     }
-    printf("Testing CLOCK_PROCESS_CPUTIME_ID with simple handler\n");
-    for (int freq : freqs) {
-        tryPosixTimer(CLOCK_PROCESS_CPUTIME_ID, freq, simpleSigHandler);
+
+    if (doMask & doClockResolution) {
+        printf("\nTesting clock resolutions\n");
+
+        printf("Testing CLOCK_MONOTONIC resolution\n");
+        testClockResolution(CLOCK_MONOTONIC);
+        printf("Testing CLOCK_PROCESS_CPUTIME_ID resolution\n");
+        testClockResolution(CLOCK_PROCESS_CPUTIME_ID);
+    }
+
+    if (doMask & doSignalResolution) {
+        printf("\nTesting profiling signal resolutions\n");
+
+        int freqs[] = { 10, 50, 100, 300, 900, 1000, 2000, 10000 };
+        printf("Testing ITIMER_REAL with simple handler\n");
+        for (int freq : freqs) {
+            tryItimer(ITIMER_REAL, freq, simpleSigHandler);
+        }
+        printf("Testing ITIMER_PROF with simple handler\n");
+        for (int freq : freqs) {
+            tryItimer(ITIMER_PROF, freq, simpleSigHandler);
+        }
+        printf("Testing ITIMER_VIRTUAL with simple handler\n");
+        for (int freq : freqs) {
+            tryItimer(ITIMER_VIRTUAL, freq, simpleSigHandler);
+        }
+#if defined(__linux__)
+        printf("Testing CLOCK_MONOTONIC with simple handler\n");
+        for (int freq : freqs) {
+            tryPosixTimer(CLOCK_MONOTONIC, freq, simpleSigHandler);
+        }
+        printf("Testing CLOCK_PROCESS_CPUTIME_ID with simple handler\n");
+        for (int freq : freqs) {
+            tryPosixTimer(CLOCK_PROCESS_CPUTIME_ID, freq, simpleSigHandler);
+        }
+#endif
+    }
+}
+
+int main(int argc, char** argv)
+{
+    int doMask;
+    if (argc > 2) {
+        printf("Usage: %s [sleep|clock|signal]\n", argv[0]);
+        return 1;
+    } else if (argc == 2) {
+        if (strcmp(argv[1], "sleep") == 0) {
+            doMask = doSleepAccuracy;
+        } else if (strcmp(argv[1], "clock") == 0) {
+            doMask = doClockResolution;
+        } else if (strcmp(argv[1], "signal") == 0) {
+            doMask = doSignalResolution;
+        } else {
+            printf("Usage: %s [sleep|clock|signal]\n", argv[0]);
+            return 1;
+        }
+    } else {
+        doMask = doSleepAccuracy | doClockResolution | doSignalResolution;
+    }
+
+    doMain(doMask);
+#if defined(__linux__)
+    printf("\nRetrying with different timer slack\n");
+    printf("Setting timer slack to 1 nsec, was %d nsec\n", prctl(PR_GET_TIMERSLACK, 0, 0, 0, 0));
+    prctl(PR_SET_TIMERSLACK, 1, 0, 0, 0);
+
+    doMain(doMask);
+
+    printf("\nRetrying with RR scheduler\n");
+    sched_param sparam;
+    memset(&sparam, 0, sizeof(sparam));
+    if (sched_setscheduler(0, SCHED_RR, &sparam) == 0) {
+        doMain(doMask);
+    } else {
+        printf("Failed to set scheduler to RR\n");
     }
 #endif
+
     return dummy;
 }
