@@ -1,28 +1,27 @@
+#if defined(__APPLE__)
+#include <mach/mach.h>
+#include <mach/mach_time.h>
+#elif defined(__linux__)
+#include <sched.h>
+#include <time.h>
+#include <unistd.h>
+#include <sys/prctl.h>
+#include <sys/syscall.h>
+#include <sys/timerfd.h>
+#else
+#error "Unsupported OS"
+#endif
+
 #include <algorithm>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-
-#if defined(__APPLE__)
 #include <pthread.h>
 #include <signal.h>
+#include <unwind.h>
 #include <sys/select.h>
 #include <sys/time.h>
-#elif defined(__linux__)
-#include <pthread.h>
-#include <sched.h>
-#include <signal.h>
-#include <time.h>
-#include <unistd.h>
-#include <sys/prctl.h>
-#include <sys/select.h>
-#include <sys/syscall.h>
-#include <sys/time.h>
-#include <sys/timerfd.h>
-#else
-#error "Unsupported OS"
-#endif
 
 int dummy = 0;
 
@@ -94,6 +93,33 @@ uint64_t sleepTime = 0;
 void simpleSigHandler(int /*sig*/, siginfo_t* /*sinfo*/, void* /*ucontext*/)
 {
     sigCount.inc(getThreadId());
+}
+
+struct StackTrace {
+    static const size_t MAX_STACK_DEPTH = 256;
+    void* stack[MAX_STACK_DEPTH];
+    size_t count = 0;
+};
+
+_Unwind_Reason_Code libgccUnwindOneFrame(struct _Unwind_Context* uc, void* arg)
+{
+    StackTrace* trace = (StackTrace*)arg;
+    trace->stack[trace->count] = (void*)_Unwind_GetIP(uc);
+    trace->count++;
+    if (trace->count == StackTrace::MAX_STACK_DEPTH) {
+        return _URC_END_OF_STACK;
+    }
+    return _URC_NO_REASON;
+}
+
+void libgccUnwindSigHandler(int /*sig*/, siginfo_t* /*sinfo*/, void* /*ucontext*/)
+{
+    sigCount.inc(getThreadId());
+    StackTrace trace;
+    _Unwind_Backtrace(libgccUnwindOneFrame, &trace);
+    for (size_t i = 0; i < trace.count; i++) {
+        dummy ^= (int)(intptr_t)trace.stack[i];
+    }
 }
 
 using SigHandlerFunction = void(*)(int, siginfo_t*, void*);
@@ -347,7 +373,7 @@ void spinningSleep(int nsec)
 template <typename SleepF>
 void testSleepAccuracy(SleepF sleepf)
 {
-    const int nsecs[] = { 10000, 1000, 100 };
+    const int nsecs[] = { 10000, 1000, 100, 1 };
 
     static const size_t NUM_ITERATIONS = 10000;
     int* deltas = new int[NUM_ITERATIONS];
@@ -401,6 +427,17 @@ void doMain(int doMask)
         testSleepAccuracy([](int nsec) {
             spinningSleep(nsec);
         });
+
+#if defined(__APPLE__)
+        printf("Testing mach_wait_until sleep accuracy\n");
+        testSleepAccuracy([](int nsec) {
+            mach_timebase_info_data_t timebase_info;
+            mach_timebase_info(&timebase_info);
+            uint64_t time_to_wait = nsec * timebase_info.numer  / timebase_info.denom;
+            uint64_t now = mach_absolute_time();
+            mach_wait_until(now + time_to_wait);
+        });
+#endif
 
 #if defined(__linux__)
         printf("Testing CLOCK_MONOTONIC relative clock_nanosleep sleep accuracy\n");
@@ -458,13 +495,17 @@ void doMain(int doMask)
         printf("\nTesting profiling signal resolutions\n");
 
         int freqs[] = { 10, 50, 100, 300, 900, 1000, 2000, 10000 };
-        printf("Testing ITIMER_REAL with simple handler\n");
+        printf("Testing ITIMER_PROF with libgcc unwind handler\n");
         for (int freq : freqs) {
-            tryItimer(ITIMER_REAL, freq, simpleSigHandler);
+            tryItimer(ITIMER_PROF, freq, libgccUnwindSigHandler);
         }
         printf("Testing ITIMER_PROF with simple handler\n");
         for (int freq : freqs) {
             tryItimer(ITIMER_PROF, freq, simpleSigHandler);
+        }
+        printf("Testing ITIMER_REAL with simple handler\n");
+        for (int freq : freqs) {
+            tryItimer(ITIMER_REAL, freq, simpleSigHandler);
         }
         printf("Testing ITIMER_VIRTUAL with simple handler\n");
         for (int freq : freqs) {
