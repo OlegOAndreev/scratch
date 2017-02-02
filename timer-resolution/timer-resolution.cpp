@@ -423,6 +423,21 @@ void doMain(int doMask)
             pselect(0, nullptr, nullptr, nullptr, &tv, nullptr);
         });
 
+        printf("Testing with pthread cond wait\n");
+        pthread_mutex_t pthreadMutex;
+        pthread_cond_t pthreadCond;
+        pthread_mutex_init(&pthreadMutex, nullptr);
+        pthread_cond_init(&pthreadCond, nullptr);
+        testSleepAccuracy([&](int nsec) {
+            struct timespec ts;
+            clock_gettime(CLOCK_REALTIME, &ts);
+            ts.tv_nsec += nsec;
+            pthread_mutex_lock(&pthreadMutex);
+            pthread_cond_timedwait(&pthreadCond, &pthreadMutex, &ts);
+            pthread_mutex_unlock(&pthreadMutex);
+        });
+
+
         printf("Testing spinning sleep accuracy\n");
         testSleepAccuracy([](int nsec) {
             spinningSleep(nsec);
