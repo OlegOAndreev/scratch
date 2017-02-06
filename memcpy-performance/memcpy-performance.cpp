@@ -1,3 +1,6 @@
+#define RTE_MACHINE_CPUFLAG_AVX2
+#include "rte_memcpy.h"
+
 #include <algorithm>
 #include <stdio.h>
 #include <stdint.h>
@@ -63,6 +66,11 @@ void libcMemcpy(char* dst, const char* src, size_t size)
     memcpy(dst, src, size);
 }
 
+void rteMemcpy(char* dst, const char* src, size_t size)
+{
+    rte_memcpy(dst, src, size);
+}
+
 // MSVC cannot compile the asm source anyway, use it only to verify MinGW results.
 #if !defined(_MSC_VER)
 bool isAvxSupported() asm("_isAvxSupported");
@@ -106,6 +114,7 @@ struct {
     DECLARE_MEMCPY_FUNC(libcMemcpy, false),
     DECLARE_MEMCPY_FUNC(naiveSseMemcpyUnrolledV2Cpp, false),
     DECLARE_MEMCPY_FUNC(naiveAvxMemcpyUnrolledV2Cpp, true),
+    DECLARE_MEMCPY_FUNC(rteMemcpy, true),
 #if !defined(_MSC_VER)
 //    DECLARE_MEMCPY_FUNC(naiveMemcpy, false),
 //    DECLARE_MEMCPY_FUNC(naiveMemcpyAligned, false),
