@@ -13,7 +13,7 @@ using std::vector;
 Uint64 timeFreq;
 
 int audioSampleRate = 48000;
-int audioFrames = 256;
+int audioFrames = 1024;
 SDL_AudioFormat audioFormat = AUDIO_S16;
 bool audioDebug = false;
 int outputWaveHz = 250;
@@ -202,7 +202,7 @@ int main(int argc, char** argv)
 
     SDL_PauseAudioDevice(outputDev, 0);
 
-    SDL_CreateWindow("Audio delay", 50, 50, 100, 100, SDL_WINDOW_OPENGL | SDL_WINDOW_ALLOW_HIGHDPI);
+    SDL_CreateWindow("Audio test", 50, 50, 100, 100, SDL_WINDOW_OPENGL | SDL_WINDOW_ALLOW_HIGHDPI);
     SDL_Event event;
     while (SDL_WaitEvent(&event)) {
         if (event.type == SDL_QUIT) {
