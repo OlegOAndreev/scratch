@@ -12,8 +12,11 @@
 #if defined(__APPLE__)
 #include <dispatch/dispatch.h>
 #include <sys/time.h>
+#include <pthread.h>
+#include <pthread_spis.h>
 #include <unistd.h>
 #elif defined(__linux__)
+#include <pthread.h>
 #include <semaphore.h>
 #include <time.h>
 #include <unistd.h>
@@ -151,6 +154,60 @@ struct MutexLock
         mtx.unlock();
     }
 };
+
+#if defined(__APPLE__) || defined(__linux__)
+template<size_t alignment>
+struct PThreadMutexLock
+{
+    pthread_mutex_t mtx;
+    char padding[alignment - sizeof(pthread_mutex_t)];
+
+    PThreadMutexLock()
+    {
+        pthread_mutex_init(&mtx, nullptr);
+    }
+
+    int lock()
+    {
+        pthread_mutex_lock(&mtx);
+        return 0;
+    }
+
+    void unlock()
+    {
+        pthread_mutex_unlock(&mtx);
+    }
+};
+#endif
+
+#if defined(__APPLE__)
+template<size_t alignment>
+struct PThreadMutexUnfairLock
+{
+    pthread_mutex_t mtx;
+    char padding[alignment - sizeof(pthread_mutex_t)];
+
+    PThreadMutexUnfairLock()
+    {
+        pthread_mutexattr_t attr;
+        pthread_mutexattr_init(&attr);
+        pthread_mutexattr_setpolicy_np(&attr, _PTHREAD_MUTEX_POLICY_FIRSTFIT);
+        pthread_mutex_init(&mtx, &attr);
+        pthread_mutexattr_destroy(&attr);
+    }
+
+    int lock()
+    {
+        pthread_mutex_lock(&mtx);
+        return 0;
+    }
+
+    void unlock()
+    {
+        pthread_mutex_unlock(&mtx);
+    }
+};
+#endif
 
 template<size_t alignment>
 struct SemaphoreLock
@@ -695,10 +752,16 @@ int main(int argc, char** argv)
 #endif
     run<LockingWorkData<TicketLock<EmptyBackoff, CACHE_LINE_WIDTH>>>("ticketlock", method, numThreads, inputSize, workAmount);
     run<LockingWorkData<TicketLock<EmptyBackoff, sizeof(size_t)>>>("ticketlock,unaligned", method, numThreads, inputSize, workAmount);
-    // std::mutex is horribly slow on OS X, skip it altogether
-#if !defined(__APPLE__)
+// #if !defined(__APPLE__) // std::mutex and default pthread_mutex is horribly slow on OS X, skip it altogether
+#if 1
     run<LockingWorkData<MutexLock<CACHE_LINE_WIDTH>>>("std::mutex", method, numThreads, inputSize, workAmount);
-    run<LockingWorkData<MutexLock<sizeof(std::mutex)>>>("std::mutex,unaligned", method, numThreads, inputSize, workAmount);
+    run<LockingWorkData<MutexLock<sizeof(pthread_mutex_t)>>>("std::mutex,unaligned", method, numThreads, inputSize, workAmount);
+    run<LockingWorkData<PThreadMutexLock<CACHE_LINE_WIDTH>>>("pthread_mutex", method, numThreads, inputSize, workAmount);
+    run<LockingWorkData<PThreadMutexLock<sizeof(pthread_mutex_t)>>>("pthread_mutex,unaligned", method, numThreads, inputSize, workAmount);
+#endif
+#if defined(__APPLE__)
+    run<LockingWorkData<PThreadMutexUnfairLock<CACHE_LINE_WIDTH>>>("pthread_mutex,unfair", method, numThreads, inputSize, workAmount);
+    run<LockingWorkData<PThreadMutexUnfairLock<sizeof(pthread_mutex_t)>>>("pthread_mutex,unfair,unaligned", method, numThreads, inputSize, workAmount);
 #endif
     run<LockingWorkData<SemaphoreLock<CACHE_LINE_WIDTH>>>("semaphore", method, numThreads, inputSize, workAmount);
     run<LockingWorkData<SemaphoreLock<sizeof(Semaphore)>>>("semaphore,unaligned", method, numThreads, inputSize, workAmount);
