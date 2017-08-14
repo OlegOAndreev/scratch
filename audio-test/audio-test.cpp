@@ -2,12 +2,14 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <memory>
 #include <unordered_map>
 #include <vector>
 #include <SDL2/SDL.h>
 #include <soundio/soundio.h>
 
 using std::pair;
+using std::unique_ptr;
 using std::unordered_map;
 using std::vector;
 
@@ -23,9 +25,10 @@ int audioSampleRate = 48000;
 int audioFrames = 1024;
 SDL_AudioFormat audioFormat = AUDIO_S16;
 bool audioDebug = false;
-int outputWaveHz = 250;
+int sineWaveHz = 250;
 
-vector<Uint8> samples;
+unique_ptr<Uint8[]> samples;
+size_t samplesSize;
 
 Uint64 timeFreq;
 
@@ -53,19 +56,22 @@ void prepareSineWave(int waveHz)
     size_t numSamples = audioSampleRate;
     switch (audioFormat) {
         case AUDIO_S16:
-            samples.resize(numSamples * sizeof(Sint16) * 2);
+            samplesSize = numSamples * sizeof(Sint16) * 2;
+            samples.reset(new Uint8[samplesSize]);
             prepareSineWaveImpl<Sint16>(numSamples, 0, audioSampleRate, kNumChannels, waveHz, -10000, 10000,
-                                        (Sint16*)samples.data());
+                                        (Sint16*)samples.get());
             break;
         case AUDIO_U16:
-            samples.resize(numSamples * sizeof(Uint16) * 2);
+            samplesSize = numSamples * sizeof(Sint16) * 2;
+            samples.reset(new Uint8[samplesSize]);
             prepareSineWaveImpl<Uint16>(numSamples, 0, audioSampleRate, kNumChannels, waveHz, 0, 20000,
-                                        (Uint16*)samples.data());
+                                        (Uint16*)samples.get());
             break;
         case AUDIO_F32:
-            samples.resize(numSamples * sizeof(float) * 2);
+            samplesSize = numSamples * sizeof(float) * 2;
+            samples.reset(new Uint8[samplesSize]);
             prepareSineWaveImpl<float>(numSamples, 0, audioSampleRate, kNumChannels, waveHz, -0.3, 0.3,
-                                       (float*)samples.data());
+                                       (float*)samples.get());
             break;
         default:
             printf("Format not implemented\n");
@@ -76,17 +82,17 @@ void prepareSineWave(int waveHz)
 template<typename T>
 size_t copyFromSamples(size_t pos, size_t len, T* dest)
 {
-    if (pos + len <= samples.size()) {
-        memcpy(dest, samples.data() + pos, len);
+    if (pos + len <= samplesSize) {
+        memcpy(dest, &samples[pos], len);
         pos += len;
-        if (pos == samples.size()) {
+        if (pos == samplesSize) {
             pos = 0;
         }
     } else {
-        size_t end = samples.size() - pos;
-        memcpy(dest, samples.data() + pos, end);
+        size_t end = samplesSize - pos;
+        memcpy(dest, &samples[pos], end);
         pos = len - end;
-        memcpy(dest + end, samples.data(), pos);
+        memcpy(dest + end, &samples[0], pos);
     }
     return pos;
 }
@@ -94,8 +100,8 @@ size_t copyFromSamples(size_t pos, size_t len, T* dest)
 void SDLCALL sdlOutputCallback(void* /*userdata*/, Uint8* stream, int len)
 {
     static size_t lastPos = 0;
-    if ((size_t)len > samples.size()) {
-        printf("Internal error: len > output size: %d > %d\n", len, (int)samples.size());
+    if ((size_t)len > samplesSize) {
+        printf("Internal error: len > output size: %d > %d\n", len, (int)samplesSize);
         return;
     }
 
@@ -122,17 +128,17 @@ void copySoundioFrames(int framesToWrite, size_t* lastPos, struct SoundIoChannel
     bool standardLayout = (areas[0].step == sizeof(T) * kNumChannels)
             && (areas[1].step == sizeof(T) * kNumChannels)
             && (areas[1].ptr - areas[0].ptr == sizeof(T))
-            && (len <= samples.size());
+            && (len <= samplesSize);
     if (standardLayout) {
         *lastPos = copyFromSamples(*lastPos, len, areas[0].ptr);
     } else {
         size_t pos = *lastPos;
         for (int frame = 0; frame < framesToWrite; frame++) {
             for (int channel = 0; channel < kNumChannels; channel++) {
-                memcpy(areas[channel].ptr, samples.data() + pos, sizeof(T));
+                memcpy(areas[channel].ptr, &samples[pos], sizeof(T));
                 areas[channel].ptr += areas[channel].step;
                 pos += sizeof(T);
-                if (pos > samples.size()) {
+                if (pos > samplesSize) {
                     pos = 0;
                 }
             }
@@ -378,7 +384,7 @@ int main(int argc, char** argv)
                 printf("Missing argument for --wave-hz\n");
                 return 1;
             }
-            outputWaveHz = atoi(argv[i + 1]);
+            sineWaveHz = atoi(argv[i + 1]);
             i += 2;
         } else if (strcmp(argv[i], "--format") == 0) {
             // Format: s16, u16 or f32.
@@ -406,7 +412,7 @@ int main(int argc, char** argv)
         }
     }
 
-    prepareSineWave(outputWaveHz);
+    prepareSineWave(sineWaveHz);
 
     switch (audioBackend) {
         case AudioBackend::SDL:
