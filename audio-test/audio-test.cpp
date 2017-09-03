@@ -69,7 +69,7 @@ size_t outputPos = 0;
 size_t inputPos = 0;
 // File to write the recorded data to.
 int outputFd = -1;
-size_t outputDataSize = 0;
+size_t outputFdDataSize = 0;
 
 Uint64 timeFreq;
 
@@ -140,7 +140,10 @@ void writeWaveHeader(int fd)
     static_assert(SDL_BYTEORDER == SDL_LIL_ENDIAN, "Big endian is not supported by WAVE writer");
     WaveHeader header;
     // Write the default values, they will be overwritten later.
-    write(fd, &header, sizeof(header));
+    if (write(fd, &header, sizeof(header)) != sizeof(header)) {
+        printf("Header write failed\n");
+        exit(1);
+    }
 }
 
 void rewriteWaveHeader(int fd)
@@ -149,13 +152,16 @@ void rewriteWaveHeader(int fd)
     lseek(fd, 0, SEEK_SET);
     header.formatTag = audioFormat == AUDIO_F32 ? kWaveFormatTagFloat : kWaveFormatTagPcm;
     header.numChannels = kNumChannels;
-    header.totalSize = 36 + outputDataSize;
+    header.totalSize = 36 + outputFdDataSize;
     header.sampleRate = audioSampleRate;
     header.byteRate = kNumChannels * audioSampleRate * SDL_AUDIO_BITSIZE(audioFormat) / 8;
     header.blockAlign = kNumChannels * SDL_AUDIO_BITSIZE(audioFormat) / 8;
-    header.dataChunkSize = outputDataSize;
+    header.dataChunkSize = outputFdDataSize;
     // Rewrite the header with actual values.
-    write(fd, &header, sizeof(header));
+    if (write(fd, &header, sizeof(header)) != sizeof(header)) {
+        printf("Header write failed\n");
+        exit(1);
+    }
 }
 
 template<typename T>
@@ -215,14 +221,47 @@ size_t copyAndDup(Uint8* dst, size_t dstLen, size_t dstPos, const Uint8* src, si
     }
 }
 
+void convertU16toS16(Uint8* stream, size_t len)
+{
+    Uint16* stream16 = (Uint16*)stream;
+    for (size_t i = 0; i < len / 2; i++) {
+        stream16[i] -= UINT16_MAX / 2;
+    }
+}
+
+void writeWaveData(Uint8* stream, size_t len)
+{
+    // 48000 * 2 channels * 1 second.
+    static Uint8 scratch[96000];
+
+    if ((int)sizeof(scratch) < len / kNumChannels) {
+        printf("Internal error: len > input scratch buffer size: %d > %d\n", (int)len, (int)sizeof(scratch) );
+    }
+    size_t writeLen = copyAndDup(scratch, sizeof(scratch), 0, stream, len);
+    if (audioFormat == AUDIO_U16) {
+        convertU16toS16(scratch, writeLen);
+    }
+    if ((size_t)write(outputFd, stream, writeLen) != writeLen) {
+        printf("Data write failed\n");
+        exit(1);
+    }
+    outputFdDataSize += writeLen;
+}
+
+// Either write to file or output.
 void SDLCALL sdlOutputCallback(void* /*userdata*/, Uint8* stream, int len)
 {
-    if ((size_t)len > samplesSize) {
-        printf("Internal error: len > output size: %d > %d\n", len, (int)samplesSize);
-        return;
-    }
+    if (outputFd != -1) {
+        writeWaveData(stream, len);
+        memset(stream, 0, len);
+    } else {
+        if ((size_t)len > samplesSize) {
+            printf("Internal error: len > output size: %d > %d\n", len, (int)samplesSize);
+            return;
+        }
 
-    outputPos = copyFromSamples(outputPos, len, stream);
+        outputPos = copyFromSamples(outputPos, len, stream);
+    }
 
     static Uint64 lastCounter = 0;
     if (audioDebug) {
@@ -237,7 +276,7 @@ void SDLCALL sdlOutputCallback(void* /*userdata*/, Uint8* stream, int len)
     }
 }
 
-void SDLCALL sdlDelayedInputCallback(void* /*userdata*/, Uint8* stream, int len)
+void SDLCALL sdlInputCallback(void* /*userdata*/, Uint8* stream, int len)
 {
     if ((size_t)len > samplesSize) {
         printf("Internal error: len > output size: %d > %d\n", len, (int)samplesSize);
@@ -257,30 +296,6 @@ void SDLCALL sdlDelayedInputCallback(void* /*userdata*/, Uint8* stream, int len)
         }
         lastCounter = newCounter;
     }
-}
-
-void convertU16toS16(Uint8* stream, size_t len)
-{
-    Uint16* stream16 = (Uint16*)stream;
-    for (size_t i = 0; i < len / 2; i++) {
-        stream16[i] -= UINT16_MAX / 2;
-    }
-}
-
-void SDLCALL sdlRecordFileCallback(void* /*userdata*/, Uint8* stream, int len)
-{
-    // 48000 * 2 channels * 1 second.
-    static Uint8 scratch[96000];
-
-    if ((int)sizeof(scratch) < len / kNumChannels) {
-        printf("Internal error: len > input scratch buffer size: %d > %d\n", len, (int)sizeof(scratch) );
-    }
-    size_t writeLen = copyAndDup(scratch, sizeof(scratch), 0, stream, len);
-    if (audioFormat == AUDIO_U16) {
-        convertU16toS16(scratch, writeLen);
-    }
-    write(outputFd, stream, writeLen);
-    outputDataSize += writeLen;
 }
 
 template<size_t frameSize>
@@ -382,8 +397,9 @@ void printNumberMap(const unordered_map<T, U>& hist)
 
 bool initSDL(OutputMode outputMode)
 {
-    SDL_AudioSpec desiredSpec = {};
+    SDL_AudioSpec desiredSpec;
     SDL_AudioSpec obtainedSpec;
+    memset(&desiredSpec, 0, sizeof(desiredSpec));
     desiredSpec.channels = kNumChannels;
     desiredSpec.freq = audioSampleRate;
     desiredSpec.samples = audioSamples;
@@ -412,16 +428,7 @@ bool initSDL(OutputMode outputMode)
            obtainedSpec.freq, obtainedSpec.samples, obtainedSpec.format);
     if (outputMode != OutputMode::SineWave) {
         desiredSpec.channels = 1;
-        switch (outputMode) {
-            case OutputMode::DelayedMic:
-                desiredSpec.callback = sdlDelayedInputCallback;
-                break;
-            case OutputMode::RecordFile:
-                desiredSpec.callback = sdlRecordFileCallback;
-                break;
-            case OutputMode::SineWave:
-                break;
-        }
+        desiredSpec.callback = sdlInputCallback;
         SDL_AudioDeviceID inputDev = SDL_OpenAudioDevice(nullptr, 1, &desiredSpec, &obtainedSpec,
                                                          SDL_AUDIO_ALLOW_ANY_CHANGE);
         if (inputDev == 0) {
@@ -544,7 +551,6 @@ int main(int argc, char** argv)
     int outputSineWaveHz = kDefaultWaveHz;
     int outputMicDelayMs = 0;
 
-
     for (int i = 1; i < argc;) {
         if (strcmp(argv[i], "--backend") == 0) {
             if (i == argc - 1) {
@@ -620,7 +626,6 @@ int main(int argc, char** argv)
                 printf("Missing argument for --file\n");
                 return 1;
             }
-            outputMode = OutputMode::RecordFile;
             outputFd = open(argv[i + 1], O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
             if (outputFd < 0) {
                 printf("Unable to open file %s: %s", argv[i + 1], strerror(errno));
@@ -653,7 +658,6 @@ int main(int argc, char** argv)
         }
     }
 
-
     SDL_Init(SDL_INIT_EVERYTHING);
     timeFreq = SDL_GetPerformanceFrequency();
 
@@ -662,12 +666,12 @@ int main(int argc, char** argv)
             prepareSineWave(outputSineWaveHz);
             break;
         case OutputMode::DelayedMic:
-            prepareOutputDelayedInput(outputInputDelayMs);
+            prepareOutputDelayedMic(outputMicDelayMs);
             break;
-        case OutputMode::RecordFile:
-            writeWaveHeader(outputFd);
-            prepareOutputDelayedInput(1000);
-            break;
+    }
+
+    if (outputFd != -1) {
+        writeWaveHeader(outputFd);
     }
 
     switch (audioBackend) {
