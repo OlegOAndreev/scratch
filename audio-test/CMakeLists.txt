@@ -4,6 +4,7 @@ include(CheckIncludeFiles)
 
 if(NOT MSVC)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -Wall -Wextra -Wshadow")
+set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} -fsanitize=address")
 endif()
 
 if(CMAKE_SYSTEM_NAME STREQUAL Linux)

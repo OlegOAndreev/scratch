@@ -169,7 +169,7 @@ void copyFromBuffer(void* dst, size_t len)
     } else {
         size_t untilEnd = bufferSize - outputPos;
         memcpy(dst, buffer.get() + outputPos, untilEnd);
-        outputPos = bufferSize - untilEnd;
+        outputPos = len - untilEnd;
         memcpy((Uint8*)dst + untilEnd, buffer.get(), outputPos);
     }
 }
