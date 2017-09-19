@@ -373,11 +373,11 @@ int runBench(size_t bufferSize, const size_t* blockSizes, size_t numBlockSizes)
 
     for (size_t i = 0; i < numBlockSizes; i++) {
         size_t blockSize = blockSizes[i];
-        for (size_t i = 0; i < arraySize(memcpyFuncs); i++) {
-            if (memcpyFuncs[i].avxRequired && !isAvxSupported()) {
+        for (size_t j = 0; j < arraySize(memcpyFuncs); j++) {
+            if (memcpyFuncs[j].avxRequired && !isAvxSupported()) {
                 continue;
             }
-            benchMemcpy(buffer, bufferSize, blockSize, blockSize, memcpyFuncs[i].func, memcpyFuncs[i].name);
+            benchMemcpy(buffer, bufferSize, blockSize, blockSize, memcpyFuncs[j].func, memcpyFuncs[i].name);
         }
         printf("\n");
     }
@@ -399,11 +399,11 @@ int runBenchMulti(size_t bufferSize, const size_t* blockSizes, size_t numBlockSi
     for (size_t i = 0; i < numBlockSizes; i++) {
         size_t fromBlockSize = blockSizes[i];
         size_t toBlockSize = fromBlockSize * 2 + 16;
-        for (size_t i = 0; i < arraySize(memcpyFuncs); i++) {
-            if (memcpyFuncs[i].avxRequired && !isAvxSupported()) {
+        for (size_t j = 0; j < arraySize(memcpyFuncs); j++) {
+            if (memcpyFuncs[j].avxRequired && !isAvxSupported()) {
                 continue;
             }
-            benchMemcpy(buffer, bufferSize, fromBlockSize, toBlockSize, memcpyFuncs[i].func, memcpyFuncs[i].name);
+            benchMemcpy(buffer, bufferSize, fromBlockSize, toBlockSize, memcpyFuncs[j].func, memcpyFuncs[j].name);
         }
         printf("\n");
     }
