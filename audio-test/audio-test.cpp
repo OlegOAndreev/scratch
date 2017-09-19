@@ -28,9 +28,10 @@ enum class OutputMode {
 
 const int kNumChannels = 2;
 
-const int kDefaultAudioSampleRate = 48000;
-const int kDefaultAudioSamples = 1024;
+const int kDefaultSampleRate = 48000;
+const int kDefaultBufferSamples = 1024;
 const int kDefaultWaveHz = 250;
+const SDL_AudioFormat kDefaultAudioFormat = AUDIO_S16;
 
 const Uint16 kWaveFormatTagPcm = 1;
 const Uint16 kWaveFormatTagFloat = 3;
@@ -55,38 +56,40 @@ struct WaveHeader {
     Uint32 dataChunkSize = 0;
 };
 
-AudioBackend audioBackend = AudioBackend::SDL;
-int audioSampleRate = kDefaultAudioSampleRate;
-int audioSamples = kDefaultAudioSamples;
-SDL_AudioFormat audioFormat = AUDIO_S16;
-bool audioDebug = false;
+AudioBackend backend = AudioBackend::SDL;
+int sampleRate = kDefaultSampleRate;
+int bufferSamples = kDefaultBufferSamples;
+SDL_AudioFormat audioFormat = kDefaultAudioFormat;
+bool debug = false;
 
-unique_ptr<Uint8[]> samples;
-size_t samplesSize = 0;
+// Samples buffer.
+unique_ptr<Uint8[]> buffer;
+size_t bufferSize = 0;
 // In bytes.
 size_t outputPos = 0;
 // In bytes, only for OutputMode::DelayedMic.
 size_t inputPos = 0;
+
 // File to write the recorded data to.
 int outputFd = -1;
 size_t outputFdDataSize = 0;
 
+// High-frequency timer rate.
 Uint64 timeFreq;
 
 unordered_map<Uint64, size_t> captureTimeHist;
 unordered_map<Uint64, size_t> outputTimeHist;
 
 template<typename ST>
-void prepareSineWaveImpl(size_t numSamples, size_t startSample, int sampleRate, int channels, int waveHz,
-                         ST low, ST high, ST* data)
+void prepareSineWaveImpl(size_t num, size_t startSample, int waveHz, ST low, ST high, ST* data)
 {
     ST ampl = (high - low) / 2;
     ST base = low + ampl;
     double sampleRad = 2 * M_PI * waveHz / sampleRate;
-    for (size_t i = 0; i < numSamples; i++) {
+    for (size_t i = 0; i < num; i++) {
         ST value = base + ST(sin(sampleRad * (i + startSample)) * ampl);
-        for (int j = 0; j < channels; j++) {
-            data[i * channels + j] = value;
+        for (int j = 0; j < kNumChannels; j++) {
+            data[i * kNumChannels + j] = value;
         }
     }
 }
@@ -94,25 +97,16 @@ void prepareSineWaveImpl(size_t numSamples, size_t startSample, int sampleRate, 
 void prepareSineWave(int waveHz)
 {
     // Fill the whole second with data.
-    size_t numSamples = audioSampleRate;
-    samplesSize = numSamples * kNumChannels * SDL_AUDIO_BITSIZE(audioFormat) / 8;
+    bufferSize = sampleRate * kNumChannels * SDL_AUDIO_BITSIZE(audioFormat) / 8;
     switch (audioFormat) {
         case AUDIO_S16:
-            samples.reset(new Uint8[samplesSize]);
-            prepareSineWaveImpl<Sint16>(numSamples, 0, audioSampleRate, kNumChannels, waveHz, -10000, 10000,
-                                        (Sint16*)samples.get());
-            break;
-        case AUDIO_U16:
-            samplesSize = numSamples * sizeof(Uint16) * kNumChannels;
-            samples.reset(new Uint8[samplesSize]);
-            prepareSineWaveImpl<Uint16>(numSamples, 0, audioSampleRate, kNumChannels, waveHz, 0, 20000,
-                                        (Uint16*)samples.get());
+            buffer.reset(new Uint8[bufferSize]);
+            prepareSineWaveImpl<Sint16>(sampleRate, 0, waveHz, -10000, 10000, (Sint16*)buffer.get());
             break;
         case AUDIO_F32:
-            samplesSize = numSamples * sizeof(float) * kNumChannels;
-            samples.reset(new Uint8[samplesSize]);
-            prepareSineWaveImpl<float>(numSamples, 0, audioSampleRate, kNumChannels, waveHz, -0.3, 0.3,
-                                       (float*)samples.get());
+            bufferSize = bufferSamples * sizeof(float) * kNumChannels;
+            buffer.reset(new Uint8[bufferSize]);
+            prepareSineWaveImpl<float>(sampleRate, 0, waveHz, -0.3, 0.3, (float*)buffer.get());
             break;
         default:
             printf("Format not implemented\n");
@@ -123,16 +117,16 @@ void prepareSineWave(int waveHz)
 void prepareOutputDelayedMic(int delayMs)
 {
     // Calculate delay in samples and make it a multiple of audioSamples.
-    int delaySamples = audioSampleRate * delayMs / 1000;
-    if (delaySamples % audioSamples != 0) {
-        delaySamples += audioSamples - (delaySamples % audioSamples);
+    int delaySamples = sampleRate * delayMs / 1000;
+    if (delaySamples % bufferSamples != 0) {
+        delaySamples += bufferSamples - (delaySamples % bufferSamples);
     }
     // Double the input delay for buffer size (the first half for initial silence).
-    samplesSize = delaySamples * 2 * kNumChannels * SDL_AUDIO_BITSIZE(audioFormat) / 8;
-    samples.reset(new Uint8[samplesSize]);
-    memset(&samples[0], 0, samplesSize);
-    inputPos = samplesSize / 2;
-    printf("Delay input by %d samples (size %d, first input pos %d)\n", delaySamples, (int)samplesSize, (int)inputPos);
+    bufferSize = delaySamples * 2 * kNumChannels * SDL_AUDIO_BITSIZE(audioFormat) / 8;
+    buffer.reset(new Uint8[bufferSize]);
+    memset(buffer.get(), 0, bufferSize);
+    inputPos = bufferSize / 2;
+    printf("Delay input by %d samples (size %d, first input pos %d)\n", delaySamples, (int)bufferSize, (int)inputPos);
 }
 
 void writeWaveHeader(int fd)
@@ -153,8 +147,8 @@ void rewriteWaveHeader(int fd)
     header.formatTag = audioFormat == AUDIO_F32 ? kWaveFormatTagFloat : kWaveFormatTagPcm;
     header.numChannels = kNumChannels;
     header.totalSize = 36 + outputFdDataSize;
-    header.sampleRate = audioSampleRate;
-    header.byteRate = kNumChannels * audioSampleRate * SDL_AUDIO_BITSIZE(audioFormat) / 8;
+    header.sampleRate = sampleRate;
+    header.byteRate = kNumChannels * sampleRate * SDL_AUDIO_BITSIZE(audioFormat) / 8;
     header.blockAlign = kNumChannels * SDL_AUDIO_BITSIZE(audioFormat) / 8;
     header.dataChunkSize = outputFdDataSize;
     // Rewrite the header with actual values.
@@ -164,113 +158,100 @@ void rewriteWaveHeader(int fd)
     }
 }
 
-template<typename T>
-size_t copyFromSamples(size_t pos, size_t len, T* dest)
+void copyFromBuffer(void* dst, size_t len)
 {
-    if (pos + len <= samplesSize) {
-        memcpy(dest, &samples[pos], len);
-        pos += len;
-        if (pos == samplesSize) {
-            pos = 0;
+    if (outputPos + len <= bufferSize) {
+        memcpy(dst, buffer.get() + outputPos, len);
+        outputPos += len;
+        if (outputPos == bufferSize) {
+            outputPos = 0;
         }
     } else {
-        size_t end = samplesSize - pos;
-        memcpy(dest, &samples[pos], end);
-        pos = len - end;
-        memcpy(dest + end, &samples[0], pos);
+        size_t untilEnd = bufferSize - outputPos;
+        memcpy(dst, buffer.get() + outputPos, untilEnd);
+        outputPos = bufferSize - untilEnd;
+        memcpy((Uint8*)dst + untilEnd, buffer.get(), outputPos);
     }
-    return pos;
 }
 
-template<size_t frameSize>
-size_t copyAndDupImpl(Uint8* dst, size_t dstLen, size_t dstPos, const Uint8* src, size_t srcLen)
+template<size_t sampleSize>
+void copyToBufferAndDupImpl(const void* src, size_t len)
 {
-    for (size_t i = 0; i < srcLen; i += frameSize) {
-        memcpy(&dst[dstPos], &src[i], frameSize);
-        dstPos += frameSize;
+//    if (kNumChannels == 1) {
+
+//    } else {
+
+//    }
+    for (size_t i = 0; i < len; i += sampleSize) {
+        memcpy(buffer.get() + inputPos, (Uint8*)src + i, sampleSize);
+        inputPos += sampleSize;
         for (int channel = 1; channel < kNumChannels; channel++) {
-            memset(&dst[dstPos], 0, frameSize);
-            dstPos += frameSize;
-        }
-        if (dstPos >= dstLen) {
-            dstPos = 0;
+            memset(buffer.get() + inputPos, 0, sampleSize);
+            inputPos += sampleSize;
         }
 //        for (int channel = 0; channel < kNumChannels; channel++) {
-//            memcpy(&dst[dstPos], &src[i], frameSize);
+//            memcpy(buffer.get() + inputPos, (Uint8*)src + i, frameSize);
 //            dstPos += frameSize;
 //        }
-//        if (dstPos >= dstLen) {
-//            dstPos = 0;
-//        }
+        if (inputPos >= bufferSize) {
+            inputPos = 0;
+        }
     }
-    return dstPos;
 }
 
-size_t copyAndDup(Uint8* dst, size_t dstLen, size_t dstPos, const Uint8* src, size_t srcLen)
+void copyToBufferAndDup(const void* src, size_t len)
 {
     switch (audioFormat) {
         case AUDIO_S16:
-            return copyAndDupImpl<sizeof(Sint16)>(dst, dstLen, dstPos, src, srcLen);
+            copyToBufferAndDupImpl<2>(src, len);
         case AUDIO_F32:
-            return copyAndDupImpl<sizeof(float)>(dst, dstLen, dstPos, src, srcLen);
-        case AUDIO_U16:
-            return copyAndDupImpl<sizeof(Uint16)>(dst, dstLen, dstPos, src, srcLen);
+            copyToBufferAndDupImpl<4>(src, len);
         default:
             printf("Wrong format\n");
             exit(1);
     }
 }
 
-void convertU16toS16(Uint8* stream, size_t len)
+void writeWaveData(size_t len)
 {
-    Uint16* stream16 = (Uint16*)stream;
-    for (size_t i = 0; i < len / 2; i++) {
-        stream16[i] -= UINT16_MAX / 2;
-    }
-}
-
-void writeWaveData(Uint8* stream, size_t len)
-{
-    // 48000 * 2 channels * 1 second.
+    // Trivial method: just write 48000 * 2 channels * 1 second.
     static Uint8 scratch[96000];
 
-    if ((int)sizeof(scratch) < len / kNumChannels) {
+    if (len > sizeof(scratch)) {
         printf("Internal error: len > input scratch buffer size: %d > %d\n", (int)len, (int)sizeof(scratch) );
     }
-    size_t writeLen = copyAndDup(scratch, sizeof(scratch), 0, stream, len);
-    if (audioFormat == AUDIO_U16) {
-        convertU16toS16(scratch, writeLen);
-    }
-    if ((size_t)write(outputFd, stream, writeLen) != writeLen) {
+    copyFromBuffer(scratch, len);
+
+    if ((size_t)write(outputFd, scratch, len) != len) {
         printf("Data write failed\n");
         exit(1);
     }
-    outputFdDataSize += writeLen;
+    outputFdDataSize += len;
 }
 
 // Either write to file or output.
 void SDLCALL sdlOutputCallback(void* /*userdata*/, Uint8* stream, int len)
 {
     if (outputFd != -1) {
-        writeWaveData(stream, len);
+        writeWaveData(len);
         memset(stream, 0, len);
     } else {
-        if ((size_t)len > samplesSize) {
-            printf("Internal error: len > output size: %d > %d\n", len, (int)samplesSize);
+        if ((size_t)len > bufferSize) {
+            printf("Internal error: len > output size: %d > %d\n", len, (int)bufferSize);
             return;
         }
 
-        outputPos = copyFromSamples(outputPos, len, stream);
+        copyFromBuffer(stream, len);
     }
 
     static Uint64 lastCounter = 0;
-    if (audioDebug) {
+    if (debug) {
         Uint64 newCounter = SDL_GetPerformanceCounter();
         if (lastCounter > 0) {
             int deltaUs = (int)((newCounter - lastCounter) * 1000 / timeFreq);
-            int numSamples = len * 4 / SDL_AUDIO_BITSIZE(audioFormat);
+            int lenSamples = len * 4 / SDL_AUDIO_BITSIZE(audioFormat);
             outputTimeHist[deltaUs]++;
-            printf("SDL output %dms = %d samples\n", deltaUs, numSamples);
+            printf("SDL output %dms = %d samples\n", deltaUs, lenSamples);
         }
         lastCounter = newCounter;
     }
@@ -278,49 +259,66 @@ void SDLCALL sdlOutputCallback(void* /*userdata*/, Uint8* stream, int len)
 
 void SDLCALL sdlInputCallback(void* /*userdata*/, Uint8* stream, int len)
 {
-    if ((size_t)len > samplesSize) {
-        printf("Internal error: len > output size: %d > %d\n", len, (int)samplesSize);
+    if ((size_t)len > bufferSize) {
+        printf("Internal error: len > output size: %d > %d\n", len, (int)bufferSize);
         return;
     }
 
-    inputPos = copyAndDup(samples.get(), samplesSize, inputPos, stream, len);
+    copyToBufferAndDup(stream, len);
 
     static Uint64 lastCounter = 0;
-    if (audioDebug) {
+    if (debug) {
         Uint64 newCounter = SDL_GetPerformanceCounter();
         if (lastCounter > 0) {
             int deltaUs = (int)((newCounter - lastCounter) * 1000 / timeFreq);
-            int numSamples = len * 2 / SDL_AUDIO_BITSIZE(audioFormat);
+            int lenSamples = len * 2 / SDL_AUDIO_BITSIZE(audioFormat);
             captureTimeHist[deltaUs]++;
-            printf("SDL capture %dms = %d samples\n", deltaUs, numSamples);
+            printf("SDL capture %dms = %d samples\n", deltaUs, lenSamples);
         }
         lastCounter = newCounter;
     }
 }
 
 template<size_t frameSize>
-size_t copySoundioFrames(int framesToWrite, size_t pos, struct SoundIoChannelArea* areas)
+void copySoundioFrames(int framesToWrite, struct SoundIoChannelArea* areas)
 {
     // Check if we've got the regular layout: interleaved channels with step = sizeof(T).
     size_t len = framesToWrite * frameSize * kNumChannels;
     bool standardLayout = (areas[0].step == frameSize * kNumChannels)
             && (areas[1].step == frameSize * kNumChannels)
             && (areas[1].ptr - areas[0].ptr == frameSize)
-            && (len <= samplesSize);
-    if (standardLayout) {
-        return copyFromSamples(pos, len, areas[0].ptr);
-    } else {
-        for (int frame = 0; frame < framesToWrite; frame++) {
-            for (int channel = 0; channel < kNumChannels; channel++) {
-                memcpy(areas[channel].ptr, &samples[pos], frameSize);
-                areas[channel].ptr += areas[channel].step;
-                pos += frameSize;
-            }
-            if (pos >= samplesSize) {
-                pos = 0;
+            && (len <= bufferSize);
+    if (outputFd != -1) {
+        writeWaveData(len);
+        if (standardLayout) {
+            memset(areas[0].ptr, 0, len);
+        } else {
+            for (int frame = 0; frame < framesToWrite; frame++) {
+                for (int channel = 0; channel < kNumChannels; channel++) {
+                    memset(areas[channel].ptr, 0, frameSize);
+                    areas[channel].ptr += areas[channel].step;
+                    outputPos += frameSize;
+                }
+                if (outputPos >= bufferSize) {
+                    outputPos = 0;
+                }
             }
         }
-        return pos;
+    } else {
+        if (standardLayout) {
+            copyFromBuffer(areas[0].ptr, len);
+        } else {
+            for (int frame = 0; frame < framesToWrite; frame++) {
+                for (int channel = 0; channel < kNumChannels; channel++) {
+                    memcpy(areas[channel].ptr, buffer.get() + outputPos, frameSize);
+                    areas[channel].ptr += areas[channel].step;
+                    outputPos += frameSize;
+                }
+                if (outputPos >= bufferSize) {
+                    outputPos = 0;
+                }
+            }
+        }
     }
 }
 
@@ -341,13 +339,10 @@ void soundioWriteCallback(struct SoundIoOutStream* outstream, int /*frameCountMi
 
         switch (audioFormat) {
             case AUDIO_S16:
-                outputPos = copySoundioFrames<sizeof(Sint16)>(framesToWrite, outputPos, areas);
-                break;
-            case AUDIO_U16:
-                outputPos = copySoundioFrames<sizeof(Uint16)>(framesToWrite, outputPos, areas);
+                copySoundioFrames<sizeof(Sint16)>(framesToWrite, areas);
                 break;
             case AUDIO_F32:
-                outputPos = copySoundioFrames<sizeof(float)>(framesToWrite, outputPos, areas);
+                copySoundioFrames<sizeof(float)>(framesToWrite, areas);
                 break;
             default:
                 printf("Format not implemented\n");
@@ -365,7 +360,7 @@ void soundioWriteCallback(struct SoundIoOutStream* outstream, int /*frameCountMi
         framesLeft -= framesToWrite;
 
         static Uint64 lastOutputCounter = 0;
-        if (audioDebug) {
+        if (debug) {
             Uint64 newCounter = SDL_GetPerformanceCounter();
             if (lastOutputCounter > 0) {
                 int deltaUs = (int)((newCounter - lastOutputCounter) * 1000 / timeFreq);
@@ -401,8 +396,8 @@ bool initSDL(OutputMode outputMode)
     SDL_AudioSpec obtainedSpec;
     memset(&desiredSpec, 0, sizeof(desiredSpec));
     desiredSpec.channels = kNumChannels;
-    desiredSpec.freq = audioSampleRate;
-    desiredSpec.samples = audioSamples;
+    desiredSpec.freq = sampleRate;
+    desiredSpec.samples = bufferSamples;
     desiredSpec.format = audioFormat;
     desiredSpec.callback = sdlOutputCallback;
     // Allow changes, but fail if any changes actually occur.
@@ -496,14 +491,11 @@ bool initSoundIO(OutputMode outputMode)
     soundioOutstream = soundio_outstream_create(soundioOutDevice);
     soundioOutstream->write_callback = soundioWriteCallback;
     soundioOutstream->underflow_callback = soundioUnderflowCallback;
-    soundioOutstream->software_latency = ((float)audioSamples) / audioSampleRate;
-    soundioOutstream->sample_rate = audioSampleRate;
+    soundioOutstream->software_latency = ((float)bufferSamples) / sampleRate;
+    soundioOutstream->sample_rate = sampleRate;
     switch (audioFormat) {
         case AUDIO_S16:
             soundioOutstream->format = SoundIoFormatS16NE;
-            break;
-        case AUDIO_U16:
-            soundioOutstream->format = SoundIoFormatU16NE;
             break;
         case AUDIO_F32:
             soundioOutstream->format = SoundIoFormatFloat32NE;
@@ -552,15 +544,27 @@ int main(int argc, char** argv)
     int outputMicDelayMs = 0;
 
     for (int i = 1; i < argc;) {
-        if (strcmp(argv[i], "--backend") == 0) {
+        if (strcmp(argv[i], "--file") == 0) {
+            // The amount of ms, by which the input will be delayed.
+            if (i == argc - 1) {
+                printf("Missing argument for --file\n");
+                return 1;
+            }
+            outputFd = open(argv[i + 1], O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
+            if (outputFd < 0) {
+                printf("Unable to open file %s: %s", argv[i + 1], strerror(errno));
+                return 1;
+            }
+            i += 2;
+        } else if (strcmp(argv[i], "--backend") == 0) {
             if (i == argc - 1) {
                 printf("Missing argument --rate\n");
                 return 1;
             }
             if (strcasecmp(argv[i + 1], "sdl") == 0) {
-                audioBackend = AudioBackend::SDL;
+                backend = AudioBackend::SDL;
             } else if (strcasecmp(argv[i + 1], "soundio") == 0) {
-                audioBackend = AudioBackend::Soundio;
+                backend = AudioBackend::Soundio;
             } else {
                 printf("Unknown backend %s\n", argv[i + 1]);
                 return 1;
@@ -571,14 +575,14 @@ int main(int argc, char** argv)
                 printf("Missing argument --rate\n");
                 return 1;
             }
-            audioSampleRate = atoi(argv[i + 1]);
+            sampleRate = atoi(argv[i + 1]);
             i += 2;
         } else if (strcmp(argv[i], "--samples") == 0) {
             if (i == argc - 1) {
                 printf("Missing argument for --samples\n");
                 return 1;
             }
-            audioSamples = atoi(argv[i + 1]);
+            bufferSamples = atoi(argv[i + 1]);
             i += 2;
         } else if (strcmp(argv[i], "--format") == 0) {
             if (i == argc - 1) {
@@ -587,8 +591,6 @@ int main(int argc, char** argv)
             }
             if (strcasecmp(argv[i + 1], "s16") == 0) {
                 audioFormat = AUDIO_S16;
-            } else if (strcasecmp(argv[i + 1], "u16") == 0) {
-                audioFormat = AUDIO_U16;
             } else if (strcasecmp(argv[i + 1], "f32") == 0) {
                 audioFormat = AUDIO_F32;
             } else {
@@ -620,20 +622,8 @@ int main(int argc, char** argv)
                 return 1;
             }
             i += 2;
-        } else if (strcmp(argv[i], "--file") == 0) {
-            // The amount of ms, by which the input will be delayed.
-            if (i == argc - 1) {
-                printf("Missing argument for --file\n");
-                return 1;
-            }
-            outputFd = open(argv[i + 1], O_CREAT | O_WRONLY, S_IRUSR | S_IWUSR);
-            if (outputFd < 0) {
-                printf("Unable to open file %s: %s", argv[i + 1], strerror(errno));
-                return 1;
-            }
-            i += 2;
         } else if (strcmp(argv[i], "--debug") == 0) {
-            audioDebug = true;
+            debug = true;
             i++;
         } else if (strcmp(argv[i], "--help") == 0) {
             printf("Usage: %s [options] operation\n"
@@ -645,11 +635,11 @@ int main(int argc, char** argv)
                    "\t--backend (sdl|soundio)\t\tAudio backend, SDL by default.\n"
                    "\t--rate SAMPLE_RATE\t\tInput/output sample rate, %d by default\n"
                    "\t--samples SAMPLES\t\tNumber of frames in the buffers, %d by default\n"
-                   "\t--format (s16|u16|f32)\t\tOutput/capture format, s16 by default\n"
+                   "\t--format (s16|f32)\t\tOutput/capture format, s16 by default\n"
                    "\t--debug\t\t\t\tOutput additional debug\n",
                     argv[0],
-                    kDefaultAudioSampleRate,
-                    kDefaultAudioSamples,
+                    kDefaultSampleRate,
+                    kDefaultBufferSamples,
                     kDefaultWaveHz);
             return 0;
         } else {
@@ -674,7 +664,7 @@ int main(int argc, char** argv)
         writeWaveHeader(outputFd);
     }
 
-    switch (audioBackend) {
+    switch (backend) {
         case AudioBackend::SDL:
             if (!initSDL(outputMode)) {
                 return 1;
@@ -696,7 +686,7 @@ int main(int argc, char** argv)
         }
     }
 
-    if (audioDebug) {
+    if (debug) {
         printf("Capture time histogram:\n");
         printNumberMap(captureTimeHist);
         printf("Output time histogram:\n");
@@ -704,7 +694,7 @@ int main(int argc, char** argv)
     }
 
     SDL_Quit();
-    switch (audioBackend) {
+    switch (backend) {
         case AudioBackend::SDL:
             break;
         case AudioBackend::Soundio:
