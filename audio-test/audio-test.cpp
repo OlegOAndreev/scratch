@@ -177,24 +177,30 @@ void copyFromBuffer(void* dst, size_t len)
 template<size_t sampleSize>
 void copyToBufferAndDupImpl(const void* src, size_t len)
 {
-//    if (kNumChannels == 1) {
-
-//    } else {
-
-//    }
-    for (size_t i = 0; i < len; i += sampleSize) {
-        memcpy(buffer.get() + inputPos, (Uint8*)src + i, sampleSize);
-        inputPos += sampleSize;
-        for (int channel = 1; channel < kNumChannels; channel++) {
-            memset(buffer.get() + inputPos, 0, sampleSize);
-            inputPos += sampleSize;
+    if (kNumChannels == 1) {
+        if (inputPos + len <= bufferSize) {
+            memcpy(buffer.get() + inputPos, src, len);
+            inputPos += len;
+            if (inputPos == bufferSize) {
+                inputPos = 0;
+            }
+        } else {
+            size_t untilEnd = bufferSize - inputPos;
+            memcpy(buffer.get() + inputPos, src, untilEnd);
+            inputPos = len - untilEnd;
+            memcpy(buffer.get(), (Uint8*)src + untilEnd, inputPos);
         }
-//        for (int channel = 0; channel < kNumChannels; channel++) {
-//            memcpy(buffer.get() + inputPos, (Uint8*)src + i, frameSize);
-//            dstPos += frameSize;
-//        }
-        if (inputPos >= bufferSize) {
-            inputPos = 0;
+    } else {
+        for (size_t i = 0; i < len; i += sampleSize) {
+            memcpy(buffer.get() + inputPos, (Uint8*)src + i, sampleSize);
+            inputPos += sampleSize;
+            for (int channel = 1; channel < kNumChannels; channel++) {
+                memcpy(buffer.get() + inputPos, (Uint8*)src + i, sampleSize);
+                inputPos += sampleSize;
+            }
+            if (inputPos >= bufferSize) {
+                inputPos = 0;
+            }
         }
     }
 }
@@ -204,8 +210,10 @@ void copyToBufferAndDup(const void* src, size_t len)
     switch (audioFormat) {
         case AUDIO_S16:
             copyToBufferAndDupImpl<2>(src, len);
+            break;
         case AUDIO_F32:
             copyToBufferAndDupImpl<4>(src, len);
+            break;
         default:
             printf("Wrong format\n");
             exit(1);
