@@ -11,6 +11,10 @@
 #include <SDL2/SDL.h>
 #include <soundio/soundio.h>
 
+// Plan:
+//  * Check delayed input.
+//  * Add changing the pitch (linear interpolation).
+
 using std::pair;
 using std::unique_ptr;
 using std::unordered_map;
@@ -77,7 +81,7 @@ size_t outputFdDataSize = 0;
 // High-frequency timer rate.
 Uint64 timeFreq;
 
-unordered_map<Uint64, size_t> captureTimeHist;
+unordered_map<Uint64, size_t> inputTimeHist;
 unordered_map<Uint64, size_t> outputTimeHist;
 
 template<typename ST>
@@ -257,7 +261,7 @@ void SDLCALL sdlOutputCallback(void* /*userdata*/, Uint8* stream, int len)
         Uint64 newCounter = SDL_GetPerformanceCounter();
         if (lastCounter > 0) {
             int deltaUs = (int)((newCounter - lastCounter) * 1000 / timeFreq);
-            int lenSamples = len * 4 / SDL_AUDIO_BITSIZE(audioFormat);
+            int lenSamples = len * 8 / (SDL_AUDIO_BITSIZE(audioFormat) * kNumChannels);
             outputTimeHist[deltaUs]++;
             printf("SDL output %dms = %d samples\n", deltaUs, lenSamples);
         }
@@ -279,16 +283,16 @@ void SDLCALL sdlInputCallback(void* /*userdata*/, Uint8* stream, int len)
         Uint64 newCounter = SDL_GetPerformanceCounter();
         if (lastCounter > 0) {
             int deltaUs = (int)((newCounter - lastCounter) * 1000 / timeFreq);
-            int lenSamples = len * 2 / SDL_AUDIO_BITSIZE(audioFormat);
-            captureTimeHist[deltaUs]++;
-            printf("SDL capture %dms = %d samples\n", deltaUs, lenSamples);
+            int lenSamples = len * 8 / SDL_AUDIO_BITSIZE(audioFormat);
+            inputTimeHist[deltaUs]++;
+            printf("SDL input %dms = %d samples\n", deltaUs, lenSamples);
         }
         lastCounter = newCounter;
     }
 }
 
 template<size_t frameSize>
-void copySoundioFrames(int framesToWrite, struct SoundIoChannelArea* areas)
+void copyToSoundioFrames(int framesToWrite, struct SoundIoChannelArea* areas)
 {
     // Check if we've got the regular layout: interleaved channels with step = sizeof(T).
     size_t len = framesToWrite * frameSize * kNumChannels;
@@ -330,6 +334,22 @@ void copySoundioFrames(int framesToWrite, struct SoundIoChannelArea* areas)
     }
 }
 
+template<size_t frameSize>
+void copyFromSoundioFramesAndDup(int framesToRead, struct SoundIoChannelArea* areas)
+{
+    // Ignore all but the first channel.
+    for (int frame = 0; frame < framesToRead; frame++) {
+        for (int channel = 0; channel < kNumChannels; channel++) {
+            memcpy(buffer.get() + inputPos, areas[0].ptr, frameSize);
+            inputPos += frameSize;
+        }
+        areas[0].ptr += areas[0].step;
+        if (inputPos >= bufferSize) {
+            inputPos = 0;
+        }
+    }
+}
+
 void soundioWriteCallback(struct SoundIoOutStream* outstream, int /*frameCountMin*/, int frameCountMax)
 {
     int framesLeft = frameCountMax;
@@ -347,10 +367,10 @@ void soundioWriteCallback(struct SoundIoOutStream* outstream, int /*frameCountMi
 
         switch (audioFormat) {
             case AUDIO_S16:
-                copySoundioFrames<sizeof(Sint16)>(framesToWrite, areas);
+                copyToSoundioFrames<sizeof(Sint16)>(framesToWrite, areas);
                 break;
             case AUDIO_F32:
-                copySoundioFrames<sizeof(float)>(framesToWrite, areas);
+                copyToSoundioFrames<sizeof(float)>(framesToWrite, areas);
                 break;
             default:
                 printf("Format not implemented\n");
@@ -380,11 +400,69 @@ void soundioWriteCallback(struct SoundIoOutStream* outstream, int /*frameCountMi
     }
 }
 
-void soundioUnderflowCallback(struct SoundIoOutStream* /*outstream*/) {
+void soundioUnderflowCallback(struct SoundIoOutStream* /*outstream*/)
+{
     static int count = 0;
     count++;
     printf("Soundio underflow %d\n", count);
 }
+
+void soundioReadCallback(struct SoundIoInStream* instream, int /*frameCountMin*/, int frameCountMax)
+{
+    int framesLeft = frameCountMax;
+    while (framesLeft > 0) {
+        struct SoundIoChannelArea* areas;
+        int framesToRead = framesLeft;
+        int err;
+        if ((err = soundio_instream_begin_read(instream, &areas, &framesToRead))) {
+            printf("Soundio unrecoverable stream error: %s\n", soundio_strerror(err));
+            exit(1);
+        }
+        if (framesToRead == 0) {
+            break;
+        }
+
+        if (areas) {
+            switch (audioFormat) {
+                case AUDIO_S16:
+                    copyFromSoundioFramesAndDup<sizeof(Sint16)>(framesToRead, areas);
+                    break;
+                case AUDIO_F32:
+                    copyFromSoundioFramesAndDup<sizeof(float)>(framesToRead, areas);
+                    break;
+                default:
+                    printf("Format not implemented\n");
+                    exit(1);
+            }
+        }
+
+        if ((err = soundio_instream_end_read(instream))) {
+            printf("Unrecoverable stream error: %s\n", soundio_strerror(err));
+            exit(1);
+        }
+
+        framesLeft -= framesToRead;
+
+        static Uint64 lastOutputCounter = 0;
+        if (debug) {
+            Uint64 newCounter = SDL_GetPerformanceCounter();
+            if (lastOutputCounter > 0) {
+                int deltaUs = (int)((newCounter - lastOutputCounter) * 1000 / timeFreq);
+                inputTimeHist[deltaUs]++;
+                printf("Soundio input %dms = %d samples\n", deltaUs, framesToRead);
+            }
+            lastOutputCounter = newCounter;
+        }
+    }
+}
+
+void soundioOverflowCallback(struct SoundIoInStream* /*instream*/)
+{
+    static int count = 0;
+    count++;
+    printf("Soundio overflow %d\n", count);
+}
+
 
 template<typename T, typename U>
 void printNumberMap(const unordered_map<T, U>& hist)
@@ -435,7 +513,7 @@ bool initSDL(OutputMode outputMode)
         SDL_AudioDeviceID inputDev = SDL_OpenAudioDevice(nullptr, 1, &desiredSpec, &obtainedSpec,
                                                          SDL_AUDIO_ALLOW_ANY_CHANGE);
         if (inputDev == 0) {
-            printf("Failed opening capture device\n");
+            printf("Failed opening input device\n");
             return false;
         }
         if (obtainedSpec.channels != desiredSpec.channels) {
@@ -459,10 +537,10 @@ bool initSDL(OutputMode outputMode)
 }
 
 SoundIo* soundio = nullptr;
-struct SoundIoOutStream* soundioOutstream = nullptr;
+struct SoundIoOutStream* soundioOutStream = nullptr;
 struct SoundIoDevice* soundioOutDevice = nullptr;
-struct SoundIoInStream* soundioInstream = nullptr;
-//struct SoundIoDevice* soundioInDevice = nullptr;
+struct SoundIoInStream* soundioInStream = nullptr;
+struct SoundIoDevice* soundioInDevice = nullptr;
 
 bool initSoundIO(OutputMode outputMode)
 {
@@ -490,58 +568,126 @@ bool initSoundIO(OutputMode outputMode)
         return false;
     }
 
-    if (soundioOutDevice->current_layout.channel_count != 2) {
+    if (soundioOutDevice->current_layout.channel_count != kNumChannels) {
         printf("No suitable number of channels available, default: %d\n",
                soundioOutDevice->current_layout.channel_count);
         return false;
     }
 
-    soundioOutstream = soundio_outstream_create(soundioOutDevice);
-    soundioOutstream->write_callback = soundioWriteCallback;
-    soundioOutstream->underflow_callback = soundioUnderflowCallback;
-    soundioOutstream->software_latency = ((float)bufferSamples) / sampleRate;
-    soundioOutstream->sample_rate = sampleRate;
+    soundioOutStream = soundio_outstream_create(soundioOutDevice);
+    soundioOutStream->write_callback = soundioWriteCallback;
+    soundioOutStream->underflow_callback = soundioUnderflowCallback;
+    soundioOutStream->software_latency = ((float)bufferSamples) / sampleRate;
+    soundioOutStream->sample_rate = sampleRate;
     switch (audioFormat) {
         case AUDIO_S16:
-            soundioOutstream->format = SoundIoFormatS16NE;
+            soundioOutStream->format = SoundIoFormatS16NE;
             break;
         case AUDIO_F32:
-            soundioOutstream->format = SoundIoFormatFloat32NE;
+            soundioOutStream->format = SoundIoFormatFloat32NE;
             break;
         default:
             printf("Format not implemented\n");
             exit(1);
     }
-    if (!soundio_device_supports_format(soundioOutDevice, soundioOutstream->format)) {
+    if (!soundio_device_supports_format(soundioOutDevice, soundioOutStream->format)) {
         printf("No suitable device format available\n");
         return false;
     }
 
-    soundioErr = soundio_outstream_open(soundioOutstream);
+    soundioErr = soundio_outstream_open(soundioOutStream);
     if (soundioErr != 0) {
         fprintf(stderr, "Unable to open device: %s", soundio_strerror(soundioErr));
         return false;
     }
-    if (soundioOutstream->layout_error != 0) {
-        printf("Unable to set channel layout: %s\n", soundio_strerror(soundioOutstream->layout_error));
+    if (soundioOutStream->layout_error != 0) {
+        printf("Unable to set channel layout: %s\n", soundio_strerror(soundioOutStream->layout_error));
         return false;
     }
 
-    soundioErr = soundio_outstream_start(soundioOutstream);
+    soundioErr = soundio_outstream_start(soundioOutStream);
     if (soundioErr != 0) {
         printf("Unable to start device: %s\n", soundio_strerror(soundioErr));
         return false;
     }
 
-    printf("Soundio software latency: %f\n", soundioOutstream->software_latency);
+    printf("Soundio software latency: %f\n", soundioOutStream->software_latency);
+
+    if (outputMode != OutputMode::SineWave) {
+        selectedDeviceIndex = soundio_default_input_device_index(soundio);
+
+        if (selectedDeviceIndex < 0) {
+            printf("Input device not found\n");
+            return false;
+        }
+
+        soundioInDevice = soundio_get_input_device(soundio, selectedDeviceIndex);
+        fprintf(stderr, "Input device: %s\n", soundioOutDevice->name);
+
+        if (soundioInDevice->probe_error) {
+            printf("Cannot probe device: %s\n", soundio_strerror(soundioInDevice->probe_error));
+            return false;
+        }
+
+//        if (soundioInDevice->current_layout.channel_count != 1) {
+//            printf("No suitable number of channels available, default: %d\n",
+//                   soundioInDevice->current_layout.channel_count);
+//            return false;
+//        }
+
+        soundioInStream = soundio_instream_create(soundioInDevice);
+        soundioInStream->read_callback = soundioReadCallback;
+        soundioInStream->overflow_callback = soundioOverflowCallback;
+        soundioInStream->software_latency = ((float)bufferSamples) / sampleRate;
+        soundioInStream->sample_rate = sampleRate;
+        switch (audioFormat) {
+            case AUDIO_S16:
+                soundioInStream->format = SoundIoFormatS16NE;
+                break;
+            case AUDIO_F32:
+                soundioInStream->format = SoundIoFormatFloat32NE;
+                break;
+            default:
+                printf("Format not implemented\n");
+                exit(1);
+        }
+        if (!soundio_device_supports_format(soundioInDevice, soundioInStream->format)) {
+            printf("No suitable device format available\n");
+            return false;
+        }
+
+        soundioErr = soundio_instream_open(soundioInStream);
+        if (soundioErr != 0) {
+            fprintf(stderr, "Unable to open device: %s", soundio_strerror(soundioErr));
+            return false;
+        }
+        if (soundioInStream->layout_error != 0) {
+            printf("Unable to set channel layout: %s\n", soundio_strerror(soundioInStream->layout_error));
+            return false;
+        }
+
+        soundioErr = soundio_instream_start(soundioInStream);
+        if (soundioErr != 0) {
+            printf("Unable to start device: %s\n", soundio_strerror(soundioErr));
+            return false;
+        }
+
+        printf("Soundio software latency: %f\n", soundioInStream->software_latency);
+    }
 
     return true;
 }
 
 void cleanupSoundIO()
 {
-    soundio_outstream_destroy(soundioOutstream);
+    soundio_outstream_destroy(soundioOutStream);
+    if (soundioInStream) {
+        soundio_instream_destroy(soundioInStream);
+    }
     soundio_device_unref(soundioOutDevice);
+    if (soundioInDevice) {
+        soundio_device_unref(soundioInDevice);
+    }
     soundio_destroy(soundio);
 }
 
@@ -637,13 +783,13 @@ int main(int argc, char** argv)
             printf("Usage: %s [options] operation\n"
                    "Operation:\n"
                    "\t--sine-wave HZ\t\t\tOutput sine wave with given HZ, %d by default\n"
-                   "\t--delay-mic MS\t\tCapture microphone and output with given delay\n"
+                   "\t--delay-mic MS\t\t\tCapture microphone and output with given delay\n"
                    "Options:\n"
-                   "\t--file FILE.WAV\t\tWrite output to file in WAV format instead of playing it\n"
+                   "\t--file FILE.WAV\t\t\tWrite output to file in WAV format instead of playing it\n"
                    "\t--backend (sdl|soundio)\t\tAudio backend, SDL by default.\n"
                    "\t--rate SAMPLE_RATE\t\tInput/output sample rate, %d by default\n"
                    "\t--samples SAMPLES\t\tNumber of frames in the buffers, %d by default\n"
-                   "\t--format (s16|f32)\t\tOutput/capture format, s16 by default\n"
+                   "\t--format (s16|f32)\t\tOutput/input format, s16 by default\n"
                    "\t--debug\t\t\t\tOutput additional debug\n",
                     argv[0],
                     kDefaultSampleRate,
@@ -655,9 +801,14 @@ int main(int argc, char** argv)
             return 1;
         }
     }
+    printf("Channels: %d, rate: %d, buffer samples: %d, backend: %s, format: %s\n",
+           kNumChannels, sampleRate, bufferSamples,
+           backend == AudioBackend::SDL ? "sdl" : "soundio",
+           audioFormat == AUDIO_F32 ? "f32" : "s16");
 
     SDL_Init(SDL_INIT_EVERYTHING);
     timeFreq = SDL_GetPerformanceFrequency();
+    printf("Timer frequency: %lld\n", (long long) timeFreq);
 
     switch (outputMode) {
         case OutputMode::SineWave:
@@ -695,8 +846,8 @@ int main(int argc, char** argv)
     }
 
     if (debug) {
-        printf("Capture time histogram:\n");
-        printNumberMap(captureTimeHist);
+        printf("Input time histogram:\n");
+        printNumberMap(inputTimeHist);
         printf("Output time histogram:\n");
         printNumberMap(outputTimeHist);
     }
