@@ -33,9 +33,6 @@ const int kDefaultBufferSamples = 1024;
 const int kDefaultWaveHz = 250;
 const SDL_AudioFormat kDefaultAudioFormat = AUDIO_S16;
 
-const Uint16 kWaveFormatTagPcm = 1;
-const Uint16 kWaveFormatTagFloat = 3;
-
 AudioBackend backend = AudioBackend::SDL;
 int sampleRate = kDefaultSampleRate;
 int bufferSamples = kDefaultBufferSamples;
@@ -183,12 +180,18 @@ struct WaveWriter {
     }
 
     // WAVE file structure, see http://www-mmsp.ece.mcgill.ca/Documents/AudioFormats/WAVE/WAVE.html.
+    static const Uint32 kRiffHeader = 0x46464952; // "RIFF"
+    static const Uint32 kWaveFormat = 0x45564157; // "WAVE"
+    static const Uint32 kFmtChunkId = 0x20746d66; // "fmt "
+    static const Uint32 kDataChunkId = 0x61746164; // "data"
+    static const Uint16 kWaveFormatTagPcm = 1;
+    static const Uint16 kWaveFormatTagFloat = 3;
     struct WaveHeader {
-        Uint32 riffHeader = 0x46464952; // "RIFF"
+        Uint32 riffHeader = kRiffHeader;
         Uint32 totalSize = 36; // Must be 36 + dataChunkSize.
-        Uint32 format = 0x45564157; // "WAVE"
+        Uint32 format = kWaveFormat;
 
-        Uint32 fmtChunkId = 0x20746d66; // "fmt "
+        Uint32 fmtChunkId = kFmtChunkId;
         Uint32 fmtChunkSize = 16;
         Uint16 formatTag = 0; // one of kWaveFormatTag*
         Uint16 numChannels = 0;
@@ -198,7 +201,7 @@ struct WaveWriter {
         Uint16 blockAlign = 0;
         Uint16 bitsPerSample = 0;
 
-        Uint32 dataChunkId = 0x61746164; // "data"
+        Uint32 dataChunkId = kDataChunkId;
         Uint32 dataChunkSize = 0;
     };
 };
