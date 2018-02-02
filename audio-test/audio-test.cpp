@@ -170,6 +170,7 @@ struct WaveWriter {
         header.sampleRate = sampleRate;
         header.byteRate = kNumChannels * sampleRate * SDL_AUDIO_BITSIZE(audioFormat) / 8;
         header.blockAlign = kNumChannels * SDL_AUDIO_BITSIZE(audioFormat) / 8;
+        header.bitsPerSample = SDL_AUDIO_BITSIZE(audioFormat);
         header.dataChunkSize = dataSize;
         // Rewrite the header with actual values.
         lseek(fd, 0, SEEK_SET);
