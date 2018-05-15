@@ -8,7 +8,9 @@ if(NOT MSVC)
   endif()
 endif()
 
-add_executable(${PROJECT_NAME} audio-stretch.cpp)
+add_definitions(-DHAVE_FFTW3)
+
+add_executable(${PROJECT_NAME} audio-stretch.cpp kiss_fft/kiss_fft.c kiss_fft/kiss_fftr.c)
 
 if(UNIX AND NOT APPLE)
   target_link_libraries(${PROJECT_NAME} rt)
