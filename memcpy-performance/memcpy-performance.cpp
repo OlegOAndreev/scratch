@@ -17,9 +17,35 @@
 #error "Unsupported OS"
 #endif
 
+// Usage:
+//   memcpy-test                runs benchmarks for all buffer sizes (L1, L2, MAIN) and all predefined block sizes,
+//                              including multi-sized blocks
+//   memcpy-test l1             runs benchmarks for L1-sized buffer and all predefined block sizes without multi-sized
+//                              blocks
+//   memcpy-test l2_multi       runs benchmarks for L1-sized buffer and all predefined multi-sized blocks
+//   memcpy-test l1_1000        runs benchmark for L1-sized buffer and block size 1000
+//   memcpy-test l2_multi_128   runs benchmark for L2-sized buffer multi-sized block [1000-2016]
+//   memcpy-test test           runs correctness tests for all memcpy implementations
+
+// Guaranteed to fit in L1.
+const int L1_SIZE = 16 * 1024;
+// Guaranteed to fit in L2 but not in L1.
+const int L2_SIZE = 96 * 1024;
+// Guaranteed to not fit in LLC.
+const int MAIN_SIZE = 512 * 1024 * 1024;
+
+size_t L1_BLOCK_SIZES[] = {4, 8, 12, 16, 20, 124, 128, 132, 1020, 1024, 1028,
+                           L1_SIZE / 4 - 4, L1_SIZE / 4, L1_SIZE / 4 + 4, L1_SIZE / 2};
+size_t L2_BLOCK_SIZES[] = {4, 8, 12, 16, 20, 124, 128, 132, 1020, 1024, 1028,
+                           L1_SIZE / 2 - 4, L1_SIZE / 2, L1_SIZE / 2 + 4,
+                           L2_SIZE / 4 - 4, L2_SIZE / 4, L2_SIZE / 4 + 4, L2_SIZE / 2};
+size_t MAIN_BLOCK_SIZES[] = {4, 8, 12, 16, 20, 124, 128, 132, 1020, 1024, 1028,
+                             L1_SIZE / 2 - 4, L1_SIZE / 2, L1_SIZE / 2 + 4,
+                             L2_SIZE / 2 - 4, L2_SIZE / 2, L2_SIZE / 2 + 4,
+                             MAIN_SIZE / 4 - 4, MAIN_SIZE / 4, MAIN_SIZE / 4 + 4, MAIN_SIZE / 2};
+
 // If true, randomizes the positions of memory to copy from and to (substantially slows things down).
-bool useRandomFrom = false;
-bool useRandomTo = false;
+bool useRandomPos = true;
 
 int64_t getTimeCounter()
 {
@@ -263,26 +289,16 @@ bool testMemcpyFunc(const MemcpyFunc& memcpyFunc, const char* memcpyName)
     return true;
 }
 
-// Take batches of size blockSize from one half of the block and copy them (randomly or not) to the other half.
+// Take batches of size blockSize from first half of the buffer and copy them to the second half.
 template <typename MemcpyFunc>
 size_t memcpyBuffer(char* buffer, size_t bufferSize, size_t blockSize, const MemcpyFunc& memcpyFunc)
 {
     size_t numBlocks = bufferSize / blockSize;
     // halfBlocks * blockSize * 2 <= numBlocks * blockSize <= bufferSize, so everything stays in bounds.
     size_t halfBlocks = numBlocks / 2;
-    if (useRandomFrom && useRandomTo) {
+    if (useRandomPos) {
         for (size_t i = 0; i < halfBlocks; i++) {
             size_t from = rand() % halfBlocks + halfBlocks;
-            size_t to = rand() % halfBlocks;
-            memcpyFunc(buffer + to * blockSize, buffer + from * blockSize, blockSize);
-        }
-    } else if (useRandomFrom) {
-        for (size_t to = 0; to < halfBlocks; to++) {
-            size_t from = rand() % halfBlocks + halfBlocks;
-            memcpyFunc(buffer + to * blockSize, buffer + from * blockSize, blockSize);
-        }
-    } else if (useRandomTo) {
-        for (size_t from = halfBlocks; from < numBlocks; from++) {
             size_t to = rand() % halfBlocks;
             memcpyFunc(buffer + to * blockSize, buffer + from * blockSize, blockSize);
         }
@@ -377,7 +393,7 @@ int runBench(size_t bufferSize, const size_t* blockSizes, size_t numBlockSizes)
             if (memcpyFuncs[j].avxRequired && !isAvxSupported()) {
                 continue;
             }
-            benchMemcpy(buffer, bufferSize, blockSize, blockSize, memcpyFuncs[j].func, memcpyFuncs[i].name);
+            benchMemcpy(buffer, bufferSize, blockSize, blockSize, memcpyFuncs[j].func, memcpyFuncs[j].name);
         }
         printf("\n");
     }
@@ -426,33 +442,6 @@ const char* stripPrefix(const char* s, const char* prefix)
     }
 }
 
-// Usage:
-//   memcpy-test                runs benchmarks for all buffer sizes (L1, L2, MAIN) and all predefined block sizes,
-//                              including multi-sized blocks
-//   memcpy-test l1             runs benchmarks for L1-sized buffer and all predefined block sizes without multi-sized
-//                              blocks
-//   memcpy-test l2_multi       runs benchmarks for L1-sized buffer and all predefined multi-sized blocks
-//   memcpy-test l1_1000        runs benchmark for L1-sized buffer and block size 1000
-//   memcpy-test l2_multi_128   runs benchmark for L2-sized buffer multi-sized block [1000-2016]
-//   memcpy-test test           runs correctness tests for all memcpy implementations
-
-// Guaranteed to fit in L1.
-const int L1_SIZE = 16 * 1024;
-// Guaranteed to fit in L2 but not in L1.
-const int L2_SIZE = 96 * 1024;
-// Guaranteed to not fit in LLC.
-const int MAIN_SIZE = 128 * 1024 * 1024;
-
-size_t L1_BLOCK_SIZES[] = {4, 8, 12, 16, 20, 124, 128, 132, 1020, 1024, 1028,
-                           L1_SIZE / 4 - 4, L1_SIZE / 4, L1_SIZE / 4 + 4, L1_SIZE / 2};
-size_t L2_BLOCK_SIZES[] = {4, 8, 12, 16, 20, 124, 128, 132, 1020, 1024, 1028,
-                           L1_SIZE / 2 - 4, L1_SIZE / 2, L1_SIZE / 2 + 4,
-                           L2_SIZE / 4 - 4, L2_SIZE / 4, L2_SIZE / 4 + 4, L2_SIZE / 2};
-size_t MAIN_BLOCK_SIZES[] = {4, 8, 12, 16, 20, 124, 128, 132, 1020, 1024, 1028,
-                             L1_SIZE / 2 - 4, L1_SIZE / 2, L1_SIZE / 2 + 4,
-                             L2_SIZE / 2 - 4, L2_SIZE / 2, L2_SIZE / 2 + 4,
-                             MAIN_SIZE / 4 - 4, MAIN_SIZE / 4, MAIN_SIZE / 4 + 4, MAIN_SIZE / 2};
-
 int main(int argc, char** argv)
 {
     srand(0);
@@ -463,22 +452,9 @@ int main(int argc, char** argv)
         if (strcmp(argv[1], "test") == 0) {
             printf("== Running tests\n");
             runTest = true;
-        } else if (strcmp(argv[1], "random") == 0) {
-            printf("== Randomized copying enabled\n");
-            useRandomFrom = true;
-            useRandomTo = true;
-            if (argc > 2) {
-                benchName = argv[2];
-            }
-        } else if (strcmp(argv[1], "random-from") == 0) {
-            printf("== Randomized gather copying enabled\n");
-            useRandomFrom = true;
-            if (argc > 2) {
-                benchName = argv[2];
-            }
-        } else if (strcmp(argv[1], "random-to") == 0) {
-            printf("== Randomized scatter copying enabled\n");
-            useRandomTo = true;
+        } else if (strcmp(argv[1], "linear") == 0) {
+            printf("== Linear copying enabled\n");
+            useRandomPos = false;
             if (argc > 2) {
                 benchName = argv[2];
             }
