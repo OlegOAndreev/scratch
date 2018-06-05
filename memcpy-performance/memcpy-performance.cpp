@@ -314,43 +314,42 @@ bool testMemcpyFunc(const MemcpyFunc& memcpyFunc, const char* memcpyName)
     return true;
 }
 
-// Take batches of size blockSize from first half of the buffer and copy them to the second half.
-template <typename MemcpyFunc>
-size_t memcpyBuffer(char* buffer, size_t bufferSize, size_t blockSize, const MemcpyFunc& memcpyFunc)
+// Chooses a "random" block size in [minBlockSize, maxBlockSize].
+size_t randomBlockSize(size_t minBlockSize, size_t maxBlockSize, uint32_t xorstate[4])
 {
-    size_t numBlocks = bufferSize / blockSize;
+    size_t off = xorshift128(xorstate) % 4;
+    return minBlockSize + (maxBlockSize - minBlockSize) * off / 4;
+}
+
+// Takes batches of various sizes in [minBlockSize, maxBlockSize] from first half of the buffer and copy them to the second half.
+template <typename MemcpyFunc>
+size_t memcpyBuffer(char* buffer, size_t bufferSize, size_t minBlockSize, size_t maxBlockSize,
+                    const MemcpyFunc& memcpyFunc)
+{
+    // Divide buffer in blocks with maxBlockSize, but copy only some random len each frame.
+    size_t numBlocks = bufferSize / maxBlockSize;
     // halfBlocks * blockSize * 2 <= numBlocks * blockSize <= bufferSize, so everything stays in bounds.
     size_t halfBlocks = numBlocks / 2;
+    // Completely randomly selected state.
+    uint32_t xorstate[4] = { 1, 2, 3, 4 };
+    size_t total = 0;
     if (useRandomPos) {
-        // Completely randomly selected state.
-        uint32_t xorstate[4] = { 1, 2, 3, 4 };
         for (size_t i = 0; i < halfBlocks; i++) {
             size_t from = reduceRange(xorshift128(xorstate), halfBlocks) + halfBlocks;
             size_t to = reduceRange(xorshift128(xorstate), halfBlocks);
-            memcpyFunc(buffer + to * blockSize, buffer + from * blockSize, blockSize);
+            size_t len = randomBlockSize(minBlockSize, maxBlockSize, xorstate);
+            memcpyFunc(buffer + to * maxBlockSize, buffer + from * maxBlockSize, len);
+            total += len;
         }
     } else {
         for (size_t to = 0; to < halfBlocks; to++) {
             size_t from = to + halfBlocks;
-            memcpyFunc(buffer + to * blockSize, buffer + from * blockSize, blockSize);
+            size_t len = randomBlockSize(minBlockSize, maxBlockSize, xorstate);
+            memcpyFunc(buffer + to * maxBlockSize, buffer + from * maxBlockSize, len);
+            total += len;
         }
     }
 
-    return halfBlocks * blockSize;
-}
-
-// Take blocks of sizes [fromBlockSize ... toBlockSize] from one half of the buffer and copy them (randomly or not)
-// to the other half.
-template <typename MemcpyFunc>
-size_t memcpyBufferMulti(char* buffer, size_t bufferSize, size_t fromBlockSize, size_t toBlockSize,
-                         const MemcpyFunc& memcpyFunc)
-{
-    size_t total = 0;
-    total += memcpyBuffer(buffer, bufferSize, fromBlockSize, memcpyFunc);
-    total += memcpyBuffer(buffer, bufferSize, fromBlockSize + (toBlockSize - fromBlockSize) / 4, memcpyFunc);
-    total += memcpyBuffer(buffer, bufferSize, fromBlockSize + (toBlockSize - fromBlockSize) / 2, memcpyFunc);
-    total += memcpyBuffer(buffer, bufferSize, fromBlockSize + (toBlockSize - fromBlockSize) * 3 / 4, memcpyFunc);
-    total += memcpyBuffer(buffer, bufferSize, toBlockSize, memcpyFunc);
     return total;
 }
 
@@ -367,7 +366,7 @@ void preparePadding(char* padding, const char* name)
 }
 
 template <typename MemcpyFunc>
-void benchMemcpy(char* buffer, size_t bufferSize, size_t fromBlockSize, size_t toBlockSize,
+void benchMemcpy(char* buffer, size_t bufferSize, size_t minBlockSize, size_t maxBlockSize,
                  const MemcpyFunc& memcpyFunc, const char* memcpyName)
 {
     int64_t timeFreq = getTimeFreq();
@@ -377,7 +376,7 @@ void benchMemcpy(char* buffer, size_t bufferSize, size_t fromBlockSize, size_t t
         int64_t start = getTimeCounter();
         int64_t deltaUsec;
         while (true) {
-            totalBytes += memcpyBufferMulti(buffer, bufferSize, fromBlockSize, toBlockSize, memcpyFunc);
+            totalBytes += memcpyBuffer(buffer, bufferSize, minBlockSize, maxBlockSize, memcpyFunc);
             deltaUsec = getTimeCounter() - start;
             // Copy for at least half a second.
             if (deltaUsec > timeFreq / 2) {
@@ -392,11 +391,11 @@ void benchMemcpy(char* buffer, size_t bufferSize, size_t fromBlockSize, size_t t
     preparePadding(memcpyNamePadding, memcpyName);
     if (gbPerSec[0] > 10) {
         printf("%s:%s copy block sizes [%d-%d] in buffer size %d: %.1f (%.1f - %.1f) Gb/sec\n", memcpyName,
-               memcpyNamePadding, (int)fromBlockSize, (int)toBlockSize, (int)bufferSize, gbPerSec[1], gbPerSec[0],
+               memcpyNamePadding, (int)minBlockSize, (int)maxBlockSize, (int)bufferSize, gbPerSec[1], gbPerSec[0],
                gbPerSec[2]);
     } else {
         printf("%s:%s copy block sizes [%d-%d] in buffer size %d: %.2f (%.2f - %.2f) Gb/sec\n", memcpyName,
-               memcpyNamePadding, (int)fromBlockSize, (int)toBlockSize, (int)bufferSize, gbPerSec[1], gbPerSec[0],
+               memcpyNamePadding, (int)minBlockSize, (int)maxBlockSize, (int)bufferSize, gbPerSec[1], gbPerSec[0],
                gbPerSec[2]);
     }
 }
@@ -434,13 +433,13 @@ int runBenchMulti(size_t bufferSize, const size_t* blockSizes, size_t numBlockSi
     }
 
     for (size_t i = 0; i < numBlockSizes; i++) {
-        size_t fromBlockSize = blockSizes[i];
-        size_t toBlockSize = fromBlockSize * 2 + 16;
+        size_t minBlockSize = blockSizes[i];
+        size_t maxBlockSize = minBlockSize * 2 + 16;
         for (size_t j = 0; j < arraySize(memcpyFuncs); j++) {
             if (memcpyFuncs[j].avxRequired && !isAvxSupported()) {
                 continue;
             }
-            benchMemcpy(buffer, bufferSize, fromBlockSize, toBlockSize, memcpyFuncs[j].func, memcpyFuncs[j].name);
+            benchMemcpy(buffer, bufferSize, minBlockSize, maxBlockSize, memcpyFuncs[j].func, memcpyFuncs[j].name);
         }
         printf("\n");
     }
