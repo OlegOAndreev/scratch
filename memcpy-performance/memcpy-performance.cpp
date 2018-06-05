@@ -82,10 +82,42 @@ int64_t getTimeFreq()
 }
 
 template <typename T, size_t N>
-size_t arraySize(T(&)[N])
+size_t arraySize(const T(&)[N])
 {
     return N;
 }
+
+// Copied from https://en.wikipedia.org/wiki/Xorshift
+uint32_t xorshift128(uint32_t state[4])
+{
+    /* Algorithm "xor128" from p. 5 of Marsaglia, "Xorshift RNGs" */
+    uint32_t s, t = state[3];
+    t ^= t << 11;
+    t ^= t >> 8;
+    state[3] = state[2]; state[2] = state[1]; state[1] = s = state[0];
+    t ^= s;
+    t ^= s >> 19;
+    state[0] = t;
+    return t;
+}
+
+// Reduces x to range [0, N), an alternative to x % N.
+// Taken from https://lemire.me/blog/2016/06/27/a-fast-alternative-to-the-modulo-reduction/
+uint32_t reduceRange(uint32_t x, uint32_t N)
+{
+    return ((uint64_t) x * (uint64_t) N) >> 32;
+}
+
+// Computes a very simple hash, see: http://www.eecs.harvard.edu/margo/papers/usenix91/paper.ps
+size_t simpleHash(const char* s, size_t size)
+{
+    size_t hash = 0;
+    for (const char* it = s, * end = s + size; it != end; ++it)
+        hash = *it + (hash << 6) + (hash << 16) - hash;
+    return hash;
+}
+
+
 
 void libcMemcpy(char* dst, const char* src, size_t size)
 {
@@ -130,6 +162,7 @@ void memcpyFromMusl(char* dst, const char* src, size_t size) asm("_memcpyFromMus
 void folly_memcpy(char* dst, const char* src, size_t size) asm("_folly_memcpy");
 #endif
 
+// Comment and uncomment array entries to enable or disable particular implementation.
 #define DECLARE_MEMCPY_FUNC(memcpyFunc, avxRequired) \
     { memcpyFunc, #memcpyFunc, avxRequired }
 
@@ -164,26 +197,18 @@ struct {
 #endif
 };
 
-
-// Compute a very simple hash, see: http://www.eecs.harvard.edu/margo/papers/usenix91/paper.ps
-size_t simpleHash(const char* s, size_t size)
-{
-    size_t hash = 0;
-    for (const char* it = s, * end = s + size; it != end; ++it)
-        hash = *it + (hash << 6) + (hash << 16) - hash;
-    return hash;
-}
-
 // Tests one memcpy run with given src, dst and size.
 template <typename MemcpyFunc>
 bool testMemcpyFuncIter(const MemcpyFunc& memcpyFunc, char* dst, char* src, size_t size)
 {
     // Red zone is a small amount of space after buffer, used to check it is not touched.
     const size_t REDZONE = 16;
+    // Completely randomly selected state.
+    uint32_t xorstate[4] = { 1, 2, 3, 4 };
 
     // Fills the buffer with randomized values.
     for (size_t i = 0; i < size + REDZONE; i++) {
-        src[i] = (unsigned char)(rand() % 256);
+        src[i] = (unsigned char)(xorshift128(xorstate) % 256);
     }
 
     // Computes the input hash to check later that the input has not been modified.
@@ -297,9 +322,11 @@ size_t memcpyBuffer(char* buffer, size_t bufferSize, size_t blockSize, const Mem
     // halfBlocks * blockSize * 2 <= numBlocks * blockSize <= bufferSize, so everything stays in bounds.
     size_t halfBlocks = numBlocks / 2;
     if (useRandomPos) {
+        // Completely randomly selected state.
+        uint32_t xorstate[4] = { 1, 2, 3, 4 };
         for (size_t i = 0; i < halfBlocks; i++) {
-            size_t from = rand() % halfBlocks + halfBlocks;
-            size_t to = rand() % halfBlocks;
+            size_t from = reduceRange(xorshift128(xorstate), halfBlocks) + halfBlocks;
+            size_t to = reduceRange(xorshift128(xorstate), halfBlocks);
             memcpyFunc(buffer + to * blockSize, buffer + from * blockSize, blockSize);
         }
     } else {
@@ -318,19 +345,12 @@ template <typename MemcpyFunc>
 size_t memcpyBufferMulti(char* buffer, size_t bufferSize, size_t fromBlockSize, size_t toBlockSize,
                          const MemcpyFunc& memcpyFunc)
 {
-    size_t blockSizes[5];
-    blockSizes[0] = fromBlockSize;
-    blockSizes[1] = fromBlockSize + (toBlockSize - fromBlockSize) / 4;
-    blockSizes[2] = fromBlockSize + (toBlockSize - fromBlockSize) / 2;
-    blockSizes[3] = fromBlockSize + (toBlockSize - fromBlockSize) * 3 / 4;
-    blockSizes[4] = toBlockSize;
-
     size_t total = 0;
-
-    for (size_t i = 0; i < arraySize(blockSizes); i++) {
-        total += memcpyBuffer(buffer, bufferSize, blockSizes[i], memcpyFunc);
-    }
-
+    total += memcpyBuffer(buffer, bufferSize, fromBlockSize, memcpyFunc);
+    total += memcpyBuffer(buffer, bufferSize, fromBlockSize + (toBlockSize - fromBlockSize) / 4, memcpyFunc);
+    total += memcpyBuffer(buffer, bufferSize, fromBlockSize + (toBlockSize - fromBlockSize) / 2, memcpyFunc);
+    total += memcpyBuffer(buffer, bufferSize, fromBlockSize + (toBlockSize - fromBlockSize) * 3 / 4, memcpyFunc);
+    total += memcpyBuffer(buffer, bufferSize, toBlockSize, memcpyFunc);
     return total;
 }
 
@@ -359,6 +379,7 @@ void benchMemcpy(char* buffer, size_t bufferSize, size_t fromBlockSize, size_t t
         while (true) {
             totalBytes += memcpyBufferMulti(buffer, bufferSize, fromBlockSize, toBlockSize, memcpyFunc);
             deltaUsec = getTimeCounter() - start;
+            // Copy for at least half a second.
             if (deltaUsec > timeFreq / 2) {
                 break;
             }
@@ -393,7 +414,7 @@ int runBench(size_t bufferSize, const size_t* blockSizes, size_t numBlockSizes)
             if (memcpyFuncs[j].avxRequired && !isAvxSupported()) {
                 continue;
             }
-            benchMemcpy(buffer, bufferSize, blockSize, blockSize, memcpyFuncs[j].func, memcpyFuncs[j].name);
+            benchMemcpy(buffer, bufferSize, blockSize, blockSize, memcpyFuncs[j].func, memcpyFuncs[j        ].name);
         }
         printf("\n");
     }
@@ -444,8 +465,6 @@ const char* stripPrefix(const char* s, const char* prefix)
 
 int main(int argc, char** argv)
 {
-    srand(0);
-
     bool runTest = false;
     const char* benchName = NULL;
     if (argc > 1) {
