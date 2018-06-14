@@ -72,11 +72,6 @@ public:
         readers.emplace_back(filename, bufferSize);
         lines.emplace_back();
         nextLine.push_back(0);
-        ChunkFileReader& reader = readers.back();
-        vector<StringView>& chunkLines = lines.back();
-        if (!reader.readAndSplit(&chunkLines)) {
-            printf("Chunk %s contains no lines\n", filename);
-        }
     }
 
     // Reads next line from the chunk and returns true if line has been read.
