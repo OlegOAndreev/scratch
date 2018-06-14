@@ -171,13 +171,61 @@ void generateFile(char const* dstFile, int numLines, int avgLineLen)
     for (int i = 0; i < numLines; i++) {
         int lineLen = randomRange(xorstate, minLineLen, maxLineLen);
         line.clear();
-        for (int j = 0; j < lineLen; j++) {
-            line.push_back(randomRange(xorstate, '0', 'z' + 1));
-        }
+		for (int j = 0; j < lineLen; j++) {
+			line.push_back(randomRange(xorstate, '0', 'z' + 1));
+		}
 		writer.writeLine(line);
     }
 
     printf("Generated %d lines x %d avg len in %dms\n", numLines, avgLineLen, elapsedMsec(startTime));
+}
+
+// A copy of std::generate, which guarantees to be unrolled by 8 elements.
+template<typename T, typename Gen>
+void generateUnrolled(T* p, size_t n, Gen gen)
+{
+	for (size_t i = 0; i < n - 7; i += 8) {
+		T e0 = gen();
+		T e1 = gen();
+		T e2 = gen();
+		T e3 = gen();
+		T e4 = gen();
+		T e5 = gen();
+		T e6 = gen();
+		T e7 = gen();
+		p[i] = e0;
+		p[i + 1] = e1;
+		p[i + 2] = e2;
+		p[i + 3] = e3;
+		p[i + 5] = e4;
+		p[i + 6] = e5;
+		p[i + 7] = e6;
+		p[i + 8] = e7;
+	}
+	for (size_t i = n & ~7; i < n; i++) {
+		p[i] = gen();
+	}
+}
+
+void generateFileFaster(char const* dstFile, int numLines, int avgLineLen)
+{
+	uint64_t startTime = getTimeCounter();
+	{
+		int minLineLen = avgLineLen / 2;
+		int maxLineLen = avgLineLen * 3 / 2;
+		// Make random generate the same for the same parameters.
+		uint32_t xorstate[4] = { uint32_t(numLines + avgLineLen), 0, 0, 0 };
+
+		ChunkFileWriter writer(dstFile);
+		for (int i = 0; i < numLines; i++) {
+			int lineLen = randomRange(xorstate, minLineLen, maxLineLen);
+			char* line = writer.getLinePtr(lineLen);
+			generateUnrolled(line, lineLen, [&xorstate] {
+				return randomRange(xorstate, '0', 'z' + 1);
+			});
+		}
+	}
+	printf("Generated %d lines x %d avg len in %dms\n", numLines, avgLineLen, elapsedMsec(startTime));
 }
 
 void printUsage(const char* argv0)
@@ -186,7 +234,8 @@ void printUsage(const char* argv0)
            "Operations:\n"
 		   "  sort srcFile dstFile [maxMemory]\t\t\t\tSorts srcFile into dst using at most maxMemory chunks\n"
            "  validate file\t\t\t\t\tValidates that the file is sorted\n"
-           "  generate dstFile numLines avgLine\t\tGenerates an ASCII file with given number of lines and average line length\n",
+		   "  generate dstFile numLines avgLine\t\tGenerates an ASCII file with given number of lines and average line length\n"
+		   "  generate-faster dstFile numLines avgLine\tGenerates an ASCII file with given number of lines and average line length\n",
            argv0);
 }
 
@@ -215,7 +264,13 @@ int main(int argc, char** argv)
             return 1;
         }
         generateFile(argv[2], atoi(argv[3]), atoi(argv[4]));
-    } else {
+	} else if (strcmp(argv[1], "generate-faster") == 0) {
+		if (argc != 5) {
+			printUsage(argv[0]);
+			return 1;
+		}
+		generateFileFaster(argv[2], atoi(argv[3]), atoi(argv[4]));
+	} else {
         printUsage(argv[0]);
         return 1;
     }

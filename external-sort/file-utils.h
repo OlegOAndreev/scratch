@@ -1,10 +1,10 @@
 #pragma once
 
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <memory>
 #include <string>
-#include <unistd.h>
 
 using std::unique_ptr;
 
@@ -117,6 +117,54 @@ public:
 
 private:
 	FILE* f;
+};
+
+// A wrapper around FILE*, providing the direct access to the buffer (to reduce the amount of copies).
+class ChunkFileWriter
+{
+public:
+	ChunkFileWriter(char const* filename, size_t bufferSize = kDefaultBufferSize)
+	{
+		f = fopen(filename, "wb");
+		if (f == nullptr) {
+			printf("Could not open file %s\n", filename);
+			exit(1);
+		}
+		// We do our own buffering.
+		setvbuf(f, nullptr, _IONBF, 0);
+		buf.reset(new char[bufferSize]);
+		bufCapacity = bufferSize;
+		bufWritten = 0;
+	}
+
+	~ChunkFileWriter()
+	{
+		if (bufWritten > 0) {
+			fwrite(buf.get(), 1, bufWritten, f);
+		}
+		fclose(f);
+	}
+
+	// Returns the pointer to the buffer to write into. Length should not include the line separator
+	// Line separator will be appended automatically.
+	char* getLinePtr(size_t length)
+	{
+		if (bufWritten + length > bufCapacity - 1) {
+			fwrite(buf.get(), 1, bufWritten, f);
+			bufWritten = 0;
+		}
+		char* ret = buf.get() + bufWritten;
+		bufWritten += length;
+		buf[bufWritten] = '\n';
+		bufWritten++;
+		return ret;
+	}
+
+private:
+	FILE* f;
+	unique_ptr<char[]> buf;
+	size_t bufCapacity;
+	size_t bufWritten;
 };
 
 } // namespace
