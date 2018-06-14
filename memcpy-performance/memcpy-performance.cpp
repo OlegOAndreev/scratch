@@ -7,15 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#if defined(__APPLE__)
-#include <sys/time.h>
-#elif defined(__linux__)
-#include <time.h>
-#elif defined(_WIN32)
-#include <windows.h>
-#else
-#error "Unsupported OS"
-#endif
+#include "common.h"
 
 // Usage:
 //   memcpy-test                runs benchmarks for all buffer sizes (L1, L2, MAIN) and all predefined block sizes,
@@ -46,77 +38,6 @@ size_t MAIN_BLOCK_SIZES[] = {4, 8, 12, 16, 20, 124, 128, 132, 1020, 1024, 1028,
 
 // If true, randomizes the positions of memory to copy from and to (substantially slows things down).
 bool useRandomPos = true;
-
-int64_t getTimeCounter()
-{
-#if defined(__APPLE__)
-    timeval tp;
-    gettimeofday(&tp, nullptr);
-    return tp.tv_sec * 1000000ULL + tp.tv_usec;
-#elif defined(__linux__)
-    timespec tp;
-    clock_gettime(CLOCK_MONOTONIC, &tp);
-    return tp.tv_sec * 1000000000ULL + tp.tv_nsec;
-#elif defined(_WIN32)
-    LARGE_INTEGER li;
-    QueryPerformanceCounter(&li);
-    return li.QuadPart;
-#else
-#error "Unsupported OS"
-#endif
-}
-
-int64_t getTimeFreq()
-{
-#if defined(__APPLE__)
-    return 1000000;
-#elif defined(__linux__)
-    return 1000000000;
-#elif defined(_WIN32)
-    LARGE_INTEGER li;
-    QueryPerformanceFrequency(&li);
-    return li.QuadPart;
-#else
-#error "Unsupported OS"
-#endif
-}
-
-template <typename T, size_t N>
-size_t arraySize(const T(&)[N])
-{
-    return N;
-}
-
-// Copied from https://en.wikipedia.org/wiki/Xorshift
-uint32_t xorshift128(uint32_t state[4])
-{
-    /* Algorithm "xor128" from p. 5 of Marsaglia, "Xorshift RNGs" */
-    uint32_t s, t = state[3];
-    t ^= t << 11;
-    t ^= t >> 8;
-    state[3] = state[2]; state[2] = state[1]; state[1] = s = state[0];
-    t ^= s;
-    t ^= s >> 19;
-    state[0] = t;
-    return t;
-}
-
-// Reduces x to range [0, N), an alternative to x % N.
-// Taken from https://lemire.me/blog/2016/06/27/a-fast-alternative-to-the-modulo-reduction/
-uint32_t reduceRange(uint32_t x, uint32_t N)
-{
-    return ((uint64_t) x * (uint64_t) N) >> 32;
-}
-
-// Computes a very simple hash, see: http://www.eecs.harvard.edu/margo/papers/usenix91/paper.ps
-size_t simpleHash(const char* s, size_t size)
-{
-    size_t hash = 0;
-    for (const char* it = s, * end = s + size; it != end; ++it)
-        hash = *it + (hash << 6) + (hash << 16) - hash;
-    return hash;
-}
-
 
 
 void libcMemcpy(char* dst, const char* src, size_t size)

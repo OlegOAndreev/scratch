@@ -12,3 +12,5 @@ add_executable(${PROJECT_NAME}
   memcpy-performance.cpp
   memcpy-cpp-impl.cpp
   ${ADDITIONAL_SOURCES})
+
+target_include_directories(${PROJECT_NAME} PRIVATE "..")
