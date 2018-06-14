@@ -119,6 +119,13 @@ private:
 	FILE* f;
 };
 
+
+// A wrapper around FILE*, providing access
+class ChunkFileReader
+{
+
+};
+
 // A wrapper around FILE*, providing the direct access to the buffer (to reduce the amount of copies).
 class ChunkFileWriter
 {

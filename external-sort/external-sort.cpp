@@ -158,25 +158,25 @@ void validateSort(char const* srcFile)
 
 void generateFile(char const* dstFile, int numLines, int avgLineLen)
 {
-    uint64_t startTime = getTimeCounter();
+	uint64_t startTime = getTimeCounter();
+	{
+		int minLineLen = avgLineLen / 2;
+		int maxLineLen = avgLineLen * 3 / 2;
+		string line;
+		line.reserve(maxLineLen);
+		// Make random generate the same for the same parameters.
+		uint32_t xorstate[4] = { uint32_t(numLines + avgLineLen), 0, 0, 0 };
 
-    int minLineLen = avgLineLen / 2;
-    int maxLineLen = avgLineLen * 3 / 2;
-    string line;
-    line.reserve(maxLineLen);
-    // Make random generate the same for the same parameters.
-    uint32_t xorstate[4] = { uint32_t(numLines + avgLineLen), 0, 0, 0 };
-
-	FileLineWriter writer(dstFile);
-    for (int i = 0; i < numLines; i++) {
-        int lineLen = randomRange(xorstate, minLineLen, maxLineLen);
-        line.clear();
-		for (int j = 0; j < lineLen; j++) {
-			line.push_back(randomRange(xorstate, '0', 'z' + 1));
+		FileLineWriter writer(dstFile);
+		for (int i = 0; i < numLines; i++) {
+			int lineLen = randomRange(xorstate, minLineLen, maxLineLen);
+			line.clear();
+			for (int j = 0; j < lineLen; j++) {
+				line.push_back(randomRange(xorstate, '0', 'z' + 1));
+			}
+			writer.writeLine(line);
 		}
-		writer.writeLine(line);
-    }
-
+	}
     printf("Generated %d lines x %d avg len in %dms\n", numLines, avgLineLen, elapsedMsec(startTime));
 }
 
@@ -197,10 +197,10 @@ void generateUnrolled(T* p, size_t n, Gen gen)
 		p[i + 1] = e1;
 		p[i + 2] = e2;
 		p[i + 3] = e3;
-		p[i + 5] = e4;
-		p[i + 6] = e5;
-		p[i + 7] = e6;
-		p[i + 8] = e7;
+		p[i + 4] = e4;
+		p[i + 5] = e5;
+		p[i + 6] = e6;
+		p[i + 7] = e7;
 	}
 	for (size_t i = n & ~7; i < n; i++) {
 		p[i] = gen();
