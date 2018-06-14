@@ -243,7 +243,7 @@ private:
 class ChunkFileWriter
 {
 public:
-	ChunkFileWriter(char const* filename, size_t preallocateSize = 0, size_t bufferSize = kDefaultBufferSize)
+	ChunkFileWriter(char const* filename, off_t preallocateSize = 0, size_t bufferSize = kDefaultBufferSize)
 	{
 		fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
 		if (fd == -1) {
@@ -253,6 +253,12 @@ public:
 		if (preallocateSize > 0) {
 #if defined(__linux__)
 			fallocate(fd, FALLOC_FL_KEEP_SIZE, 0, preallocateSize);
+#elif defined(__APPLE__)
+			fstore_t store = { F_ALLOCATECONTIG, F_PEOFPOSMODE, 0, preallocateSize, 0 };
+			if (fcntl(fd, F_PREALLOCATE, &store) < 0) {
+				store.fst_flags = F_ALLOCATEALL;
+				fcntl(fd, F_PREALLOCATE, &store);
+			}
 #endif
 		}
 		buf.reset(new char[bufferSize]);
