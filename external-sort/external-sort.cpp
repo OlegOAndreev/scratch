@@ -9,11 +9,49 @@
 #include "common.h"
 #include "file-utils.h"
 
+using std::min;
 using std::priority_queue;
 using std::string;
 using std::vector;
 
 size_t const kDefaultMaxMemory = 1024 * 1024 * 1024LL;
+
+// Comparer for two ChunkOffsets.
+bool compareLines(char const* buffer, LineOffset line1, LineOffset line2)
+{
+	int ret = memcmp(buffer + line1.offset, buffer + line2.offset, min(line1.length, line2.length));
+	if (ret < 0) {
+		return true;
+	} else if (ret > 0) {
+		return false;
+	} else {
+		return line1.length < line2.length;
+	}
+}
+
+// Comparer for LineOffset and string.
+bool compareLines(char const* buffer, string const& line1, LineOffset line2)
+{
+	int ret = memcmp(line1.c_str(), buffer + line2.offset, min(line1.length(), line2.length));
+	if (ret < 0) {
+		return true;
+	} else if (ret > 0) {
+		return false;
+	} else {
+		return line1.length() < line2.length;
+	}
+}
+
+string stringFromChunkLine(char const* buffer, LineOffset line)
+{
+	return string(buffer + line.offset, buffer + line.offset + line.length);
+}
+
+void stringFromChunkLine(char const* buffer, LineOffset line, string* str)
+{
+	str->clear();
+	str->append(buffer + line.offset, buffer + line.offset + line.length);
+}
 
 string getNextChunkFile(char const* dstFile, size_t numChunks)
 {
@@ -76,19 +114,14 @@ vector<string> chunkAndSort(char const* srcFile, char const* dstFile, size_t max
 }
 
 // A simple pair: line from chunk and id of the chunk it has been read from.
-struct ChunkLine {
+struct LineWithId {
 	size_t chunkId;
 	string line;
 
-	ChunkLine(size_t chunkId, string const& line)
+	LineWithId(size_t chunkId, string const& line)
 		: chunkId(chunkId)
 		, line(line)
 	{
-	}
-
-	bool operator<(ChunkLine const& other) const
-	{
-		return line < other.line;
 	}
 };
 
@@ -102,11 +135,14 @@ void mergeChunks(vector<string> const& chunkFiles, char const* dstFile)
 			chunkReaders.emplace_back(chunkFile.c_str());
 		}
 
-		priority_queue<ChunkLine> chunkLines;
+		auto lineWithIdComp = [] (LineWithId const& line1, LineWithId const& line2) {
+			return line1.line > line2.line;
+		};
+		priority_queue<LineWithId, vector<LineWithId>, decltype(lineWithIdComp)> chunkLines(lineWithIdComp);
 		string line;
 		for (size_t chunkId = 0; chunkId < chunkReaders.size(); chunkId++) {
 			if (chunkReaders[chunkId].readLine(&line)) {
-				chunkLines.push(ChunkLine(chunkId, line));
+				chunkLines.push(LineWithId(chunkId, line));
 			} else {
 				printf("No read from %s\n", chunkFiles[chunkId].c_str());
 			}
@@ -114,12 +150,12 @@ void mergeChunks(vector<string> const& chunkFiles, char const* dstFile)
 
 		FileLineWriter dstWriter(dstFile);
 		while (!chunkLines.empty()) {
-			ChunkLine const& top = chunkLines.top();
+			LineWithId const& top = chunkLines.top();
 			dstWriter.writeLine(top.line);
 			size_t nextChunkId = top.chunkId;
 			chunkLines.pop();
 			if (chunkReaders[nextChunkId].readLine(&line)) {
-				chunkLines.push(ChunkLine(nextChunkId, line));
+				chunkLines.push(LineWithId(nextChunkId, line));
 			}
 		}
 	}
@@ -134,25 +170,65 @@ void externalSort(char const* srcFile, char const* dstFile, size_t maxMemory)
 	printf("Total sorting time is %dms\n", elapsedMsec(startTime));
 }
 
+void printErrorInverseStrings(string const& line1, string const& line2, int lineCount)
+{
+	printf("ERROR: Lines %d and %d are inverse:\n  %s\nvs\n  %s\n", lineCount, lineCount + 1, line1.c_str(), line2.c_str());
+	exit(1);
+}
+
 void validateSort(char const* srcFile)
 {
 	uint64_t startTime = getTimeCounter();
-	FileLineReader reader(srcFile);
-	string lines[2];
-	size_t prevLine = 0;
-	size_t curLine = 1;
-	reader.readLine(&lines[prevLine]);
-	int lineCount = 1;
-	while (reader.readLine(&lines[curLine])) {
-		prevLine = 1 - curLine;
-		if (lines[prevLine] > lines[curLine]) {
-			printf("ERROR: Lines %d and %d are inverse:\n  %s\nvs\n  %s\n",
-				   lineCount, lineCount + 1, lines[prevLine].c_str(), lines[curLine].c_str());
-			exit(1);
+	{
+		FileLineReader reader(srcFile);
+		string lines[2];
+		size_t prevLine = 0;
+		size_t curLine = 1;
+		reader.readLine(&lines[prevLine]);
+		int lineCount = 1;
+		while (reader.readLine(&lines[curLine])) {
+			prevLine = 1 - curLine;
+			if (lines[prevLine] > lines[curLine]) {
+				printErrorInverseStrings(lines[prevLine], lines[curLine], lineCount);
+			}
+			curLine = prevLine;
+			lineCount++;
 		}
-		curLine = prevLine;
-        lineCount++;
-    }
+	}
+	printf("Validated successfully in %dms\n", elapsedMsec(startTime));
+}
+
+void validateSortFaster(char const* srcFile)
+{
+	uint64_t startTime = getTimeCounter();
+	{
+		ChunkFileReader reader(srcFile);
+		char const* buf = reader.buffer();
+		vector<LineOffset> lines;
+		int lineCount = 1;
+		// Store the last chunk line to compare it to the first line of the new chunk. Valid only if lineCount > 1.
+		string lastChunkLine;
+		while (true) {
+			reader.readAndSplit(&lines);
+			if (lines.empty()) {
+				break;
+			}
+			// Check if first line is less than the previous chunk last line.
+			if (lineCount > 1) {
+				if (!compareLines(buf, lastChunkLine, lines.front())) {
+					printErrorInverseStrings(lastChunkLine, stringFromChunkLine(buf, lines.front()), lineCount - 1);
+				}
+			}
+			for (size_t i = 1; i < lines.size(); i++, lineCount++) {
+				if (!compareLines(buf, lines[i - 1], lines[i])) {
+					printErrorInverseStrings(stringFromChunkLine(buf, lines[i - 1]), stringFromChunkLine(buf, lines[i]), lineCount);
+				}
+			}
+			lineCount++;
+			// Store last chunk line for comparing with first line of next chunk.
+			stringFromChunkLine(buf, lines.back(), &lastChunkLine);
+		}
+	}
 	printf("Validated successfully in %dms\n", elapsedMsec(startTime));
 }
 
@@ -177,7 +253,7 @@ void generateFile(char const* dstFile, int numLines, int avgLineLen)
 			writer.writeLine(line);
 		}
 	}
-    printf("Generated %d lines x %d avg len in %dms\n", numLines, avgLineLen, elapsedMsec(startTime));
+	printf("Generated %d lines x %d avg len in %dms\n", numLines, avgLineLen, elapsedMsec(startTime));
 }
 
 // A copy of std::generate, which guarantees to be unrolled by 8 elements.
@@ -230,40 +306,47 @@ void generateFileFaster(char const* dstFile, int numLines, int avgLineLen)
 
 void printUsage(const char* argv0)
 {
-    printf("Usage: %s operation [options]\n"
-           "Operations:\n"
-		   "  sort srcFile dstFile [maxMemory]\t\t\t\tSorts srcFile into dst using at most maxMemory chunks\n"
-           "  validate file\t\t\t\t\tValidates that the file is sorted\n"
+	printf("Usage: %s operation [options]\n"
+		   "Operations:\n"
+		   "  sort srcFile dstFile [maxMemory]\t\tSorts srcFile into dst using at most maxMemory chunks\n"
+		   "  validate file\t\t\t\t\tValidates that the file is sorted\n"
+		   "  validate-faster file\t\t\t\tValidates that the file is sorted\n"
 		   "  generate dstFile numLines avgLine\t\tGenerates an ASCII file with given number of lines and average line length\n"
 		   "  generate-faster dstFile numLines avgLine\tGenerates an ASCII file with given number of lines and average line length\n",
-           argv0);
+		   argv0);
 }
 
 int main(int argc, char** argv)
 {
-    if (argc < 2) {
-        printUsage(argv[0]);
-        return 1;
-    }
-    if (strcmp(argv[1], "sort") == 0) {
+	if (argc < 2) {
+		printUsage(argv[0]);
+		return 1;
+	}
+	if (strcmp(argv[1], "sort") == 0) {
 		if (argc != 4 && argc != 5) {
-            printUsage(argv[0]);
-            return 1;
-        }
+			printUsage(argv[0]);
+			return 1;
+		}
 		size_t maxMemory = (argc > 4) ? (size_t)atoll(argv[4]) : kDefaultMaxMemory;
 		externalSort(argv[2], argv[3], maxMemory);
-    } else if (strcmp(argv[1], "validate") == 0) {
-        if (argc != 3) {
-            printUsage(argv[0]);
-            return 1;
-        }
-        validateSort(argv[2]);
-    } else if (strcmp(argv[1], "generate") == 0) {
-        if (argc != 5) {
-            printUsage(argv[0]);
-            return 1;
-        }
-        generateFile(argv[2], atoi(argv[3]), atoi(argv[4]));
+	} else if (strcmp(argv[1], "validate") == 0) {
+		if (argc != 3) {
+			printUsage(argv[0]);
+			return 1;
+		}
+		validateSort(argv[2]);
+	} else if (strcmp(argv[1], "validate-faster") == 0) {
+		if (argc != 3) {
+			printUsage(argv[0]);
+			return 1;
+		}
+		validateSortFaster(argv[2]);
+	} else if (strcmp(argv[1], "generate") == 0) {
+		if (argc != 5) {
+			printUsage(argv[0]);
+			return 1;
+		}
+		generateFile(argv[2], atoi(argv[3]), atoi(argv[4]));
 	} else if (strcmp(argv[1], "generate-faster") == 0) {
 		if (argc != 5) {
 			printUsage(argv[0]);
@@ -271,8 +354,8 @@ int main(int argc, char** argv)
 		}
 		generateFileFaster(argv[2], atoi(argv[3]), atoi(argv[4]));
 	} else {
-        printUsage(argv[0]);
-        return 1;
-    }
-    return 0;
+		printUsage(argv[0]);
+		return 1;
+	}
+	return 0;
 }

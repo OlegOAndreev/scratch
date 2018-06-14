@@ -5,8 +5,13 @@
 #include <cstring>
 #include <memory>
 #include <string>
+#include <vector>
+
+#include <fcntl.h>
+#include <unistd.h>
 
 using std::unique_ptr;
+using std::vector;
 
 namespace {
 
@@ -14,7 +19,7 @@ size_t const kDefaultBufferSize = 1024 * 1024;
 
 char const kLineSeparator = '\n';
 
-// A wrapper around FILE*, allowing to read lines in std::string. Ignores last empty line to match the behavior of FileWriter.
+// A wrapper around FILE*, allowing to read lines in std::string. Ignores last empty line to match the behavior of FileLineWriter.
 class FileLineReader
 {
 public:
@@ -33,7 +38,7 @@ public:
 		bufRead = 0;
 	}
 
-	// we need this because of the noexcept requirement in vector.
+	// We need this because of the noexcept requirement in vector.
 	FileLineReader(FileLineReader&& other) noexcept
 		: f(other.f)
 		, buf(std::move(other.buf))
@@ -55,7 +60,6 @@ public:
 	bool readLine(std::string* str)
 	{
 		str->clear();
-
 		char* bufp = buf.get();
 		// Reads until either the line separator or end of file is reached.
 		while (true) {
@@ -119,12 +123,108 @@ private:
 	FILE* f;
 };
 
+// An index into buffer, containing the line.
+struct LineOffset
+{
+	size_t offset;
+	size_t length;
 
-// A wrapper around FILE*, providing access
+	LineOffset(size_t offset, size_t length)
+		: offset(offset)
+		, length(length)
+	{
+	}
+};
+
+// A wrapper around FILE*, reading big chunks of memory, splitting them into strings and providing access directly to the chunk.
+//  Ignores last empty line to match the behavior of ChunkFileWriter.
 class ChunkFileReader
 {
+public:
+	ChunkFileReader(char const* filename, size_t bufferSize = kDefaultBufferSize)
+	{
+		fd = open(filename, O_RDONLY);
+		if (fd == -1) {
+			printf("Could not open file %s\n", filename);
+			exit(1);
+		}
+		buf.reset(new char[bufferSize]);
+		bufCapacity = bufferSize;
+		bufFilled = 0;
+		bufRemaining = 0;
+	}
 
+	// We need this because of the noexcept requirement in vector.
+	ChunkFileReader(ChunkFileReader&& other) noexcept
+		: fd(other.fd)
+		, buf(std::move(other.buf))
+		, bufCapacity(other.bufCapacity)
+		, bufFilled(other.bufFilled)
+		, bufRemaining(other.bufRemaining)
+	{
+		other.fd = -1;
+	}
+
+	~ChunkFileReader()
+	{
+		if (fd != -1) {
+			close(fd);
+		}
+	}
+
+	// Returns the pointer to the buffer (guaranteed to be the same during ChunkFileReader life).
+	char const* buffer() const
+	{
+		return buf.get();
+	}
+
+	// Reads new chunk and splits it into lines.
+	void readAndSplit(vector<LineOffset>* lines)
+	{
+		char* bufp = buf.get();
+		// Move the remaining part from the end of the buffer.
+		if (bufRemaining < bufFilled) {
+			bufFilled = bufFilled - bufRemaining;
+			memmove(bufp, bufp + bufRemaining, bufFilled);
+		} else {
+			bufFilled = 0;
+		}
+		ssize_t readChars = read(fd, bufp + bufFilled, bufCapacity - bufFilled);
+		if (readChars < 0) {
+			printf("Could not read file\n");
+			exit(1);
+		}
+		bufFilled += readChars;
+		// We process the remainder differently, depending on whether this is the end of the file or not.
+		bool eof = bufFilled != bufCapacity;
+
+		lines->clear();
+		size_t lastOffset = 0;
+		while (true) {
+			char* lastp = bufp + lastOffset;
+			char* sep = (char*)memchr(lastp, kLineSeparator, bufFilled - lastOffset);
+			if (sep == nullptr) {
+				break;
+			}
+			lines->push_back(LineOffset(lastOffset, sep - lastp));
+			lastOffset = sep - bufp + 1;
+		}
+		bufRemaining = lastOffset;
+		// If this is the end of file and last line is not empty, add it.
+		if (eof && lastOffset < bufFilled) {
+			lines->push_back(LineOffset(lastOffset, bufFilled - lastOffset));
+		}
+	}
+
+private:
+	int fd;
+	unique_ptr<char[]> buf;
+	size_t bufCapacity;
+	size_t bufFilled;
+	// Remaining part of the line, not included in last readAndSplit output (basically location of the last separator + 1).
+	size_t bufRemaining;
 };
+
 
 // A wrapper around FILE*, providing the direct access to the buffer (to reduce the amount of copies).
 class ChunkFileWriter
@@ -132,13 +232,11 @@ class ChunkFileWriter
 public:
 	ChunkFileWriter(char const* filename, size_t bufferSize = kDefaultBufferSize)
 	{
-		f = fopen(filename, "wb");
-		if (f == nullptr) {
+		fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
+		if (fd == -1) {
 			printf("Could not open file %s\n", filename);
 			exit(1);
 		}
-		// We do our own buffering.
-		setvbuf(f, nullptr, _IONBF, 0);
 		buf.reset(new char[bufferSize]);
 		bufCapacity = bufferSize;
 		bufWritten = 0;
@@ -147,17 +245,27 @@ public:
 	~ChunkFileWriter()
 	{
 		if (bufWritten > 0) {
-			fwrite(buf.get(), 1, bufWritten, f);
+			if (write(fd, buf.get(), bufWritten) < (ssize_t)bufWritten) {
+				printf("Could not write to file\n");
+				exit(1);
+			}
 		}
-		fclose(f);
+		close(fd);
 	}
 
 	// Returns the pointer to the buffer to write into. Length should not include the line separator
 	// Line separator will be appended automatically.
 	char* getLinePtr(size_t length)
 	{
+		if (length > bufCapacity - 1) {
+			printf("Requested length larger than buffer capacity: %d vs %d", (int)length, (int)bufCapacity);
+			exit(1);
+		}
 		if (bufWritten + length > bufCapacity - 1) {
-			fwrite(buf.get(), 1, bufWritten, f);
+			if (write(fd, buf.get(), bufWritten) < (ssize_t)bufWritten) {
+				printf("Could not write to file\n");
+				exit(1);
+			}
 			bufWritten = 0;
 		}
 		char* ret = buf.get() + bufWritten;
@@ -168,7 +276,7 @@ public:
 	}
 
 private:
-	FILE* f;
+	int fd;
 	unique_ptr<char[]> buf;
 	size_t bufCapacity;
 	size_t bufWritten;
