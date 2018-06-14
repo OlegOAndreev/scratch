@@ -292,7 +292,8 @@ void generateFileFaster(char const* dstFile, int numLines, int avgLineLen)
 		// Make random generate the same for the same parameters.
 		uint32_t xorstate[4] = { uint32_t(numLines + avgLineLen), 0, 0, 0 };
 
-		ChunkFileWriter writer(dstFile);
+		// Preallocate the average file size.
+		ChunkFileWriter writer(dstFile, numLines * avgLineLen, kDefaultBufferSize);
 		for (int i = 0; i < numLines; i++) {
 			int lineLen = randomRange(xorstate, minLineLen, maxLineLen);
 			char* line = writer.getLinePtr(lineLen);

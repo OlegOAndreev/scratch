@@ -10,6 +10,10 @@
 #include <fcntl.h>
 #include <unistd.h>
 
+#if defined(__linux__)
+#include <linux/falloc.h>
+#endif
+
 using std::unique_ptr;
 using std::vector;
 
@@ -181,6 +185,20 @@ public:
 	// Reads new chunk and splits it into lines.
 	void readAndSplit(vector<LineOffset>* lines)
 	{
+		bool eof = fillBuf();
+		splitLines(eof, lines);
+	}
+
+private:
+	int fd;
+	unique_ptr<char[]> buf;
+	size_t bufCapacity;
+	size_t bufFilled;
+	// Remaining part of the line, not included in last readAndSplit output (basically location of the last separator + 1).
+	size_t bufRemaining;
+
+	bool fillBuf()
+	{
 		char* bufp = buf.get();
 		// Move the remaining part from the end of the buffer.
 		if (bufRemaining < bufFilled) {
@@ -195,10 +213,13 @@ public:
 			exit(1);
 		}
 		bufFilled += readChars;
-		// We process the remainder differently, depending on whether this is the end of the file or not.
-		bool eof = bufFilled != bufCapacity;
+		return bufFilled != bufCapacity;
+	}
 
+	void splitLines(bool eof, vector<LineOffset>* lines)
+	{
 		lines->clear();
+		char* bufp = buf.get();
 		size_t lastOffset = 0;
 		while (true) {
 			char* lastp = bufp + lastOffset;
@@ -215,14 +236,6 @@ public:
 			lines->push_back(LineOffset(lastOffset, bufFilled - lastOffset));
 		}
 	}
-
-private:
-	int fd;
-	unique_ptr<char[]> buf;
-	size_t bufCapacity;
-	size_t bufFilled;
-	// Remaining part of the line, not included in last readAndSplit output (basically location of the last separator + 1).
-	size_t bufRemaining;
 };
 
 
@@ -230,12 +243,17 @@ private:
 class ChunkFileWriter
 {
 public:
-	ChunkFileWriter(char const* filename, size_t bufferSize = kDefaultBufferSize)
+	ChunkFileWriter(char const* filename, size_t preallocateSize = 0, size_t bufferSize = kDefaultBufferSize)
 	{
 		fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
 		if (fd == -1) {
 			printf("Could not open file %s\n", filename);
 			exit(1);
+		}
+		if (preallocateSize > 0) {
+#if defined(__linux__)
+			fallocate(fd, FALLOC_FL_KEEP_SIZE, 0, preallocateSize);
+#endif
 		}
 		buf.reset(new char[bufferSize]);
 		bufCapacity = bufferSize;
