@@ -25,7 +25,13 @@ bool preallocate = true;
 // List of chunk files with total size of the original file.
 struct ChunkFiles {
     vector<string> filenames;
-    off_t totalSize = 0;
+    off_t totalSize;
+
+    // Support gcc 4.6 :-(
+    ChunkFiles()
+        : totalSize(0)
+    {
+    }
 };
 
 // A simple pair: line from chunk and num of the chunk it has been read from.
@@ -93,12 +99,6 @@ public:
                 return false;
             }
         }
-    }
-
-    // Returns number of chunks.
-    size_t numChunks() const
-    {
-        return readers.size();
     }
 
 private:
@@ -286,13 +286,14 @@ void mergeChunksFaster(ChunkFiles const& chunkFiles, char const* dstFile)
     uint64_t startTime = getTimeCounter();
     {
         MultiChunkReader multiChunkReader;
-        size_t perChunkBufferSize = maxMemory / chunkFiles.filenames.size();
+        size_t numChunks = chunkFiles.filenames.size();
+        size_t perChunkBufferSize = maxMemory / numChunks;
         for (string const& chunkFile : chunkFiles.filenames) {
             multiChunkReader.addReader(chunkFile.c_str(), perChunkBufferSize);
         }
 
         priority_queue<StringViewWithNum> topLines;
-        for (size_t chunkNum = 0; chunkNum < multiChunkReader.numChunks(); chunkNum++) {
+        for (size_t chunkNum = 0; chunkNum < numChunks; chunkNum++) {
             StringView line;
             if (multiChunkReader.readLineFrom(chunkNum, &line)) {
                 topLines.push(StringViewWithNum(chunkNum, line));
