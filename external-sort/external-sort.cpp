@@ -467,7 +467,24 @@ void generateFileFaster(char const* dstFile, int numLines, int avgLineLen)
     printf("Generated %d lines x %d avg len in %dms\n", numLines, avgLineLen, elapsedMsec(startTime));
 }
 
-void printUsage(const char* argv0)
+// Benchmarks sorting the srcFile in chunks.
+void benchmarkSort(char const* srcFile, char const* sortMethod)
+{
+    ChunkFileReader fileReader(srcFile, maxMemory);
+    vector<StringView> lines;
+    while (fileReader.readAndSplit(&lines)) {
+        uint64_t startTime = getTimeCounter();
+        if (strcmp(sortMethod, "std") == 0) {
+            std::sort(lines.begin(), lines.end());
+        } else {
+            printf("Unknown sorting method %s\n", sortMethod);
+            exit(1);
+        }
+        printf("Sorted %d lines by %s sort in %dms\n", (int)lines.size(), sortMethod, elapsedMsec(startTime));
+    }
+}
+
+void printUsage(char const* argv0)
 {
     printf("Usage: %s operation [operation params] [options]\n\n"
            "Operations:\n"
@@ -477,7 +494,8 @@ void printUsage(const char* argv0)
            "  validate-faster FILE\t\t\t\tValidates that the FILE is sorted (with optimizations)\n"
            "  generate FILE NUMLINES AVGLINE\t\tGenerates an ASCII FILE with given number of lines and average line length\n"
            "  generate-faster FILE NUMLINES AVGLINE\t\tGenerates an ASCII file with given number of lines and average line length"
-           " (with optimizations)\n\n"
+           " (with optimizations)\n"
+           "  benchmark-sort FILE METHOD\t\t\tBenchmarks the sorting routine by sorting the file in memory\n\n"
            "Options:\n"
            "  --max-memory SIZE\t\tThe max amount of memory to be used for in-memory buffers\n"
            "  --leave-chunks\t\tDo not remove the chunks left after sorting\n"
@@ -550,6 +568,12 @@ int main(int argc, char** argv)
             return 1;
         }
         generateFileFaster(argv[2], atoi(argv[3]), atoi(argv[4]));
+    } else if (strcmp(argv[1], "benchmark-sort") == 0) {
+        if (argc != 4) {
+            printUsage(argv[0]);
+            return 1;
+        }
+        benchmarkSort(argv[2], argv[3]);
     } else {
         printUsage(argv[0]);
         return 1;

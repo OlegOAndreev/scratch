@@ -16,7 +16,7 @@ inline int compareStr(char const* begin1, size_t length1, char const* begin2, si
     }
 }
 
-}
+} // namespace
 
 // Your minimalist string view.
 struct StringView
