@@ -21,11 +21,11 @@ void callSortMethod(char const* sortMethod, It first, It last)
         std::sort(first, last);
     } else if (strcmp(sortMethod, "quick") == 0) {
         quickSort(first, last);
-    } else if (strcmp(sortMethod, "quick-2") == 0) {
-        quickSort(first, last, 2);
-    } else if (strcmp(sortMethod, "quick-4") == 0) {
+    } else if (strcmp(sortMethod, "quick-5") == 0) {
         quickSort(first, last, 4);
-    } else if (strcmp(sortMethod, "quick-16") == 0) {
+    } else if (strcmp(sortMethod, "quick-10") == 0) {
+        quickSort(first, last, 16);
+    } else if (strcmp(sortMethod, "quick-30") == 0) {
         quickSort(first, last, 16);
     } else if (strcmp(sortMethod, "insertion") == 0) {
         insertionSort(first, last);
@@ -63,8 +63,9 @@ void testSort(char const* sortMethod, size_t maxSize)
     vector<int> scratch;
     array.reserve(maxSize);
     scratch.reserve(maxSize);
+    uint64_t startTime;
 
-    uint64_t startTime = getTimeCounter();
+    startTime = getTimeCounter();
     for (size_t size = 0; size < maxSize; size++) {
         array.resize(size);
         for (size_t i = 0; i < size; i++) {
