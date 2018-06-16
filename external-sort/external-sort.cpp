@@ -8,6 +8,8 @@
 
 #include "common.h"
 #include "file-utils.h"
+#include "sort.h"
+#include "sort-test.h"
 
 using std::min;
 using std::priority_queue;
@@ -470,16 +472,11 @@ void generateFileFaster(char const* dstFile, int numLines, int avgLineLen)
 // Benchmarks sorting the srcFile in chunks.
 void benchmarkSort(char const* srcFile, char const* sortMethod)
 {
-    ChunkFileReader fileReader(srcFile, maxMemory);
+    ChunkFileReader fileReader(srcFile, 1024 * 1024 * 1024);
     vector<StringView> lines;
     while (fileReader.readAndSplit(&lines)) {
         uint64_t startTime = getTimeCounter();
-        if (strcmp(sortMethod, "std") == 0) {
-            std::sort(lines.begin(), lines.end());
-        } else {
-            printf("Unknown sorting method %s\n", sortMethod);
-            exit(1);
-        }
+        callSortMethod(sortMethod, lines.begin(), lines.end());
         printf("Sorted %d lines by %s sort in %dms\n", (int)lines.size(), sortMethod, elapsedMsec(startTime));
     }
 }
@@ -495,11 +492,12 @@ void printUsage(char const* argv0)
            "  generate FILE NUMLINES AVGLINE\t\tGenerates an ASCII FILE with given number of lines and average line length\n"
            "  generate-faster FILE NUMLINES AVGLINE\t\tGenerates an ASCII file with given number of lines and average line length"
            " (with optimizations)\n"
-           "  benchmark-sort FILE METHOD\t\t\tBenchmarks the sorting routine by sorting the file in memory\n\n"
+           "  benchmark-sort FILE METHOD\t\t\tBenchmarks the sorting routine by sorting the file in memory\n"
+           "  test-sort METHOD [MAXSIZE]\t\t\tRuns testing method on the sorting routine\n\n"
            "Options:\n"
            "  --max-memory SIZE\t\tThe max amount of memory to be used for in-memory buffers\n"
            "  --leave-chunks\t\tDo not remove the chunks left after sorting\n"
-           "  --no-preallocate\t\tDo not preallocate file space (can be both a win and a loss depending on FS, OS etc.)\n",
+           "  --no-preallocate\t\t\tDo not preallocate file space (can be both a win and a loss depending on FS, OS etc.)\n",
            argv0);
 }
 
@@ -574,10 +572,18 @@ int main(int argc, char** argv)
             return 1;
         }
         benchmarkSort(argv[2], argv[3]);
+    } else if (strcmp(argv[1], "test-sort") == 0) {
+        if (argc != 3 && argc != 4) {
+            printUsage(argv[0]);
+            return 1;
+        }
+        size_t maxSize = (argc == 4) ? (size_t) atoll(argv[3]) : 10000;
+        testSort(argv[2], maxSize);
     } else {
         printUsage(argv[0]);
         return 1;
     }
+
 
     return 0;
 }
