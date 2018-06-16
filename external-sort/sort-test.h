@@ -66,9 +66,9 @@ void testSort(char const* sortMethod, size_t maxSize)
 
     uint64_t startTime = getTimeCounter();
     for (size_t size = 0; size < maxSize; size++) {
-        array.clear();
+        array.resize(size);
         for (size_t i = 0; i < size; i++) {
-            array.push_back(123);
+            array[i] = 123;
         }
         compareSortInt(sortMethod, array, scratch);
     }
@@ -76,6 +76,7 @@ void testSort(char const* sortMethod, size_t maxSize)
 
     startTime = getTimeCounter();
     for (size_t size = 0; size < maxSize; size++) {
+        array.resize(size);
         for (size_t i = 0; i < size; i++) {
             array[i] = 10000000 + i;
         }
@@ -85,6 +86,7 @@ void testSort(char const* sortMethod, size_t maxSize)
 
     startTime = getTimeCounter();
     for (size_t size = 0; size < maxSize; size++) {
+        array.resize(size);
         for (size_t i = 0; i < size; i++) {
             array[i] = 10000000 - i;
         }
@@ -94,6 +96,7 @@ void testSort(char const* sortMethod, size_t maxSize)
 
     startTime = getTimeCounter();
     for (size_t size = 0; size < maxSize; size++) {
+        array.resize(size);
         for (size_t i = 0; i < size / 2; i++) {
             array[i] = 10000000 + i;
         }
@@ -106,6 +109,7 @@ void testSort(char const* sortMethod, size_t maxSize)
 
     startTime = getTimeCounter();
     for (size_t size = 0; size < maxSize; size++) {
+        array.resize(size);
         for (size_t i = 0; i < size / 2; i++) {
             array[i] = 10000000 - i;
         }
@@ -118,6 +122,7 @@ void testSort(char const* sortMethod, size_t maxSize)
 
     startTime = getTimeCounter();
     for (size_t size = 0; size < maxSize; size++) {
+        array.resize(size);
         for (size_t i = 0; i < size / 2; i++) {
             array[i] = 10000000 + i;
         }
@@ -130,6 +135,7 @@ void testSort(char const* sortMethod, size_t maxSize)
 
     startTime = getTimeCounter();
     for (size_t size = 0; size < maxSize; size++) {
+        array.resize(size);
         for (size_t i = 0; i < size / 2; i++) {
             array[i] = 10000000 + i;
         }
@@ -142,6 +148,7 @@ void testSort(char const* sortMethod, size_t maxSize)
 
     startTime = getTimeCounter();
     for (size_t size = 0; size < maxSize; size++) {
+        array.resize(size);
         for (size_t i = 0; i < size / 4; i++) {
             array[i] = 10000000 + i;
         }
@@ -157,6 +164,7 @@ void testSort(char const* sortMethod, size_t maxSize)
 
     startTime = getTimeCounter();
     for (size_t size = 0; size < maxSize; size++) {
+        array.resize(size);
         uint32_t state[4] = { (uint32_t)size, (uint32_t)size, (uint32_t)size, (uint32_t)size };
         for (size_t i = 0; i < size; i++) {
             array[i] = randomRange(state, 0, 10000000);
@@ -167,6 +175,7 @@ void testSort(char const* sortMethod, size_t maxSize)
 
     startTime = getTimeCounter();
     for (size_t size = 0; size < maxSize; size++) {
+        array.resize(size);
         uint32_t state[4] = { (uint32_t)size, (uint32_t)size, (uint32_t)size, (uint32_t)size };
         for (size_t i = 0; i < size; i++) {
             array[i] = randomRange(state, 0, 10);
@@ -177,6 +186,7 @@ void testSort(char const* sortMethod, size_t maxSize)
 
     startTime = getTimeCounter();
     for (size_t size = 0; size < maxSize; size++) {
+        array.resize(size);
         uint32_t state[4] = { (uint32_t)size, (uint32_t)size, (uint32_t)size, (uint32_t)size };
         for (size_t i = 0; i < size; i++) {
             array[i] = randomRange(state, 0, 2);
