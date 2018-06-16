@@ -22,11 +22,13 @@ void callSortMethod(char const* sortMethod, It first, It last)
     } else if (strcmp(sortMethod, "quick") == 0) {
         quickSort(first, last);
     } else if (strcmp(sortMethod, "quick-5") == 0) {
-        quickSort(first, last, 4);
+        quickSort(first, last, 5);
     } else if (strcmp(sortMethod, "quick-10") == 0) {
-        quickSort(first, last, 16);
+        quickSort(first, last, 10);
     } else if (strcmp(sortMethod, "quick-30") == 0) {
-        quickSort(first, last, 16);
+        quickSort(first, last, 30);
+    } else if (strcmp(sortMethod, "selection") == 0) {
+        selectionSort(first, last);
     } else if (strcmp(sortMethod, "insertion") == 0) {
         insertionSort(first, last);
     } else {

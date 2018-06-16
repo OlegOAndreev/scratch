@@ -497,7 +497,7 @@ void printUsage(char const* argv0)
            "Options:\n"
            "  --max-memory SIZE\t\tThe max amount of memory to be used for in-memory buffers\n"
            "  --leave-chunks\t\tDo not remove the chunks left after sorting\n"
-           "  --no-preallocate\t\t\tDo not preallocate file space (can be both a win and a loss depending on FS, OS etc.)\n",
+           "  --no-preallocate\t\tDo not preallocate file space (can be both a win and a loss depending on FS, OS etc.)\n",
            argv0);
 }
 
