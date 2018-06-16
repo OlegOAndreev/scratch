@@ -22,20 +22,55 @@ void insertionSort(It first, It last)
     }
 }
 
-// A trivial quicksort implementation, just for comparison with std::sort.
+template<typename T>
+T median3(T const& v1, T const& v2, T const& v3)
+{
+    if (v1 < v2) {
+        if (v2 < v3) {
+            return v2;
+        } else {
+            return (v1 < v3) ? v3 : v1;
+        }
+    } else {
+        if (v2 < v3) {
+            return (v1 < v3) ? v1 : v3;
+        } else {
+            return v2;
+        }
+    }
+}
+
+// A trivial quicksort implementation, just for comparison with std::sort. Unlike the std::sort
+// this function assumes that copying the values is cheap (when selecting the pivot).
 template<typename It>
 void quickSort(It first, It last, size_t insertionCutoff = 8)
 {
     while (true) {
         if (last - first < 2) {
             return;
-        }
-        if ((size_t)(last - first) <= insertionCutoff) {
+        } else if (last - first == 2) {
+            if (*first > *(first + 1)) {
+                std::swap(*first, *(first + 1));
+            }
+            return;
+        } else if (last - first == 3) {
+            if (*first > *(first + 1)) {
+                std::swap(*first, *(first + 1));
+            }
+            if (*first > *(first + 2)) {
+                std::swap(*first, *(first + 2));
+            }
+            if (*(first + 1) > *(first + 2)) {
+                std::swap(*(first + 1), *(first + 2));
+            }
+            return;
+        } else if ((size_t)(last - first) <= insertionCutoff) {
             insertionSort(first, last);
             return;
         }
-        // Trivial pivot selection.
-        auto pivot = *(first + (last - first) / 2);
+
+        // Median of 3 selection: median of first, middle, last.
+        auto pivot = median3(*first, *(first + (last - first) / 2), *(last - 1));
         // Partition.
         It left = first, right = last - 1;
         while (left < right) {
