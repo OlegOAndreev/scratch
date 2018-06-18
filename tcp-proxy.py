@@ -1,11 +1,32 @@
 #!/usr/bin/python
 
+import datetime
 import select
 import socket
 import sys
 
+# A small script for proxying requests to some port (either ipv4 or ipv6) to some other host/port (either ipv4 or ipv6).
+# Usage:
+#  tcp-proxy.py 12345 v6 127.0.0.1 12345 v4 - will proxy connections to :::12345 to 127.0.0.1:12345
+#  (useful if you have a legacy service listening only on ipv4)
+
 MAX_LISTEN = 100
 MAX_BUFFER = 10000
+
+def printLog(s):
+    sys.stdout.write(str(datetime.datetime.now()))
+    sys.stdout.write(" INFO: ")
+    sys.stdout.write(s)
+    sys.stdout.write('\n')
+    sys.stdout.flush()
+
+# Write both INFO and ERROR to stdout
+def printErr(s):
+    sys.stdout.write(str(datetime.datetime.now()))
+    sys.stdout.write(" ERROR: ")
+    sys.stdout.write(s)
+    sys.stdout.write('\n')
+    sys.stdout.flush()
 
 class ProxyServer:
     listenSocket = None
@@ -42,16 +63,16 @@ class ProxyServer:
     def acceptIncoming(self):
         try:
             fromSocket, _ = self.listenSocket.accept()
-            print("Connection from {0}".format(fromSocket.getpeername()))
+            printLog("Connection from {0}".format(fromSocket.getpeername()))
         except socket.error, e:
-            print("Got exception when accepting: {0}".format(str(e)))
+            printErr("Got exception when accepting: {0}".format(str(e)))
 
         try:
             toSocket = socket.socket(self.toFamily, socket.SOCK_STREAM)
             toSocket.connect((self.toHost, self.toPort))
-            print("Proxy connection: {0} -> {1}".format(fromSocket.getpeername(), toSocket.getpeername()))
+            printLog("Proxy connection: {0} -> {1}".format(fromSocket.getpeername(), toSocket.getpeername()))
         except socket.error as e:
-            print("Got exception when connecting to {0}:{1} : {2}".format(self.toHost, self.toPort, e))
+            printErr("Got exception when connecting to {0}:{1} : {2}".format(self.toHost, self.toPort, e))
             fromSocket.close()
             return
         self.socketMap[fromSocket] = toSocket
@@ -71,17 +92,17 @@ class ProxyServer:
         try:
             data = readSocket.recv(MAX_BUFFER)
         except socket.error as e:
-            print("Got exception when reading data in {0} -> {1}: {2}".format(readSocket.getpeername(), writeSocket.getpeername(), e))
+            printErr("Got exception when reading data in {0} -> {1}: {2}".format(readSocket.getpeername(), writeSocket.getpeername(), e))
             self.cleanSockets(readSocket, writeSocket)
             return
         if not data:
-            print("Host {0} closed connection, closing {1}".format(readSocket.getpeername(), writeSocket.getpeername()))
+            printLog("Host {0} closed connection, closing {1}".format(readSocket.getpeername(), writeSocket.getpeername()))
             self.cleanSockets(readSocket, writeSocket)
             return
         try:
             writeSocket.send(data)
         except socket.error as e:
-            print("Got exception when writing data in {0} -> {1}: {2}".format(readSocket.getpeername(), writeSocket.getpeername(), e))
+            printErr("Got exception when writing data in {0} -> {1}: {2}".format(readSocket.getpeername(), writeSocket.getpeername(), e))
             self.cleanSockets(writeSocket, readSocket)
             return
 
@@ -91,7 +112,7 @@ def parse_family(s):
     elif s.endswith("4"):
         return socket.AF_INET
     else:
-        print("Unknown family {0}".format(s))
+        printErr("Unknown family {0}".format(s))
         sys.exit(1)
 
 def family_to_str(family):
@@ -100,11 +121,11 @@ def family_to_str(family):
     elif family == socket.AF_INET:
         return "ipv4"
     else:
-        print("Unknown family {0}".format(family))
+        printErr("Unknown family {0}".format(family))
         sys.exit(1)
 
 if len(sys.argv) != 6:
-    print("Usage: {0} listen-port listen-family to-host to-port to-family".format(sys.argv[0]))
+    printErr("Usage: {0} listen-port listen-family to-host to-port to-family".format(sys.argv[0]))
     sys.exit(1)
 
 listenPort = int(sys.argv[1])
@@ -112,7 +133,7 @@ listenFamily = parse_family(sys.argv[2])
 toHost = sys.argv[3]
 toPort = int(sys.argv[4])
 toFamily = parse_family(sys.argv[5])
-print("Running proxy {0} ({1}) -> {2}:{3} ({4})".format(listenPort, family_to_str(listenFamily), toHost, toPort, family_to_str(toFamily)))
+printLog("Running proxy {0} ({1}) -> {2}:{3} ({4})".format(listenPort, family_to_str(listenFamily), toHost, toPort, family_to_str(toFamily)))
 
 proxyServer = ProxyServer(listenPort, listenFamily, toHost, toPort, toFamily)
 proxyServer.run_forever()
