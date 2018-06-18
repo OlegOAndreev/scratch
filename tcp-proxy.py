@@ -19,6 +19,9 @@ class ProxyServer:
     def __init__(self, fromPort, fromFamily, toHost, toPort, toFamily):
         self.listenSocket = socket.socket(fromFamily, socket.SOCK_STREAM)
         self.listenSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        if fromFamily == socket.AF_INET6:
+            # Otherwise the bind will bind to both ipv4 and ipv6 sockets.
+            self.listenSocket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
         self.listenSocket.setblocking(False)
         self.listenSocket.bind(("", fromPort))
         self.listenSocket.listen(MAX_LISTEN)
@@ -48,7 +51,7 @@ class ProxyServer:
             toSocket.connect((self.toHost, self.toPort))
             print("Proxy connection: {0} -> {1}".format(fromSocket.getpeername(), toSocket.getpeername()))
         except socket.error as e:
-            print("Got exception when connecting: {0}".format(e))
+            print("Got exception when connecting to {0}:{1} : {2}".format(self.toHost, self.toPort, e))
             fromSocket.close()
             return
         self.socketMap[fromSocket] = toSocket
