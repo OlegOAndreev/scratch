@@ -1,5 +1,6 @@
 #!/usr/bin/python
 
+import argparse
 import datetime
 import select
 import socket
@@ -29,91 +30,82 @@ def printErr(s):
     sys.stdout.flush()
 
 class ProxyServer:
-    listenSocket = None
-    toHost = None
-    toPort = None
-    toFamily = None
-    socketsToRead = []
-    # This map will contain both sockets (from client and from proxied server).
-    socketMap = {}
+    to_host = None
+    to_family = None
+    # This maps listening socket, bound to local port to remote port number.
+    listen_sockets = {}
+    # This maps socket to peer, contains both local -> remote and remote -> local mappings.
+    peer_map = {}
 
-    def __init__(self, fromPort, fromFamily, toHost, toPort, toFamily):
-        self.listenSocket = socket.socket(fromFamily, socket.SOCK_STREAM)
-        self.listenSocket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        if fromFamily == socket.AF_INET6:
-            # Otherwise the bind will bind to both ipv4 and ipv6 sockets.
-            self.listenSocket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
-        self.listenSocket.setblocking(False)
-        self.listenSocket.bind(("", fromPort))
-        self.listenSocket.listen(MAX_LISTEN)
-        self.toHost = toHost
-        self.toPort = toPort
-        self.toFamily = toFamily
-        self.socketsToRead.append(self.listenSocket)
+    def __init__(self, from_ports, from_family, to_host, to_ports, to_family):
+        self.to_host = to_host
+        self.to_family = to_family
+        for (from_port, to_port) in zip(from_ports, to_ports):
+            listen_socket = socket.socket(from_family, socket.SOCK_STREAM)
+            listen_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            if from_family == socket.AF_INET6:
+                # Otherwise the bind will bind to both ipv4 and ipv6 sockets.
+                listen_socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 1)
+            # Recommended for dealing with errors when accept can hang in case of misbehaving client.
+            listen_socket.setblocking(False)
+            # Empty string is equivalent of INADDR_ANY
+            listen_socket.bind(("", from_port))
+            listen_socket.listen(MAX_LISTEN)
+            self.listen_sockets[listen_socket] = to_port
 
     def run_forever(self):
         while True:
-            socketsReady, _, _ = select.select(self.socketsToRead, [], [])
-            for readySocket in socketsReady:
-                if readySocket == self.listenSocket:
-                    self.acceptIncoming()
+            sockets_to_read = list(self.listen_sockets.keys()) + list(self.peer_map.keys())
+            sockets_ready, _, _ = select.select(sockets_to_read, [], [])
+            for ready_socket in sockets_ready:
+                if ready_socket in self.listen_sockets:
+                    self.accept_incoming(ready_socket)
                 else:
-                    self.readWrite(readySocket)
+                    self.read_write(ready_socket)
 
-    def acceptIncoming(self):
+    def accept_incoming(self, listen_socket):
         try:
-            fromSocket, _ = self.listenSocket.accept()
-            printLog("Connection from {0}".format(fromSocket.getpeername()))
+            from_socket, _ = listen_socket.accept()
+            printLog("Connection from {0}".format(from_socket.getpeername()))
         except socket.error, e:
             printErr("Got exception when accepting: {0}".format(str(e)))
 
+        to_port = self.listen_sockets[listen_socket]
         try:
-            toSocket = socket.socket(self.toFamily, socket.SOCK_STREAM)
-            toSocket.connect((self.toHost, self.toPort))
-            printLog("Proxy connection: {0} -> {1}".format(fromSocket.getpeername(), toSocket.getpeername()))
+            to_socket = socket.socket(self.to_family, socket.SOCK_STREAM)
+            to_socket.connect((self.to_host, to_port))
+            printLog("Proxy connection: {0} -> {1}".format(from_socket.getpeername(), to_socket.getpeername()))
         except socket.error as e:
-            printErr("Got exception when connecting to {0}:{1} : {2}".format(self.toHost, self.toPort, e))
-            fromSocket.close()
+            printErr("Got exception when connecting to {0}:{1} : {2}".format(self.to_host, to_port, e))
+            from_socket.close()
             return
-        self.socketMap[fromSocket] = toSocket
-        self.socketMap[toSocket] = fromSocket
-        self.socketsToRead.append(fromSocket)
-        self.socketsToRead.append(toSocket)
-    
-    def cleanSockets(self, socket1, socket2):
-        socket2.close()
-        del self.socketMap[socket1]
-        del self.socketMap[socket2]
-        self.socketsToRead.remove(socket1)
-        self.socketsToRead.remove(socket2)
+        self.peer_map[from_socket] = to_socket
+        self.peer_map[to_socket] = from_socket
 
-    def readWrite(self, readSocket):
-        writeSocket = self.socketMap[readSocket]
+    def read_write(self, read_socket):
+        write_socket = self.peer_map[read_socket]
         try:
-            data = readSocket.recv(MAX_BUFFER)
+            data = read_socket.recv(MAX_BUFFER)
         except socket.error as e:
-            printErr("Got exception when reading data in {0} -> {1}: {2}".format(readSocket.getpeername(), writeSocket.getpeername(), e))
-            self.cleanSockets(readSocket, writeSocket)
+            printErr("Got exception when reading data in {0} -> {1}: {2}".format(read_socket.getpeername(), write_socket.getpeername(), e))
+            self.clean_sockets(read_socket, write_socket)
             return
         if not data:
-            printLog("Host {0} closed connection, closing {1}".format(readSocket.getpeername(), writeSocket.getpeername()))
-            self.cleanSockets(readSocket, writeSocket)
+            printLog("Host {0} closed connection, closing {1}".format(read_socket.getpeername(), write_socket.getpeername()))
+            self.clean_sockets(read_socket, write_socket)
             return
         try:
-            writeSocket.send(data)
+            write_socket.send(data)
         except socket.error as e:
-            printErr("Got exception when writing data in {0} -> {1}: {2}".format(readSocket.getpeername(), writeSocket.getpeername(), e))
-            self.cleanSockets(writeSocket, readSocket)
+            printErr("Got exception when writing data in {0} -> {1}: {2}".format(read_socket.getpeername(), write_socket.getpeername(), e))
+            self.clean_sockets(write_socket, read_socket)
             return
 
-def parse_family(s):
-    if s.endswith("6"):
-        return socket.AF_INET6
-    elif s.endswith("4"):
-        return socket.AF_INET
-    else:
-        printErr("Unknown family {0}".format(s))
-        sys.exit(1)
+    def clean_sockets(self, socket1, socket2):
+        socket1.close()
+        socket2.close()
+        del self.peer_map[socket1]
+        del self.peer_map[socket2]
 
 def family_to_str(family):
     if family == socket.AF_INET6:
@@ -124,16 +116,54 @@ def family_to_str(family):
         printErr("Unknown family {0}".format(family))
         sys.exit(1)
 
-if len(sys.argv) != 6:
-    printErr("Usage: {0} listen-port listen-family to-host to-port to-family".format(sys.argv[0]))
-    sys.exit(1)
+if __name__ == "__main__":
+    ap = argparse.ArgumentParser(description="Proxies requests from some ports on ipv4/ipv6 to other ports on other host on ipv4/ipv6")
+    ap.add_argument("--from-ports", dest="from_ports", required=True, help="List of ports to proxy from, separated by comma, must be matched --to-ports")
+    ap.add_argument("--from-v4", dest="from_v4", action="store_true", help="Proxy from ipv4 ports, either this or --from-v6 is required")
+    ap.add_argument("--from-v6", dest="from_v6", action="store_true", help="Proxy from ipv6 ports, either this or --from-v4 is required")
+    ap.add_argument("--to-ports", dest="to_ports", help="List of ports to proxy to, separated by comma, must be matched by --from-ports"
+                                                        " or be empty (in this case it will be equal to --from-ports")
+    ap.add_argument("--to-v4", dest="to_v4", action="store_true", help="Proxy to ipv4 ports, either this or --to-v6 is required")
+    ap.add_argument("--to-v6", dest="to_v6", action="store_true", help="Proxy to ipv6 ports, either this or --to-v4 is required")
+    ap.add_argument("--to-host", dest="to_host", help="Host to proxy to, localhost by default")
+    args = ap.parse_args()
 
-listenPort = int(sys.argv[1])
-listenFamily = parse_family(sys.argv[2])
-toHost = sys.argv[3]
-toPort = int(sys.argv[4])
-toFamily = parse_family(sys.argv[5])
-printLog("Running proxy {0} ({1}) -> {2}:{3} ({4})".format(listenPort, family_to_str(listenFamily), toHost, toPort, family_to_str(toFamily)))
+    from_ports = [int(i.strip()) for i in args.from_ports.split(",")]
+    if not from_ports:
+        print("There must be at least one port in --from-ports")
+        sys.exit(1)
+    if args.to_ports:
+        to_ports = [int(i.strip()) for i in args.to_ports.split(",")]
+        if len(from_ports) != len(to_ports):
+            print("Number of ports in --from-ports and --to-ports must match")
+            sys.exit(1)
+    else:
+        to_ports = from_ports
 
-proxyServer = ProxyServer(listenPort, listenFamily, toHost, toPort, toFamily)
-proxyServer.run_forever()
+    if (not args.from_v4 and not args.from_v6) or (args.from_v4 and args.from_v6):
+        print("Either --from-v4 or --from-v6 is required")
+        sys.exit(1)
+    if args.from_v4:
+        from_family = socket.AF_INET
+    else:
+        from_family = socket.AF_INET6
+
+    if (not args.to_v4 and not args.to_v6) or (args.to_v4 and args.to_v6):
+        print("Either --to-v4 or --to-v6 is required")
+        sys.exit(1)
+    if args.to_v4:
+        to_family = socket.AF_INET
+    else:
+        to_family = socket.AF_INET6
+    
+    to_host = args.to_host
+    if not to_host:
+        if args.to_v4:
+            to_host = "127.0.0.1"
+        else:
+            to_host = "::1"
+
+	printLog("Running proxy {0} ({1}) -> {2}:{3} ({4})".format(from_ports, family_to_str(from_family), to_host, to_ports, family_to_str(to_family)))
+
+	proxyServer = ProxyServer(from_ports, from_family, to_host, to_ports, to_family)
+	proxyServer.run_forever()
