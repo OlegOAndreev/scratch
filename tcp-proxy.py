@@ -71,6 +71,7 @@ class ProxyServer:
             printErr("Got exception when accepting: {0}".format(str(e)))
 
         to_port = self.listen_sockets[listen_socket]
+        printLog("Connecting to {0}:{1}...".format(self.to_host, to_port))
         try:
             to_socket = socket.socket(self.to_family, socket.SOCK_STREAM)
             to_socket.connect((self.to_host, to_port))
