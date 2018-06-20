@@ -30,9 +30,9 @@ struct StringView
     {
     }
 
-    StringView(char const* begin, size_t length)
-        : begin(begin)
-        , length(length)
+    StringView(char const* _begin, size_t _length)
+        : begin(_begin)
+        , length(_length)
     {
     }
 };

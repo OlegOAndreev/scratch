@@ -41,9 +41,9 @@ struct LineWithNum {
     size_t chunkNum;
     string line;
 
-    LineWithNum(size_t chunkNum, string const& line)
-        : chunkNum(chunkNum)
-        , line(line)
+    LineWithNum(size_t _chunkNum, string const& _line)
+        : chunkNum(_chunkNum)
+        , line(_line)
     {
     }
 
@@ -59,9 +59,9 @@ struct StringViewWithNum {
     size_t chunkNum;
     StringView line;
 
-    StringViewWithNum(size_t chunkNum, StringView line)
-        : chunkNum(chunkNum)
-        , line(line)
+    StringViewWithNum(size_t _chunkNum, StringView _line)
+        : chunkNum(_chunkNum)
+        , line(_line)
     {
     }
 
