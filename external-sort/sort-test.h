@@ -27,6 +27,10 @@ void callSortMethod(char const* sortMethod, It first, It last)
         quickSort(first, last, 10);
     } else if (strcmp(sortMethod, "quick-30") == 0) {
         quickSort(first, last, 30);
+    } else if (strcmp(sortMethod, "heap") == 0) {
+        heapSort(first, last, false);
+    } else if (strcmp(sortMethod, "heap-std") == 0) {
+        heapSort(first, last, true);
     } else if (strcmp(sortMethod, "selection") == 0) {
         selectionSort(first, last);
     } else if (strcmp(sortMethod, "insertion") == 0) {

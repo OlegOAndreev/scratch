@@ -1,5 +1,7 @@
 #pragma once
 
+#include "max-heap.h"
+
 #include <algorithm>
 
 template<typename It>
@@ -57,8 +59,9 @@ T median3(T const& v1, T const& v2, T const& v3)
     }
 }
 
-// A trivial quicksort implementation, just for comparison with std::sort. Unlike the std::sort
-// this function assumes that copying the values is cheap (when selecting the pivot).
+// A quicksort implementation, just for comparison with std::sort. Runs insertion sorts after cutoff,
+// uses sorting networks for 2, 3 and 4 elements. Unlike the std::sort assumes that copying the values
+// is cheap (when selecting the pivot).
 template<typename It>
 void quickSort(It first, It last, size_t cutoff = 15)
 {
@@ -130,4 +133,23 @@ void quickSort(It first, It last, size_t cutoff = 15)
             first = left;
         }
     }
+}
+
+// A heap-sort implementation. If useStdHeap is true, uses std::make_heap/std::push_heap/std::pop_heap to make the heap,
+// otherwise uses makeHeap/pushHeap/popHeap.
+template<typename It>
+void heapSort(It first, It last, bool useStdHeap = false)
+{
+    if (useStdHeap) {
+        std::make_heap(first, last);
+        for (ptrdiff_t i = last - first; i > 1; i--) {
+            std::pop_heap(first, first + i);
+        }
+    } else {
+        makeHeap(first, last);
+        for (ptrdiff_t i = last - first; i > 1; i--) {
+            popHeap(first, first + i);
+        }
+    }
+
 }
