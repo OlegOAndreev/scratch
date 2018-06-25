@@ -190,7 +190,7 @@ void quickSortImpl(It first, It last, size_t cutoff, size_t remainingDepth)
 
         // Median of 3 selection: median of first, middle, last.
         size_t pivotIdx = detail::median3(first, 0, (last - first) / 2, last - first - 1);
-#if 1
+#if 0
         auto pivot = *(first + pivotIdx);
         // Partition. [first, left) is less or equal to pivot, [right, last) is greater or equal to pivot.
         It left = first;
@@ -208,6 +208,13 @@ void quickSortImpl(It first, It last, size_t cutoff, size_t remainingDepth)
                 --right;
             }
         }
+        if (left - first > last - left) {
+            quickSortImpl(left, last, cutoff, remainingDepth);
+            last = left;
+        } else {
+            quickSortImpl(first, left, cutoff, remainingDepth);
+            first = left;
+        }
 #else
         // A slightly different quickSort implementation: moves the pivot to the first element. Performs the same as the previous
         // version on random arrays, but much worse on pre-sorted arrays.
@@ -215,7 +222,8 @@ void quickSortImpl(It first, It last, size_t cutoff, size_t remainingDepth)
         // Move pivot to the first element.
         std::swap(*first, *(first + pivotIdx));
 
-        // Partition. [first + 1, left) is less or equal to pivot, [right, last) is greater or equal to pivot.
+        // Partition: [first + 1, left) is less or equal to pivot, [right, last) is greater or equal to pivot, after the
+        // last iteration [left, last) is greater or equal to pivot (right can be equal to left - 1).
         It left = first + 1;
         It right = last;
         while (left < right) {
@@ -231,14 +239,18 @@ void quickSortImpl(It first, It last, size_t cutoff, size_t remainingDepth)
                 --right;
             }
         }
-#endif
-        if (left - first > last - left) {
+
+        // Move the pivot back to the center. Now this element is in the right place.
+        std::swap(*first, *(left - 1));
+
+        if (left - first - 1 > last - left) {
             quickSortImpl(left, last, cutoff, remainingDepth);
-            last = left;
+            last = left - 1;
         } else {
-            quickSortImpl(first, left, cutoff, remainingDepth);
+            quickSortImpl(first, left - 1, cutoff, remainingDepth);
             first = left;
         }
+#endif
     }
 }
 
