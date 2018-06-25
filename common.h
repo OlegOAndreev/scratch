@@ -12,12 +12,26 @@
 #error "Unsupported OS"
 #endif
 
+//
+// Preprocessor
+//
+
+// Define SIZE_T_BITS
 #if SIZE_MAX == 0xFFFFFFFF
 #define SIZE_T_BITS 32
 #elif SIZE_MAX == 0xFFFFFFFFFFFFFFFF
 #define SIZE_T_BITS 64
 #else
 #error "Unsupported SIZE_MAX"
+#endif
+
+// Define FORCE_INLINE
+#if defined(__clang__) || defined(__GNUC__)
+#define FORCE_INLINE __attribute__((always_inline)) inline
+#elif defined(_MSC_VER)
+#define FORCE_INLINE __forceinline
+#else
+#define FORCE_INLINE
 #endif
 
 //
@@ -51,6 +65,7 @@ inline int nextLog2(size_t v)
 // Time-related functions.
 //
 
+// Returns current time counter in ticks, frequency specified by getTimeFreq.
 inline int64_t getTimeCounter()
 {
 #if defined(__APPLE__)
@@ -70,6 +85,7 @@ inline int64_t getTimeCounter()
 #endif
 }
 
+// Returns timer frequency.
 inline int64_t getTimeFreq()
 {
 #if defined(__APPLE__)
@@ -85,6 +101,7 @@ inline int64_t getTimeFreq()
 #endif
 }
 
+// Returns elapsed milliseconds since startTime ticks.
 inline int elapsedMsec(uint64_t startTime)
 {
     return (getTimeCounter() - startTime) * 1000LL / getTimeFreq();
@@ -116,6 +133,7 @@ inline uint32_t reduceRange(uint32_t x, uint32_t N)
     return ((uint64_t) x * (uint64_t) N) >> 32;
 }
 
+// Returns random values in range [from, to) with xorshift128 state.
 inline uint32_t randomRange(uint32_t state[4], uint32_t from, uint32_t to)
 {
     return from + reduceRange(xorshift128(state), to - from);
@@ -126,6 +144,7 @@ inline uint32_t randomRange(uint32_t state[4], uint32_t from, uint32_t to)
 // Containers
 //
 
+// Returns statically determined size of an array.
 template <typename T, size_t N>
 size_t arraySize(const T(&)[N])
 {
