@@ -27,7 +27,7 @@ FORCE_INLINE size_t median3(It first, size_t i1, size_t i2, size_t i3)
 
 // "Small" sort: if the sizes are small, sort and return true, otherwise return false.
 template<typename It>
-bool smallSort(It first, It last)
+FORCE_INLINE bool smallSort(It first, It last)
 {
     if (last - first < 2) {
         return true;
