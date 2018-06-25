@@ -27,6 +27,22 @@ void callSortMethod(char const* sortMethod, It first, It last)
         quickSort(first, last, 10);
     } else if (strcmp(sortMethod, "quick-30") == 0) {
         quickSort(first, last, 30);
+    } else if (strcmp(sortMethod, "quick-3way") == 0) {
+        quickSortThreeWay(first, last);
+    } else if (strcmp(sortMethod, "quick-3way-5") == 0) {
+        quickSortThreeWay(first, last, 5);
+    } else if (strcmp(sortMethod, "quick-3way-10") == 0) {
+        quickSortThreeWay(first, last, 10);
+    } else if (strcmp(sortMethod, "quick-3way-30") == 0) {
+        quickSortThreeWay(first, last, 30);
+    } else if (strcmp(sortMethod, "quick-2pivot") == 0) {
+        quickSortDualPivot(first, last);
+    } else if (strcmp(sortMethod, "quick-2pivot-5") == 0) {
+        quickSortDualPivot(first, last, 5);
+    } else if (strcmp(sortMethod, "quick-2pivot-10") == 0) {
+        quickSortDualPivot(first, last, 10);
+    } else if (strcmp(sortMethod, "quick-2pivot-30") == 0) {
+        quickSortDualPivot(first, last, 30);
     } else if (strcmp(sortMethod, "heap") == 0) {
         heapSort(first, last, false);
     } else if (strcmp(sortMethod, "heap-std") == 0) {
