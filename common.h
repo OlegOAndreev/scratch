@@ -12,6 +12,40 @@
 #error "Unsupported OS"
 #endif
 
+#if SIZE_MAX == 0xFFFFFFFF
+#define SIZE_T_BITS 32
+#elif SIZE_MAX == 0xFFFFFFFFFFFFFFFF
+#define SIZE_T_BITS 64
+#else
+#error "Unsupported SIZE_MAX"
+#endif
+
+//
+// Bit manipulation
+//
+
+// Returns the exponent e such that 2^(e - 1) <= v < 2^e.
+inline int nextLog2(size_t v)
+{
+#if defined(__clang__) || defined(__GNUC__)
+    if (v == 0) {
+        return 0;
+    } else {
+#if SIZE_T_BITS == 32
+        return sizeof(size_t) * 8 - __builtin_clz(v);
+#elif SIZE_T_BITS == 64
+        return sizeof(size_t) * 8 - __builtin_clzl(v);
+#endif
+    }
+#else
+    int e = 0;
+    while (v != 0) {
+        e++;
+        v >>= 1;
+    }
+    return e;
+#endif
+}
 
 //
 // Time-related functions.
