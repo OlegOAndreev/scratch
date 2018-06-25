@@ -7,25 +7,25 @@
 
 namespace detail {
 
-template<typename T>
-T median3(T const& v1, T const& v2, T const& v3)
+template<typename It>
+FORCE_INLINE size_t median3(It first, size_t i1, size_t i2, size_t i3)
 {
-    if (v1 < v2) {
-        if (v2 < v3) {
-            return v2;
+    if (*(first + i1) < *(first + i2)) {
+        if (*(first + i2) < *(first + i3)) {
+            return i2;
         } else {
-            return (v1 < v3) ? v3 : v1;
+            return (*(first + i1) < *(first + i3)) ? i3 : i1;
         }
     } else {
-        if (v2 < v3) {
-            return (v1 < v3) ? v1 : v3;
+        if (*(first + i2) < *(first + i3)) {
+            return (*(first + i1) < *(first + i3)) ? i1 : i3;
         } else {
-            return v2;
+            return i2;
         }
     }
 }
 
-// "Small" sort: if the sizes are small, sort using the sorting networks and return true, otherwise return false.
+// "Small" sort: if the sizes are small, sort and return true, otherwise return false.
 template<typename It>
 bool smallSort(It first, It last)
 {
@@ -37,6 +37,7 @@ bool smallSort(It first, It last)
         }
         return true;
     } else if (last - first == 3) {
+#if 1
         // Sorting network for 3 elements.
         if (*first > *(first + 1)) {
             std::swap(*first, *(first + 1));
@@ -47,6 +48,42 @@ bool smallSort(It first, It last)
         if (*(first + 1) > *(first + 2)) {
             std::swap(*(first + 1), *(first + 2));
         }
+#else
+        // This code should be slightly more performant, than sorting networks (sometimes it does two comparisons
+        // instead of 3), but it does not show up in the profile.
+        if (*first > *(first + 1)) {
+            if (*(first + 1) > *(first + 2)) {
+                // first[2] < first[1] < first[0]
+                std::swap(*first, *(first + 2));
+            } else {
+                if (*first > *(first + 2)) {
+                    // first[1] < first[2] < first[0]
+                    auto tmp = std::move(*first);
+                    *first = std::move(*(first + 1));
+                    *(first + 1) = std::move(*(first + 2));
+                    *(first + 2) = std::move(tmp);
+                } else {
+                    // first[1] < first[0] < first[2]
+                    std::swap(*first, *(first + 1));
+                }
+            }
+        } else {
+            if (*(first + 1) > *(first + 2)) {
+                if (*first > *(first + 2)) {
+                    // first[2] < first[0] < first[1]
+                    auto tmp = std::move(*first);
+                    *first = std::move(*(first + 2));
+                    *(first + 2) = std::move(*(first + 1));
+                    *(first + 1) = std::move(tmp);
+                } else {
+                    // first[0] < first[2] < first[1]
+                    std::swap(*(first + 1), *(first + 2));
+                }
+            } else {
+                // first[0] < first[1] < first[2], do nothing
+            }
+        }
+#endif
         return true;
     } else if (last - first == 4) {
         // Sorting network for 4 elements.
@@ -79,10 +116,10 @@ void selectionSort(It first, It last)
     if (first == last) {
         return;
     }
-    for (It i = first; i < last - 1; i++) {
+    for (It i = first; i < last - 1; ++i) {
         It minI = i;
         auto minV = *i;
-        for (It j = i + 1; j < last; j++) {
+        for (It j = i + 1; j < last; ++j) {
             if (minV > *j) {
                 minI = j;
                 minV = *j;
@@ -100,10 +137,13 @@ void insertionSort(It first, It last)
     if (first == last) {
         return;
     }
-    for (It i = first + 1; i < last; i++) {
+    for (It i = first + 1; i < last; ++i) {
+        if (*i > *(i - 1)) {
+            continue;
+        }
         auto v = std::move(*i);
         It j;
-        for (j = i; j > first && v < *(j - 1); j--) {
+        for (j = i; j > first && v < *(j - 1); --j) {
             *j = std::move(*(j - 1));
         }
         *j = std::move(v);
@@ -117,12 +157,12 @@ void heapSort(It first, It last, bool useStdHeap = false)
 {
     if (useStdHeap) {
         std::make_heap(first, last);
-        for (ptrdiff_t i = last - first; i > 1; i--) {
+        for (size_t i = last - first; i > 1; i--) {
             std::pop_heap(first, first + i);
         }
     } else {
         makeHeap(first, last);
-        for (ptrdiff_t i = last - first; i > 1; i--) {
+        for (size_t i = last - first; i > 1; i--) {
             popHeap(first, first + i);
         }
     }
@@ -135,10 +175,10 @@ template<typename It>
 void quickSortImpl(It first, It last, size_t cutoff, size_t remainingDepth)
 {
     while (true) {
-        if (detail::smallSort(first, last)) {
-            return;
-        } else if ((size_t)(last - first) <= cutoff) {
-            insertionSort(first, last);
+        if ((size_t)(last - first) <= cutoff) {
+            if (!detail::smallSort(first, last)) {
+                insertionSort(first, last);
+            }
             return;
         }
 
@@ -149,28 +189,54 @@ void quickSortImpl(It first, It last, size_t cutoff, size_t remainingDepth)
         remainingDepth--;
 
         // Median of 3 selection: median of first, middle, last.
-        auto pivot = detail::median3(*first, *(first + (last - first) / 2), *(last - 1));
+        size_t pivotIdx = detail::median3(first, 0, (last - first) / 2, last - first - 1);
+#if 1
+        auto pivot = *(first + pivotIdx);
         // Partition. [first, left) is less or equal to pivot, [right, last) is greater or equal to pivot.
         It left = first;
-        It right = last - 1;
+        It right = last;
         while (left < right) {
             while (*left < pivot) {
                 ++left;
             }
-            while (pivot < *right) {
+            while (pivot < *(right - 1)) {
                 --right;
             }
             if (left < right) {
-                std::swap(*left, *right);
+                std::swap(*left, *(right - 1));
                 ++left;
                 --right;
             }
         }
-        if (right - first > last - left) {
+#else
+        // A slightly different quickSort implementation: moves the pivot to the first element. Performs the same as the previous
+        // version on random arrays, but much worse on pre-sorted arrays.
+
+        // Move pivot to the first element.
+        std::swap(*first, *(first + pivotIdx));
+
+        // Partition. [first + 1, left) is less or equal to pivot, [right, last) is greater or equal to pivot.
+        It left = first + 1;
+        It right = last;
+        while (left < right) {
+            while (*left < *first) {
+                ++left;
+            }
+            while (*first < *(right - 1)) {
+                --right;
+            }
+            if (left < right) {
+                std::swap(*left, *(right - 1));
+                ++left;
+                --right;
+            }
+        }
+#endif
+        if (left - first > last - left) {
             quickSortImpl(left, last, cutoff, remainingDepth);
-            last = right + 1;
+            last = left;
         } else {
-            quickSortImpl(first, right + 1, cutoff, remainingDepth);
+            quickSortImpl(first, left, cutoff, remainingDepth);
             first = left;
         }
     }
@@ -180,10 +246,10 @@ template<typename It>
 void quickSortThreeWayImpl(It first, It last, size_t cutoff, size_t remainingDepth)
 {
     while (true) {
-        if (detail::smallSort(first, last)) {
-            return;
-        } else if ((size_t)(last - first) <= cutoff) {
-            insertionSort(first, last);
+        if ((size_t)(last - first) <= cutoff) {
+            if (!detail::smallSort(first, last)) {
+                insertionSort(first, last);
+            }
             return;
         }
 
@@ -194,16 +260,19 @@ void quickSortThreeWayImpl(It first, It last, size_t cutoff, size_t remainingDep
         remainingDepth--;
 
         // Median of 3 selection: median of first, middle, last.
-        auto pivot = detail::median3(*first, *(first + (last - first) / 2), *(last - 1));
+        size_t pivotIdx = detail::median3(first, 0, (last - first) / 2, last - first - 1);
+        // Move pivot to the start of the array.
+        std::swap(*(first + pivotIdx), *first);
+
         // Partition. [first, left) is less than pivot, [left, leftPivot) is pivot, [right, last)
         // is greater than pivot.
-        It left = first;
-        It leftPivot = first;
+        It left = first + 1;
+        It leftPivot = first + 1;
         It right = last;
         while (leftPivot < right) {
-            if (*leftPivot == pivot) {
+            if (*leftPivot == *first) {
                 ++leftPivot;
-            } else if (*leftPivot < pivot) {
+            } else if (*leftPivot < *first) {
                 if (leftPivot != left) {
                     std::swap(*leftPivot, *left);
                 }
@@ -214,6 +283,10 @@ void quickSortThreeWayImpl(It first, It last, size_t cutoff, size_t remainingDep
                 std::swap(*leftPivot, *right);
             }
         }
+
+        // Return pivot back to the place.
+        left--;
+        std::swap(*first, *left);
 
         if (left - first > last - right) {
             quickSortThreeWayImpl(right, last, cutoff, remainingDepth);
@@ -229,10 +302,10 @@ template<typename It>
 void quickSortDualPivotImpl(It first, It last, size_t cutoff, size_t remainingDepth)
 {
     while (true) {
-        if (detail::smallSort(first, last)) {
-            return;
-        } else if ((size_t)(last - first) <= cutoff) {
-            insertionSort(first, last);
+        if ((size_t)(last - first) <= cutoff) {
+            if (!detail::smallSort(first, last)) {
+                insertionSort(first, last);
+            }
             return;
         }
 
@@ -242,36 +315,27 @@ void quickSortDualPivotImpl(It first, It last, size_t cutoff, size_t remainingDe
         }
         remainingDepth--;
 
-        size_t size = last - first;
-        auto pivot1 = *(first + size / 3);
-        auto pivot2 = *(first + size * 2 / 3);
-        if (pivot1 == pivot2) {
-            // Find the new pivot2.
-            for (It it = first; it != last; ++it) {
-                if (*it != pivot1) {
-                    pivot2 = *it;
-                    break;
-                }
-            }
-            // All elements are equal to pivot1, the array is constant (and, therefore, sorted), exit.
-            if (pivot1 == pivot2) {
-                return;
-            }
-        } else if (pivot1 > pivot2) {
-            std::swap(pivot1, pivot2);
+        // Very simple pivot selection: 1/3th element and 2/3th element.
+        size_t pivot1Idx = (last - first) / 3;
+        size_t pivot2Idx = pivot1Idx * 2;
+        if (*(first + pivot1Idx) > *(first + pivot2Idx)) {
+            std::swap(pivot1Idx, pivot2Idx);
         }
+        // Move pivot1 to the start of the array, pivot2 to the end of the array.
+        std::swap(*(first + pivot1Idx), *first);
+        std::swap(*(first + pivot2Idx), *(last - 1));
 
-        // Partition. Slightly modified dual-pivot quicksort. [first, left1) is less or equal to pivot1,
-        // [left1, left2) is less or equal to pivot2, [right, last) is greater than pivot2.
-        It left1 = first;
-        It left2 = first;
-        It right = last;
+        // Partition: [first + 1, left1) is less than pivot1, [left1, left2) is greater or equal to pivot1
+        // and less or equal to pivot2, [right, last - 1) is greater than pivot2.
+        It left1 = first + 1;
+        It left2 = first + 1;
+        It right = last - 1;
 
         while (left2 < right) {
-            if (*left2 > pivot2) {
+            if (*left2 > *(last - 1)) {
                 --right;
                 std::swap(*left2, *right);
-            } else if (*left2 > pivot1) {
+            } else if (*left2 > *first) {
                 ++left2;
             } else {
                 std::swap(*left1, *left2);
@@ -279,6 +343,12 @@ void quickSortDualPivotImpl(It first, It last, size_t cutoff, size_t remainingDe
                 ++left2;
             }
         }
+
+        // Return pivots back to their place: left1 - 1 and left2 respectively.
+        left1--;
+        std::swap(*left1, *first);
+        std::swap(*right, *(last - 1));
+        right++;
 
         size_t l1 = left1 - first;
         size_t l2 = left2 - left1;
@@ -315,8 +385,7 @@ void quickSortDualPivotImpl(It first, It last, size_t cutoff, size_t remainingDe
 } // namespace detail
 
 // A quicksort implementation, just for comparison with std::sort. Runs heapSort if recursed more than log(last - first),
-// insertion sorts for small arrays (less than cutoff), uses sorting networks for 2, 3 and 4 elements.
-// Unlike the std::sort assumes that copying the valuesv is cheap (when selecting the pivot).
+// insertion sorts for small arrays (less than cutoff), uses specialized small sort for 2, 3 and 4 elements.
 template<typename It>
 void quickSort(It first, It last, size_t cutoff = 15)
 {
@@ -336,5 +405,5 @@ void quickSortThreeWay(It first, It last, size_t cutoff = 15)
 template<typename It>
 void quickSortDualPivot(It first, It last, size_t cutoff = 15)
 {
-    detail::quickSortDualPivotImpl(first, last, cutoff, nextLog2(last - first) * 4);
+    detail::quickSortDualPivotImpl(first, last, cutoff, nextLog2(last - first) * 2);
 }

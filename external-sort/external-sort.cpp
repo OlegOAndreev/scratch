@@ -6,6 +6,8 @@
 #include <string>
 #include <vector>
 
+#define COUNT_STRING_COMPARES
+
 #include "common.h"
 #include "file-utils.h"
 #include "sort.h"
@@ -15,6 +17,10 @@ using std::min;
 using std::priority_queue;
 using std::string;
 using std::vector;
+
+#if defined(COUNT_STRING_COMPARES)
+size_t compareStrCount = 0;
+#endif
 
 size_t const kDefaultMaxMemory = 1024 * 1024 * 1024LL;
 
@@ -583,6 +589,10 @@ int main(int argc, char** argv)
         printUsage(argv[0]);
         return 1;
     }
+
+#if defined(COUNT_STRING_COMPARES)
+    printf("Total comparisons: %lld\n", (long long)compareStrCount);
+#endif
 
     return 0;
 }

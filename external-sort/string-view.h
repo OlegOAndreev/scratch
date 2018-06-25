@@ -22,10 +22,17 @@ struct StringView
     }
 };
 
+#if defined(COUNT_STRING_COMPARES)
+extern size_t compareStrCount;
+#endif
+
 namespace detail {
 
 inline int compareStr(char const* begin1, size_t length1, char const* begin2, size_t length2)
 {
+#if defined(COUNT_STRING_COMPARES)
+    compareStrCount++;
+#endif
     int ret = memcmp(begin1, begin2, std::min(length1, length2));
     if (ret != 0) {
         return ret;
