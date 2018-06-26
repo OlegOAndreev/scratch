@@ -27,6 +27,14 @@ void callSortMethod(char const* sortMethod, It first, It last)
         quickSort(first, last, 10);
     } else if (strcmp(sortMethod, "quick-30") == 0) {
         quickSort(first, last, 30);
+    } else if (strcmp(sortMethod, "quick-alt") == 0) {
+        quickSortAlt(first, last);
+    } else if (strcmp(sortMethod, "quick-alt-5") == 0) {
+        quickSortAlt(first, last, 5);
+    } else if (strcmp(sortMethod, "quick-alt-10") == 0) {
+        quickSortAlt(first, last, 10);
+    } else if (strcmp(sortMethod, "quick-alt-30") == 0) {
+        quickSortAlt(first, last, 30);
     } else if (strcmp(sortMethod, "quick-3way") == 0) {
         quickSortThreeWay(first, last);
     } else if (strcmp(sortMethod, "quick-3way-5") == 0) {
