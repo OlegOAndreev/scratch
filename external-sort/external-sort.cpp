@@ -11,7 +11,6 @@
 #include "common.h"
 #include "file-utils.h"
 #include "sort.h"
-#include "sort-test.h"
 
 using std::min;
 using std::priority_queue;
@@ -499,7 +498,6 @@ void printUsage(char const* argv0)
            "  generate-faster FILE NUMLINES AVGLINE\t\tGenerates an ASCII file with given number of lines and average line length"
            " (with optimizations)\n"
            "  benchmark-sort FILE METHOD\t\t\tBenchmarks the sorting routine by sorting the file in memory\n"
-           "  test-sort METHOD [MAXSIZE]\t\t\tRuns testing method on the sorting routine\n\n"
            "Options:\n"
            "  --max-memory SIZE\t\tThe max amount of memory to be used for in-memory buffers\n"
            "  --leave-chunks\t\tDo not remove the chunks left after sorting\n"
@@ -578,13 +576,6 @@ int main(int argc, char** argv)
             return 1;
         }
         benchmarkSort(argv[2], argv[3]);
-    } else if (strcmp(argv[1], "test-sort") == 0) {
-        if (argc != 3 && argc != 4) {
-            printUsage(argv[0]);
-            return 1;
-        }
-        size_t maxSize = (argc == 4) ? (size_t) atoll(argv[3]) : 10000;
-        testSort(argv[2], maxSize);
     } else {
         printUsage(argv[0]);
         return 1;

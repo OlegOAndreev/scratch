@@ -1,5 +1,3 @@
-#pragma once
-
 #include <algorithm>
 #include <cstring>
 #include <cstdlib>
@@ -10,60 +8,7 @@
 
 // Sort testing utilities.
 
-namespace {
-
 using std::vector;
-
-template<typename It>
-void callSortMethod(char const* sortMethod, It first, It last)
-{
-    if (strcmp(sortMethod, "std") == 0) {
-        std::sort(first, last);
-    } else if (strcmp(sortMethod, "quick") == 0) {
-        quickSort(first, last);
-    } else if (strcmp(sortMethod, "quick-5") == 0) {
-        quickSort(first, last, 5);
-    } else if (strcmp(sortMethod, "quick-10") == 0) {
-        quickSort(first, last, 10);
-    } else if (strcmp(sortMethod, "quick-30") == 0) {
-        quickSort(first, last, 30);
-    } else if (strcmp(sortMethod, "quick-alt") == 0) {
-        quickSortAlt(first, last);
-    } else if (strcmp(sortMethod, "quick-alt-5") == 0) {
-        quickSortAlt(first, last, 5);
-    } else if (strcmp(sortMethod, "quick-alt-10") == 0) {
-        quickSortAlt(first, last, 10);
-    } else if (strcmp(sortMethod, "quick-alt-30") == 0) {
-        quickSortAlt(first, last, 30);
-    } else if (strcmp(sortMethod, "quick-3way") == 0) {
-        quickSortThreeWay(first, last);
-    } else if (strcmp(sortMethod, "quick-3way-5") == 0) {
-        quickSortThreeWay(first, last, 5);
-    } else if (strcmp(sortMethod, "quick-3way-10") == 0) {
-        quickSortThreeWay(first, last, 10);
-    } else if (strcmp(sortMethod, "quick-3way-30") == 0) {
-        quickSortThreeWay(first, last, 30);
-    } else if (strcmp(sortMethod, "quick-2pivot") == 0) {
-        quickSortDualPivot(first, last);
-    } else if (strcmp(sortMethod, "quick-2pivot-5") == 0) {
-        quickSortDualPivot(first, last, 5);
-    } else if (strcmp(sortMethod, "quick-2pivot-10") == 0) {
-        quickSortDualPivot(first, last, 10);
-    } else if (strcmp(sortMethod, "quick-2pivot-30") == 0) {
-        quickSortDualPivot(first, last, 30);
-    } else if (strcmp(sortMethod, "heap") == 0) {
-        heapSort(first, last, false);
-    } else if (strcmp(sortMethod, "heap-std") == 0) {
-        heapSort(first, last, true);
-    } else if (strcmp(sortMethod, "selection") == 0) {
-        selectionSort(first, last);
-    } else if (strcmp(sortMethod, "insertion") == 0) {
-        insertionSort(first, last);
-    } else {
-        printf("Unknown sorting method %s\n", sortMethod);
-        exit(1);
-    }
-}
 
 void compareSortInt(char const* sortMethod, vector<int>& array, vector<int>& scratch)
 {
@@ -229,4 +174,15 @@ void testSort(char const* sortMethod, size_t maxSize)
     printf("All tests on %s [0-%d) passed in %dms\n", sortMethod, (int)maxSize, elapsedMsec(totalStartTime));
 }
 
-} // namespace
+int main(int argc, char** argv)
+{
+    if (argc != 3) {
+        printf("Usage: %s sort-method size\n", argv[0]);
+        return 1;
+    }
+
+    char const* sortMethod = argv[1];
+    size_t maxSize = (size_t)atoll(argv[2]);
+    testSort(sortMethod, maxSize);
+    return 0;
+}

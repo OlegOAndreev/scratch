@@ -4,7 +4,12 @@
 #include "max-heap.h"
 
 #include <algorithm>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 #include <iterator>
+
+// A number of sorting routines.
 
 // If enabled, uses hand-written ifs in smallSort for 3 elements, not the sorting network.
 // #define MANUAL_SMALL_SORT3
@@ -499,11 +504,140 @@ void quickSortDualPivotImpl(It first, It last, size_t cutoff, size_t remainingDe
         // Move pivot1 to the start of the array, pivot2 to the end of the array. Special cases:
         // 1. pivot1Idx == pivot2Idx
         // 2. pivot1Idx == size - 1 or pivot2Idx == 0 or both.
-        // The only invariant which should hold is that *first <= *(last - 1), so we only
+        // The only invariant which should hold is that *first <= *(last - 1), so we only swap the pivots if this invariant
+        // does not hold.
+        It last1 = last - 1;
         std::swap(*(first + pivot1Idx), *first);
-        std::swap(*(first + pivot2Idx), *(last - 1));
-        if (*first > *(last - 1)) {
-            std::swap(*first, *(last - 1));
+        std::swap(*(first + pivot2Idx), *last1);
+        if (*first > *last1) {
+            std::swap(*first, *last1);
+        }
+
+        // Partition: [first + 1, left1) is less than pivot1, [left1, left2) is greater or equal to pivot1
+        // and less or equal to pivot2, [right, last - 1) is greater than pivot2.
+        It left1 = first + 1;
+        It left2 = left1;
+        It right = last - 1;
+
+        while (left2 < right) {
+            if (*left2 > *last1) {
+                --right;
+                std::swap(*left2, *right);
+            } else if (*left2 > *first) {
+                ++left2;
+            } else {
+                std::swap(*left1, *left2);
+                ++left1;
+                ++left2;
+            }
+        }
+
+        // Return pivots back to their place: left1 - 1 and left2 respectively.
+        --left1;
+        std::swap(*left1, *first);
+        std::swap(*left2, *last1);
+        ++left2;
+
+        // Final partition is [first, left1), [left1 + 1, left2 - 1) and [left2, last).
+        // NOTE: Interesting enough, including this tail-call optimization mis-optimizes the loop on clang -O2, but not -O3 or gcc,
+        // clang version Apple LLVM version 8.1.0 (clang-802.0.42).
+        size_t l1 = left1 - first;
+        size_t l2 = left2 - left1 - 2;
+        size_t l3 = last - left2;
+        if (l1 < l2) {
+            if (l2 < l3) {
+                // l1 < l2 < l3
+                quickSortDualPivotImpl(first, left1, cutoff, remainingDepth);
+                quickSortDualPivotImpl(left1 + 1, left2 - 1, cutoff, remainingDepth);
+                first = left2;
+            } else {
+                // l1 < l3 < l2 or l3 < l1 < l2
+                quickSortDualPivotImpl(first, left1, cutoff, remainingDepth);
+                quickSortDualPivotImpl(left2, last, cutoff, remainingDepth);
+                first = left1 + 1;
+                last = left2 - 1;
+            }
+        } else {
+            if (l1 < l3) {
+                // l2 < l1 < l3
+                quickSortDualPivotImpl(left1 + 1, left2 - 1, cutoff, remainingDepth);
+                quickSortDualPivotImpl(first, left1, cutoff, remainingDepth);
+                first = left2;
+            } else {
+                // l2 < l3 < l1 or l3 < l2 < l1
+                quickSortDualPivotImpl(left1 + 1, left2 - 1, cutoff, remainingDepth);
+                quickSortDualPivotImpl(left2, last, cutoff, remainingDepth);
+                last = left1;
+            }
+        }
+    }
+}
+
+template<typename It>
+void quickSortDualPivotAltImpl(It first, It last, size_t cutoff, size_t remainingDepth)
+{
+    while (true) {
+        if ((size_t)(last - first) <= cutoff) {
+            if (!smallSort(first, last)) {
+                insertionSort(first, last);
+            }
+            break;
+        }
+
+        if (remainingDepth == 0) {
+            heapSort(first, last);
+            break;
+        }
+        remainingDepth--;
+
+        size_t size = last - first;
+        // Select two elements from: 0, 1/3th element, 2/3th and last element. Do a 4-element sorting network.
+        size_t i0 = 0;
+        size_t i1 = size / 3;
+        size_t i2 = i1 * 2;
+        size_t i3 = size - 1;
+        if (*(first + i0) > *(first + i1)) {
+            std::swap(i0, i1);
+        }
+        if (*(first + i2) > *(first + i3)) {
+            std::swap(i2, i3);
+        }
+        if (*(first + i0) > *(first + i2)) {
+            std::swap(i0, i2);
+        }
+        if (*(first + i1) > *(first + i3)) {
+            std::swap(i1, i3);
+        }
+        if (*(first + i1) > *(first + i2)) {
+            std::swap(i1, i2);
+        }
+        size_t pivot1Idx = i1;
+        size_t pivot2Idx = i2;
+        // Move pivot1 to the start of the array, pivot2 to the end of the array. We need the pivot1 to be strictly less than
+        // pivot2 in all cases (or exit early if the array is constant).
+        It last1 = last - 1;
+        std::swap(*(first + pivot1Idx), *first);
+        std::swap(*(first + pivot2Idx), *last1);
+        if (*first > *last1) {
+            std::swap(*first, *last1);
+        } else if (*first == *last1) {
+            // Try to find the pivot differing from this one.
+            It it = first + 1;
+            for (; it != last; ++it) {
+                if (*it > *first) {
+                    std::swap(*it, *last1);
+                    break;
+                } else if (*it < *first) {
+                    // Move first to last and move it to first.
+                    std::swap(*first, *last1);
+                    std::swap(*it, *first);
+                    break;
+                }
+            }
+            if (it == last) {
+                // The array is constant.
+                return;
+            }
         }
 
         // Partition: [first + 1, left1) is less than pivot1, [left1, left2) is greater or equal to pivot1
@@ -540,26 +674,26 @@ void quickSortDualPivotImpl(It first, It last, size_t cutoff, size_t remainingDe
         if (l1 < l2) {
             if (l2 < l3) {
                 // l1 < l2 < l3
-                quickSortDualPivotImpl(first, left1, cutoff, remainingDepth);
-                quickSortDualPivotImpl(left1 + 1, left2 - 1, cutoff, remainingDepth);
+                quickSortDualPivotAltImpl(first, left1, cutoff, remainingDepth);
+                quickSortDualPivotAltImpl(left1 + 1, left2 - 1, cutoff, remainingDepth);
                 first = left2;
             } else {
                 // l1 < l3 < l2 or l3 < l1 < l2
-                quickSortDualPivotImpl(first, left1, cutoff, remainingDepth);
-                quickSortDualPivotImpl(left2, last, cutoff, remainingDepth);
+                quickSortDualPivotAltImpl(first, left1, cutoff, remainingDepth);
+                quickSortDualPivotAltImpl(left2, last, cutoff, remainingDepth);
                 first = left1 + 1;
                 last = left2 - 1;
             }
         } else {
             if (l1 < l3) {
                 // l2 < l1 < l3
-                quickSortDualPivotImpl(left1 + 1, left2 - 1, cutoff, remainingDepth);
-                quickSortDualPivotImpl(first, left1, cutoff, remainingDepth);
+                quickSortDualPivotAltImpl(left1 + 1, left2 - 1, cutoff, remainingDepth);
+                quickSortDualPivotAltImpl(first, left1, cutoff, remainingDepth);
                 first = left2;
             } else {
                 // l2 < l3 < l1 or l3 < l2 < l1
-                quickSortDualPivotImpl(left1 + 1, left2 - 1, cutoff, remainingDepth);
-                quickSortDualPivotImpl(left2, last, cutoff, remainingDepth);
+                quickSortDualPivotAltImpl(left1 + 1, left2 - 1, cutoff, remainingDepth);
+                quickSortDualPivotAltImpl(left2, last, cutoff, remainingDepth);
                 last = left1;
             }
         }
@@ -600,7 +734,6 @@ void quickSortThreeWay(It first, It last, size_t cutoff = 0)
     detail::quickSortThreeWayImpl(first, last, cutoff, nextLog2(last - first) * 4);
 }
 
-
 // An implementation of dual-pivot quick sort: partition array into (less than pivot1), (pivot) and (greater than pivot) arrays.
 template<typename It>
 void quickSortDualPivot(It first, It last, size_t cutoff = 0)
@@ -609,4 +742,74 @@ void quickSortDualPivot(It first, It last, size_t cutoff = 0)
         cutoff = detail::defaultCutoff<typename std::iterator_traits<It>::value_type>();
     }
     detail::quickSortDualPivotImpl(first, last, cutoff, nextLog2(last - first) * 2);
+}
+
+// A version of quickSortDualPivot which has a bit different partitioning scheme.
+template<typename It>
+void quickSortDualPivotAlt(It first, It last, size_t cutoff = 0)
+{
+    if (cutoff == 0) {
+        cutoff = detail::defaultCutoff<typename std::iterator_traits<It>::value_type>();
+    }
+    detail::quickSortDualPivotAltImpl(first, last, cutoff, nextLog2(last - first) * 2);
+}
+
+// A helper to call the required method by name.
+template<typename It>
+void callSortMethod(char const* sortMethod, It first, It last)
+{
+    if (strcmp(sortMethod, "std") == 0) {
+        std::sort(first, last);
+    } else if (strcmp(sortMethod, "quick") == 0) {
+        quickSort(first, last);
+    } else if (strcmp(sortMethod, "quick-5") == 0) {
+        quickSort(first, last, 5);
+    } else if (strcmp(sortMethod, "quick-10") == 0) {
+        quickSort(first, last, 10);
+    } else if (strcmp(sortMethod, "quick-30") == 0) {
+        quickSort(first, last, 30);
+    } else if (strcmp(sortMethod, "quick-alt") == 0) {
+        quickSortAlt(first, last);
+    } else if (strcmp(sortMethod, "quick-alt-5") == 0) {
+        quickSortAlt(first, last, 5);
+    } else if (strcmp(sortMethod, "quick-alt-10") == 0) {
+        quickSortAlt(first, last, 10);
+    } else if (strcmp(sortMethod, "quick-alt-30") == 0) {
+        quickSortAlt(first, last, 30);
+    } else if (strcmp(sortMethod, "quick-3way") == 0) {
+        quickSortThreeWay(first, last);
+    } else if (strcmp(sortMethod, "quick-3way-5") == 0) {
+        quickSortThreeWay(first, last, 5);
+    } else if (strcmp(sortMethod, "quick-3way-10") == 0) {
+        quickSortThreeWay(first, last, 10);
+    } else if (strcmp(sortMethod, "quick-3way-30") == 0) {
+        quickSortThreeWay(first, last, 30);
+    } else if (strcmp(sortMethod, "quick-2pivot") == 0) {
+        quickSortDualPivot(first, last);
+    } else if (strcmp(sortMethod, "quick-2pivot-5") == 0) {
+        quickSortDualPivot(first, last, 5);
+    } else if (strcmp(sortMethod, "quick-2pivot-10") == 0) {
+        quickSortDualPivot(first, last, 10);
+    } else if (strcmp(sortMethod, "quick-2pivot-30") == 0) {
+        quickSortDualPivot(first, last, 30);
+    } else if (strcmp(sortMethod, "quick-2pivot-alt") == 0) {
+        quickSortDualPivotAlt(first, last);
+    } else if (strcmp(sortMethod, "quick-2pivot-alt-5") == 0) {
+        quickSortDualPivotAlt(first, last, 5);
+    } else if (strcmp(sortMethod, "quick-2pivot-alt-10") == 0) {
+        quickSortDualPivotAlt(first, last, 10);
+    } else if (strcmp(sortMethod, "quick-2pivot-alt-30") == 0) {
+        quickSortDualPivotAlt(first, last, 30);
+    } else if (strcmp(sortMethod, "heap") == 0) {
+        heapSort(first, last, false);
+    } else if (strcmp(sortMethod, "heap-std") == 0) {
+        heapSort(first, last, true);
+    } else if (strcmp(sortMethod, "selection") == 0) {
+        selectionSort(first, last);
+    } else if (strcmp(sortMethod, "insertion") == 0) {
+        insertionSort(first, last);
+    } else {
+        printf("Unknown sorting method %s\n", sortMethod);
+        exit(1);
+    }
 }
