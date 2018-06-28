@@ -6,49 +6,7 @@
 #include <string.h>
 #include <vector>
 
-#if defined(__APPLE__)
-#include <sys/time.h>
-#elif defined(__linux__)
-#include <time.h>
-#elif defined(_WIN32)
-#include <windows.h>
-#else
-#error "Unsupported OS"
-#endif
-
-int64_t getTimeCounter()
-{
-#if defined(__APPLE__)
-    timeval tp;
-    gettimeofday(&tp, nullptr);
-    return tp.tv_sec * 1000000ULL + tp.tv_usec;
-#elif defined(__linux__)
-    timespec tp;
-    clock_gettime(CLOCK_MONOTONIC, &tp);
-    return tp.tv_sec * 1000000000ULL + tp.tv_nsec;
-#elif defined(_WIN32)
-    LARGE_INTEGER li;
-    QueryPerformanceCounter(&li);
-    return li.QuadPart;
-#else
-#error "Unsupported OS"
-#endif
-}
-
-int64_t getTimeFreq()
-{
-#if defined(__APPLE__)
-    return 1000000;
-#elif defined(__linux__)
-    return 1000000000;
-#elif defined(_WIN32)
-    LARGE_INTEGER li;
-    QueryPerformanceFrequency(&li);
-    return li.QuadPart;
-#else
-#error "Unsupported OS"
-#endif
-}
+#include "common.h"
 
 enum class Op
 {

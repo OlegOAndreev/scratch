@@ -5,33 +5,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <vector>
-#if defined(__APPLE__)
-#include <sys/time.h>
-#elif defined(__linux__)
-#include <time.h>
-#endif
 
-int64_t getTimeCounter()
-{
-#if defined(__APPLE__)
-    timeval tp;
-    gettimeofday(&tp, nullptr);
-    return tp.tv_sec * 1000000ULL + tp.tv_usec;
-#elif defined(__linux__)
-    timespec tp;
-    clock_gettime(CLOCK_MONOTONIC, &tp);
-    return tp.tv_sec * 1000000000ULL + tp.tv_nsec;
-#endif
-}
-
-int64_t getTimeFreq()
-{
-#if defined(__APPLE__)
-    return 1000000;
-#elif defined(__linux__)
-    return 1000000000;
-#endif
-}
+#include "common.h"
 
 // x[i] = horizontal position of queen on i-th vertical
 int naiveIter(int* x, int y, int n)
