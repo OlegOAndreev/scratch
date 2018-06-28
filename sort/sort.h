@@ -347,6 +347,8 @@ void quickSortImpl(It first, It last, size_t cutoff, size_t remainingDepth)
 }
 
 
+// A slightly different quickSort implementation: moves the pivot to the first element. Performs the same as the previous
+// version on random arrays, but much worse on pre-sorted arrays.
 template<typename It>
 void quickSortAltImpl(It first, It last, size_t cutoff, size_t remainingDepth)
 {
@@ -363,9 +365,6 @@ void quickSortAltImpl(It first, It last, size_t cutoff, size_t remainingDepth)
             return;
         }
         remainingDepth--;
-
-        // A slightly different quickSort implementation: moves the pivot to the first element. Performs the same as the previous
-        // version on random arrays, but much worse on pre-sorted arrays.
 
         // Median either of 3 or 5 elements (median of 3 elements can be insufficient for cases like asc-desc array).
         size_t size = last - first;
@@ -461,6 +460,34 @@ void quickSortThreeWayImpl(It first, It last, size_t cutoff, size_t remainingDep
     }
 }
 
+// Selects two elements from: 0, 1/3th element, 2/3th and last element. Do a 4-element sorting network.
+template<typename It>
+void dualPivotSelection(It first, It last, size_t* pivot1Idx, size_t* pivot2Idx)
+{
+    size_t size = last - first;
+    size_t i0 = 0;
+    size_t i1 = size / 3;
+    size_t i2 = i1 * 2;
+    size_t i3 = size - 1;
+    if (*(first + i0) > *(first + i1)) {
+        std::swap(i0, i1);
+    }
+    if (*(first + i2) > *(first + i3)) {
+        std::swap(i2, i3);
+    }
+    if (*(first + i0) > *(first + i2)) {
+        std::swap(i0, i2);
+    }
+    if (*(first + i1) > *(first + i3)) {
+        std::swap(i1, i3);
+    }
+    if (*(first + i1) > *(first + i2)) {
+        std::swap(i1, i2);
+    }
+    *pivot1Idx = i1;
+    *pivot2Idx = i2;
+}
+
 template<typename It>
 void quickSortDualPivotImpl(It first, It last, size_t cutoff, size_t remainingDepth)
 {
@@ -478,29 +505,9 @@ void quickSortDualPivotImpl(It first, It last, size_t cutoff, size_t remainingDe
         }
         remainingDepth--;
 
-        size_t size = last - first;
-        // Select two elements from: 0, 1/3th element, 2/3th and last element. Do a 4-element sorting network.
-        size_t i0 = 0;
-        size_t i1 = size / 3;
-        size_t i2 = i1 * 2;
-        size_t i3 = size - 1;
-        if (*(first + i0) > *(first + i1)) {
-            std::swap(i0, i1);
-        }
-        if (*(first + i2) > *(first + i3)) {
-            std::swap(i2, i3);
-        }
-        if (*(first + i0) > *(first + i2)) {
-            std::swap(i0, i2);
-        }
-        if (*(first + i1) > *(first + i3)) {
-            std::swap(i1, i3);
-        }
-        if (*(first + i1) > *(first + i2)) {
-            std::swap(i1, i2);
-        }
-        size_t pivot1Idx = i1;
-        size_t pivot2Idx = i2;
+        size_t pivot1Idx;
+        size_t pivot2Idx;
+        dualPivotSelection(first, last, &pivot1Idx, &pivot2Idx);
         // Move pivot1 to the start of the array, pivot2 to the end of the array. Special cases:
         // 1. pivot1Idx == pivot2Idx
         // 2. pivot1Idx == size - 1 or pivot2Idx == 0 or both.
@@ -523,7 +530,7 @@ void quickSortDualPivotImpl(It first, It last, size_t cutoff, size_t remainingDe
             if (*left2 > *last1) {
                 --right;
                 std::swap(*left2, *right);
-            } else if (*left2 > *first) {
+            } else if (*left2 >= *first) {
                 ++left2;
             } else {
                 std::swap(*left1, *left2);
@@ -573,6 +580,8 @@ void quickSortDualPivotImpl(It first, It last, size_t cutoff, size_t remainingDe
     }
 }
 
+// A slightly different dual-pivot quicksort implementation: always makes two pivots different (pivot1 < pivot2, not
+// pivot1 <= pivot2 like the default implementation).
 template<typename It>
 void quickSortDualPivotAltImpl(It first, It last, size_t cutoff, size_t remainingDepth)
 {
@@ -590,41 +599,26 @@ void quickSortDualPivotAltImpl(It first, It last, size_t cutoff, size_t remainin
         }
         remainingDepth--;
 
-        size_t size = last - first;
-        // Select two elements from: 0, 1/3th element, 2/3th and last element. Do a 4-element sorting network.
-        size_t i0 = 0;
-        size_t i1 = size / 3;
-        size_t i2 = i1 * 2;
-        size_t i3 = size - 1;
-        if (*(first + i0) > *(first + i1)) {
-            std::swap(i0, i1);
-        }
-        if (*(first + i2) > *(first + i3)) {
-            std::swap(i2, i3);
-        }
-        if (*(first + i0) > *(first + i2)) {
-            std::swap(i0, i2);
-        }
-        if (*(first + i1) > *(first + i3)) {
-            std::swap(i1, i3);
-        }
-        if (*(first + i1) > *(first + i2)) {
-            std::swap(i1, i2);
-        }
-        size_t pivot1Idx = i1;
-        size_t pivot2Idx = i2;
+        size_t pivot1Idx;
+        size_t pivot2Idx;
+        dualPivotSelection(first, last, &pivot1Idx, &pivot2Idx);
         // Move pivot1 to the start of the array, pivot2 to the end of the array. We need the pivot1 to be strictly less than
         // pivot2 in all cases (or exit early if the array is constant).
         It last1 = last - 1;
-        std::swap(*(first + pivot1Idx), *first);
-        std::swap(*(first + pivot2Idx), *last1);
-        if (*first > *last1) {
-            std::swap(*first, *last1);
-        } else if (*first == *last1) {
-            // Try to find the pivot differing from this one.
+        if (*(first + pivot1Idx) != *(first + pivot2Idx)) {
+            std::swap(*(first + pivot1Idx), *first);
+            std::swap(*(first + pivot2Idx), *last1);
+            if (*first > *last1) {
+                std::swap(*first, *last1);
+            }
+        } else {
+            // Move pivot1 to first.
+            std::swap(*first, *(first + pivot1Idx));
+            // Try to find the pivot differing from the first one.
             It it = first + 1;
             for (; it != last; ++it) {
                 if (*it > *first) {
+                    // We found the second pivot.
                     std::swap(*it, *last1);
                     break;
                 } else if (*it < *first) {
@@ -640,9 +634,12 @@ void quickSortDualPivotAltImpl(It first, It last, size_t cutoff, size_t remainin
             }
         }
 
-        // Partition: [first + 1, left1) is less than pivot1, [left1, left2) is greater or equal to pivot1
-        // and less or equal to pivot2, [right, last - 1) is greater than pivot2.
+        // Partition: [first + 1, left1) is less or equal than pivot1, [left1, left2) is greater than pivot1
+        // and less or equal than pivot2, [right, last - 1) is greater than pivot2.
         It left1 = first + 1;
+        while (*left1 <= *first) {
+            left1++;
+        }
         It left2 = left1;
         It right = last - 1;
 
