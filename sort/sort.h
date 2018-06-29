@@ -12,17 +12,27 @@
 // A number of sorting routines.
 
 // If enabled, uses hand-written ifs in smallSort for 3 elements, not the sorting network.
-// #define MANUAL_SMALL_SORT3
+//#define MANUAL_SMALL_SORT3
 
-// #define INSERTION_SORT_SENTINEL
+// If enabled, uses minimal element as a sentinel to remove one comparison in insertionSort.
+//#define INSERTION_SORT_SENTINEL
 
-// Cutoff for using insertion sort for general element type.
-size_t const kDefaultCutoff = 15;
-
-// Cutoff for using insertion sort for arithmetic element type (e.g. int or float).
-size_t const kArithmeticTypeCutoff = 30;
+// If enabled, uses a sentinel to reduce number of comparisons in quickSortAlt.
+//#define QUICK_SORT_ALT_SENTINEL
 
 namespace detail {
+
+// Minimal size of the cutoff for quick sort.
+size_t const kMinQuickSortCutoff = 2;
+
+// Cutoff for using insertion sort instead of quick sort for general element type.
+size_t const kDefaultCutoff = 15;
+
+// Cutoff for using insertion sort instead of quick sort for arithmetic element type (e.g. int or float).
+size_t const kArithmeticTypeCutoff = 30;
+
+// The size of the array when the switch from median-of-3 to median-of-5 happens.
+size_t const kQuickSortAltSwitchToMedian5 = 100;
 
 template<typename T>
 size_t defaultCutoff()
@@ -267,7 +277,7 @@ void selectionSort(It first, It last)
 }
 
 template<typename It>
-void insertionSort(It first, It last)
+void insertionSortImpl(It first, It last)
 {
     if (first == last) {
         return;
@@ -315,6 +325,15 @@ void insertionSort(It first, It last)
 #endif
 }
 
+template<typename It>
+void insertionSort(It first, It last)
+{
+    if (first == last) {
+        return;
+    }
+    insertionSortImpl(first, last);
+}
+
 // A heap-sort implementation. If useStdHeap is true, uses std::make_heap/std::push_heap/std::pop_heap to make the heap,
 // otherwise uses makeHeap/pushHeap/popHeap.
 template<typename It>
@@ -342,7 +361,7 @@ void quickSortImpl(It first, It last, size_t cutoff, size_t remainingDepth)
     while (true) {
         if ((size_t)(last - first) <= cutoff) {
             if (!smallSort(first, last)) {
-                insertionSort(first, last);
+                insertionSortImpl(first, last);
             }
             break;
         }
@@ -358,6 +377,7 @@ void quickSortImpl(It first, It last, size_t cutoff, size_t remainingDepth)
         size_t pivotIdx, highIdx;
         median3(first, 0, size / 2, size - 1, &pivotIdx, &highIdx);
         auto pivot = *(first + pivotIdx);
+
         // Partition. [first, left) is less or equal to pivot, [right, last) is greater or equal to pivot.
         It left = first;
         It right = last;
@@ -368,11 +388,12 @@ void quickSortImpl(It first, It last, size_t cutoff, size_t remainingDepth)
             while (pivot < *(right - 1)) {
                 --right;
             }
-            if (left < right) {
-                std::swap(*left, *(right - 1));
-                ++left;
-                --right;
+            if (left >= right) {
+                break;
             }
+            std::swap(*left, *(right - 1));
+            ++left;
+            --right;
         }
 
         if (left - first > last - left) {
@@ -387,14 +408,14 @@ void quickSortImpl(It first, It last, size_t cutoff, size_t remainingDepth)
 
 
 // A slightly different quickSort implementation: moves the pivot to the first element. Performs the same as the previous
-// version on random arrays, but much worse on pre-sorted arrays.
+// version on random arrays, but much worse on pre-sorted arrays. cutoff must be larger than 2.
 template<typename It>
 void quickSortAltImpl(It first, It last, size_t cutoff, size_t remainingDepth)
 {
     while (true) {
         if ((size_t)(last - first) <= cutoff) {
             if (!smallSort(first, last)) {
-                insertionSort(first, last);
+                insertionSortImpl(first, last);
             }
             return;
         }
@@ -408,7 +429,7 @@ void quickSortAltImpl(It first, It last, size_t cutoff, size_t remainingDepth)
         // Median either of 3 or 5 elements (median of 3 elements can be insufficient for cases like asc-desc array).
         size_t size = last - first;
         size_t pivotIdx, highIdx;
-        if (size < 100) {
+        if (size < kQuickSortAltSwitchToMedian5) {
             median3(first, 0, size / 2, size - 1, &pivotIdx, &highIdx);
         } else {
             median5(first, 0, size / 4, size / 2, size / 2 + size / 4, size - 1, &pivotIdx, &highIdx);
@@ -416,6 +437,32 @@ void quickSortAltImpl(It first, It last, size_t cutoff, size_t remainingDepth)
         // Move pivot to the first element.
         std::swap(*first, *(first + pivotIdx));
 
+#if defined(QUICK_SORT_ALT_SENTINEL)
+        // Use element from highIdx (which must be equal or greater to element from pivotIdx) as a sentinel,
+        // place it in the last - 1.
+        if (highIdx != 0) {
+            std::swap(*(first + highIdx), *(last - 1));
+        } else {
+            // We swapped elements first and pivotIdx.
+            std::swap(*(first + pivotIdx), *(last - 1));
+        }
+
+        // Partition: [first + 1, left) is less or equal to pivot, [right, last) is greater or equal to pivot.
+        It left = first;
+        It right = last;
+        while (true) {
+            do {
+                --right;
+            } while (*first < *right);
+            do {
+                ++left;
+            } while (*left < *first);
+            if (left >= right) {
+                break;
+            }
+            std::swap(*left, *right);
+        }
+#else
         // Partition: [first + 1, left) is less or equal to pivot, [right, last) is greater or equal to pivot.
         It left = first + 1;
         It right = last;
@@ -426,12 +473,14 @@ void quickSortAltImpl(It first, It last, size_t cutoff, size_t remainingDepth)
             while (*left < *first) {
                 ++left;
             }
-            if (left < right) {
-                std::swap(*left, *(right - 1));
-                ++left;
-                --right;
+            if (left >= right) {
+                break;
             }
+            std::swap(*left, *(right - 1));
+            ++left;
+            --right;
         }
+#endif
 
         // After the last iteration [left, last) is greater or equal to pivot (right can be equal to left - 1).
         // Move the pivot back to the center. Now this element is in the right place, exclude it from sorting.
@@ -452,7 +501,7 @@ void quickSortThreeWayImpl(It first, It last, size_t cutoff, size_t remainingDep
     while (true) {
         if ((size_t)(last - first) <= cutoff) {
             if (!smallSort(first, last)) {
-                insertionSort(first, last);
+                insertionSortImpl(first, last);
             }
             return;
         }
@@ -537,7 +586,7 @@ void quickSortDualPivotImpl(It first, It last, size_t cutoff, size_t remainingDe
     while (true) {
         if ((size_t)(last - first) <= cutoff) {
             if (!smallSort(first, last)) {
-                insertionSort(first, last);
+                insertionSortImpl(first, last);
             }
             break;
         }
@@ -631,7 +680,7 @@ void quickSortDualPivotAltImpl(It first, It last, size_t cutoff, size_t remainin
     while (true) {
         if ((size_t)(last - first) <= cutoff) {
             if (!smallSort(first, last)) {
-                insertionSort(first, last);
+                insertionSortImpl(first, last);
             }
             break;
         }
@@ -749,6 +798,8 @@ void quickSort(It first, It last, size_t cutoff = 0)
 {
     if (cutoff == 0) {
         cutoff = detail::defaultCutoff<typename std::iterator_traits<It>::value_type>();
+    } else if (cutoff < detail::kMinQuickSortCutoff) {
+        cutoff = detail::kMinQuickSortCutoff;
     }
     detail::quickSortImpl(first, last, cutoff, nextLog2(last - first) * 4);
 }
@@ -759,6 +810,8 @@ void quickSortAlt(It first, It last, size_t cutoff = 0)
 {
     if (cutoff == 0) {
         cutoff = detail::defaultCutoff<typename std::iterator_traits<It>::value_type>();
+    } else if (cutoff < detail::kMinQuickSortCutoff) {
+        cutoff = detail::kMinQuickSortCutoff;
     }
     detail::quickSortAltImpl(first, last, cutoff, nextLog2(last - first) * 4);
 }
@@ -770,6 +823,8 @@ void quickSortThreeWay(It first, It last, size_t cutoff = 0)
 {
     if (cutoff == 0) {
         cutoff = detail::defaultCutoff<typename std::iterator_traits<It>::value_type>();
+    } else if (cutoff < detail::kMinQuickSortCutoff) {
+        cutoff = detail::kMinQuickSortCutoff;
     }
     detail::quickSortThreeWayImpl(first, last, cutoff, nextLog2(last - first) * 4);
 }
@@ -780,6 +835,8 @@ void quickSortDualPivot(It first, It last, size_t cutoff = 0)
 {
     if (cutoff == 0) {
         cutoff = detail::defaultCutoff<typename std::iterator_traits<It>::value_type>();
+    } else if (cutoff < detail::kMinQuickSortCutoff) {
+        cutoff = detail::kMinQuickSortCutoff;
     }
     detail::quickSortDualPivotImpl(first, last, cutoff, nextLog2(last - first) * 2);
 }
@@ -790,6 +847,8 @@ void quickSortDualPivotAlt(It first, It last, size_t cutoff = 0)
 {
     if (cutoff == 0) {
         cutoff = detail::defaultCutoff<typename std::iterator_traits<It>::value_type>();
+    } else if (cutoff < detail::kMinQuickSortCutoff) {
+        cutoff = detail::kMinQuickSortCutoff;
     }
     detail::quickSortDualPivotAltImpl(first, last, cutoff, nextLog2(last - first) * 2);
 }
