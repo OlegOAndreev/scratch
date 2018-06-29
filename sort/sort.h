@@ -96,25 +96,35 @@ size_t defaultCutoff<double>()
 }
 
 template<typename It>
-FORCE_INLINE size_t median3(It first, size_t i0, size_t i1, size_t i2)
+FORCE_INLINE void median3(It first, size_t i0, size_t i1, size_t i2, size_t* med, size_t* high)
 {
     if (*(first + i0) < *(first + i1)) {
         if (*(first + i1) < *(first + i2)) {
-            return i1;
+            *med = i1;
+            *high = i2;
+        } else if (*(first + i0) < *(first + i2)) {
+            *med = i2;
+            *high = i1;
         } else {
-            return (*(first + i0) < *(first + i2)) ? i2 : i0;
+            *med = i0;
+            *high = i1;
         }
     } else {
-        if (*(first + i1) < *(first + i2)) {
-            return (*(first + i0) < *(first + i2)) ? i0 : i2;
+        if (*(first + i1) > *(first + i2)) {
+            *med = i1;
+            *high = i0;
+        } else if (*(first + i0) > *(first + i2)) {
+            *med = i2;
+            *high = i0;
         } else {
-            return i1;
+            *med = i0;
+            *high = i2;
         }
     }
 }
 
 template<typename It>
-FORCE_INLINE size_t median5(It first, size_t i0, size_t i1, size_t i2, size_t i3, size_t i4)
+FORCE_INLINE void median5(It first, size_t i0, size_t i1, size_t i2, size_t i3, size_t i4, size_t* med, size_t* high)
 {
     // Sorting network for 5 elements.
     if (*(first + i0) > *(first + i1)) {
@@ -144,7 +154,8 @@ FORCE_INLINE size_t median5(It first, size_t i0, size_t i1, size_t i2, size_t i3
     if (*(first + i1) > *(first + i2)) {
         std::swap(i1, i2);
     }
-    return i2;
+    *med = i2;
+    *high = i4;
 }
 
 // "Small" sort: if the sizes are small, sort and return true, otherwise return false.
@@ -261,20 +272,40 @@ void insertionSort(It first, It last)
     if (first == last) {
         return;
     }
-    for (It i = first + 1; i < last; ++i) {
+#if defined(INSERTION_SORT_SENTINEL)
+    // Find the min value and insert it directly into first element.
+    It minI = first;
+    for (It i = first + 1; i != last; ++i) {
+        if (*minI > *i) {
+            minI = i;
+        }
+    }
+    std::swap(*minI, *first);
+    for (It i = first + 2; i != last; ++i) {
         if (*i > *(i - 1)) {
             continue;
         }
-#if !defined(INSERTION_SORT_SENTINEL)
+        auto v = std::move(*i);
+        It j;
+        // We do not need the j > first check here because the first is always the smallest element.
+        for (j = i; v < *(j - 1); --j) {
+            *j = std::move(*(j - 1));
+        }
+        *j = std::move(v);
+    }
+#else
+    for (It i = first + 1; i != last; ++i) {
+        if (*i > *(i - 1)) {
+            continue;
+        }
         auto v = std::move(*i);
         It j;
         for (j = i; j > first && v < *(j - 1); --j) {
             *j = std::move(*(j - 1));
         }
         *j = std::move(v);
-#else
-#endif
     }
+#endif
 }
 
 // A heap-sort implementation. If useStdHeap is true, uses std::make_heap/std::push_heap/std::pop_heap to make the heap,
@@ -317,7 +348,8 @@ void quickSortImpl(It first, It last, size_t cutoff, size_t remainingDepth)
 
         // Median either of 3 or 5 elements (median of 3 elements can be insufficient for cases like asc-desc array).
         size_t size = last - first;
-        size_t pivotIdx = median3(first, 0, size / 2, size - 1);
+        size_t pivotIdx, highIdx;
+        median3(first, 0, size / 2, size - 1, &pivotIdx, &highIdx);
         auto pivot = *(first + pivotIdx);
         // Partition. [first, left) is less or equal to pivot, [right, last) is greater or equal to pivot.
         It left = first;
@@ -368,9 +400,12 @@ void quickSortAltImpl(It first, It last, size_t cutoff, size_t remainingDepth)
 
         // Median either of 3 or 5 elements (median of 3 elements can be insufficient for cases like asc-desc array).
         size_t size = last - first;
-        size_t pivotIdx = size < 100
-                ? median3(first, 0, size / 2, size - 1)
-                : median5(first, 0, size / 4, size / 2, size / 2 + size / 4, size - 1);
+        size_t pivotIdx, highIdx;
+        if (size < 100) {
+            median3(first, 0, size / 2, size - 1, &pivotIdx, &highIdx);
+        } else {
+            median5(first, 0, size / 4, size / 2, size / 2 + size / 4, size - 1, &pivotIdx, &highIdx);
+        }
         // Move pivot to the first element.
         std::swap(*first, *(first + pivotIdx));
 
@@ -378,11 +413,11 @@ void quickSortAltImpl(It first, It last, size_t cutoff, size_t remainingDepth)
         It left = first + 1;
         It right = last;
         while (left < right) {
-            while (*left < *first) {
-                ++left;
-            }
             while (*first < *(right - 1)) {
                 --right;
+            }
+            while (*left < *first) {
+                ++left;
             }
             if (left < right) {
                 std::swap(*left, *(right - 1));
@@ -422,7 +457,8 @@ void quickSortThreeWayImpl(It first, It last, size_t cutoff, size_t remainingDep
         remainingDepth--;
 
         // Median of 3 selection: median of first, middle, last.
-        size_t pivotIdx = median3(first, 0, (last - first) / 2, last - first - 1);
+        size_t pivotIdx, highIdx;
+        median3(first, 0, (last - first) / 2, last - first - 1,  &pivotIdx, &highIdx);
         // Move pivot to the start of the array.
         std::swap(*(first + pivotIdx), *first);
 
