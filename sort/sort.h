@@ -275,10 +275,17 @@ void insertionSort(It first, It last)
 #if defined(INSERTION_SORT_SENTINEL)
     // Find the min value and insert it directly into first element.
     It minI = first;
+    bool isConst = true;
     for (It i = first + 1; i != last; ++i) {
-        if (*minI > *i) {
-            minI = i;
+        if (*minI != *i) {
+            isConst = false;
+            if (*minI > *i) {
+                minI = i;
+            }
         }
+    }
+    if (isConst) {
+        return;
     }
     std::swap(*minI, *first);
     for (It i = first + 2; i != last; ++i) {
