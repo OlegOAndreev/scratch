@@ -1,51 +1,14 @@
 #include <immintrin.h>
 #include <stdint.h>
 
+#include "common.h"
+
 #if defined(WITH_IACA_SUPPORT)
 #include <iacaMarks.h>
 #else
 #define IACA_START
 #define IACA_END
 #endif
-
-#if defined(__GNUC__)
-#define FORCE_INLINE __attribute__((always_inline)) inline
-
-// Defines a pair of functions type load_postfix(const char* p) and void store_postfix(char* p, type v),
-// e.g. load_i8/store_i8 for loading/storing int8_t.
-#define DEFINE_LOAD_STORE(type, postfix) \
-FORCE_INLINE type load_##postfix(const char* p) \
-{ \
-    type v; \
-    __builtin_memcpy(&v, p, sizeof(v)); \
-    return v; \
-} \
-FORCE_INLINE void store_##postfix(char* p, type v) \
-{ \
-    __builtin_memcpy(p, &v, sizeof(v)); \
-}
-
-#elif defined(_MSC_VER)
-#define FORCE_INLINE __forceinline
-
-#define DEFINE_LOAD_STORE(type, postfix) \
-FORCE_INLINE type load_##postfix(const char* p) \
-{ \
-    return *(const type*)p; \
-} \
-FORCE_INLINE void store_##postfix(const char* p, type v) \
-{ \
-    *(type*)p = v; \
-}
-
-#else
-#error "Unsupported compiler"
-#endif
-
-DEFINE_LOAD_STORE(int8_t, i8)
-DEFINE_LOAD_STORE(int16_t, i16)
-DEFINE_LOAD_STORE(int32_t, i32)
-DEFINE_LOAD_STORE(int64_t, i64)
 
 FORCE_INLINE __m128 load_f128(const char* p)
 {
