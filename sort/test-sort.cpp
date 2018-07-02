@@ -25,6 +25,16 @@ struct SimpleStringView
         , length(_length)
     {
     }
+
+    bool operator<(SimpleStringView const& other) const
+    {
+        int ret = memcmp(ptr, other.ptr, std::min(length, other.length));
+        if (ret != 0) {
+            return ret < 0;
+        } else {
+            return length < other.length;
+        }
+    }
 };
 
 // Simple rope-like structure just for tests.
@@ -86,6 +96,8 @@ size_t findDiffIndex(vector<T> const& array1, vector<T> const& array2)
     return SIZE_MAX;
 }
 
+// We cannot simply run sort and check that everything is ok, because we can have out of bounds accesses or some other
+// errors which will generate the correctly sorted array with different values.
 void compareSortInt(char const* sortMethod, vector<int>& array, vector<int>& scratch)
 {
     scratch = array;
@@ -106,6 +118,19 @@ void compareSortInt(char const* sortMethod, vector<int>& array, vector<int>& scr
     }
 }
 
+void allCompareSortInt(char const* sortMethod, vector<vector<int>>& arrays, size_t maxSize, char const* arrayType)
+{
+    vector<int> scratch;
+    scratch.reserve(maxSize);
+    uint64_t startTime = getTimeCounter();
+    for (vector<int>& array : arrays) {
+        compareSortInt(sortMethod, array, scratch);
+    }
+    printf("Tested %s in %dms\n", arrayType, elapsedMsec(startTime));
+}
+
+// We cannot simply run sort and check that everything is ok, because we can have out of bounds accesses or some other
+// errors which will generate the correctly sorted array with different values.
 void compareSortString(char const* sortMethod, vector<string>& array, vector<string>& scratch)
 {
     scratch = array;
@@ -125,6 +150,17 @@ void compareSortString(char const* sortMethod, vector<string>& array, vector<str
     }
 }
 
+void allCompareSortString(char const* sortMethod, vector<vector<string>>& arrays, size_t maxSize, char const* arrayType)
+{
+    vector<string> scratch;
+    scratch.reserve(maxSize);
+    uint64_t startTime = getTimeCounter();
+    for (vector<string>& array : arrays) {
+        compareSortString(sortMethod, array, scratch);
+    }
+    printf("Tested %s in %dms\n", arrayType, elapsedMsec(startTime));
+}
+
 // Preparers int test data and runs sorting method on the data, using std::sort to validate the results.
 void testSortInt(char const* sortMethod, size_t minSize, size_t maxSize)
 {
@@ -134,10 +170,6 @@ void testSortInt(char const* sortMethod, size_t minSize, size_t maxSize)
     vector<vector<int>> arrays;
     size_t numTests = maxSize - minSize;
     arrays.resize(numTests);
-    // Scratch will be used for comparing with std::sort
-    vector<int> scratch;
-    scratch.resize(maxSize);
-    uint64_t startTime;
 
     for (size_t size = minSize; size < maxSize; size++) {
         vector<int>& array = arrays[size - minSize];
@@ -146,11 +178,7 @@ void testSortInt(char const* sortMethod, size_t minSize, size_t maxSize)
             array[i] = 123;
         }
     }
-    startTime = getTimeCounter();
-    for (size_t size = minSize; size < maxSize; size++) {
-        compareSortInt(sortMethod, arrays[size - minSize], scratch);
-    }
-    printf("Tested one value in %dms\n", elapsedMsec(startTime));
+    allCompareSortInt(sortMethod, arrays, maxSize, "one value");
 
     for (size_t size = minSize; size < maxSize; size++) {
         vector<int>& array = arrays[size - minSize];
@@ -159,11 +187,7 @@ void testSortInt(char const* sortMethod, size_t minSize, size_t maxSize)
             array[i] = 10000000 + i;
         }
     }
-    startTime = getTimeCounter();
-    for (size_t size = minSize; size < maxSize; size++) {
-        compareSortInt(sortMethod, arrays[size - minSize], scratch);
-    }
-    printf("Tested ascending in %dms\n", elapsedMsec(startTime));
+    allCompareSortInt(sortMethod, arrays, maxSize, "ascending");
 
     for (size_t size = minSize; size < maxSize; size++) {
         vector<int>& array = arrays[size - minSize];
@@ -172,11 +196,7 @@ void testSortInt(char const* sortMethod, size_t minSize, size_t maxSize)
             array[i] = 10000000 - i;
         }
     }
-    startTime = getTimeCounter();
-    for (size_t size = minSize; size < maxSize; size++) {
-        compareSortInt(sortMethod, arrays[size - minSize], scratch);
-    }
-    printf("Tested descending in %dms\n", elapsedMsec(startTime));
+    allCompareSortInt(sortMethod, arrays, maxSize, "descending");
 
     for (size_t size = minSize; size < maxSize; size++) {
         vector<int>& array = arrays[size - minSize];
@@ -188,11 +208,7 @@ void testSortInt(char const* sortMethod, size_t minSize, size_t maxSize)
             array[i] = 10000000 + size - i;
         }
     }
-    startTime = getTimeCounter();
-    for (size_t size = minSize; size < maxSize; size++) {
-        compareSortInt(sortMethod, arrays[size - minSize], scratch);
-    }
-    printf("Tested an ascending and descending in %dms\n", elapsedMsec(startTime));
+    allCompareSortInt(sortMethod, arrays, maxSize, "ascending and descending");
 
     for (size_t size = minSize; size < maxSize; size++) {
         vector<int>& array = arrays[size - minSize];
@@ -204,11 +220,7 @@ void testSortInt(char const* sortMethod, size_t minSize, size_t maxSize)
             array[i] = 10000000 - size + i;
         }
     }
-    startTime = getTimeCounter();
-    for (size_t size = minSize; size < maxSize; size++) {
-        compareSortInt(sortMethod, arrays[size - minSize], scratch);
-    }
-    printf("Tested an ascending and ascending in %dms\n", elapsedMsec(startTime));
+    allCompareSortInt(sortMethod, arrays, maxSize, "ascending and ascending");
 
     for (size_t size = minSize; size < maxSize; size++) {
         vector<int>& array = arrays[size - minSize];
@@ -223,53 +235,46 @@ void testSortInt(char const* sortMethod, size_t minSize, size_t maxSize)
             array[i] = 10000000 + i;
         }
     }
-    startTime = getTimeCounter();
-    for (size_t size = minSize; size < maxSize; size++) {
-        compareSortInt(sortMethod, arrays[size - minSize], scratch);
-    }
-    printf("Tested an array with a plateu in %dms\n", elapsedMsec(startTime));
+    allCompareSortInt(sortMethod, arrays, maxSize, "an array with a plateu");
 
-    for (size_t size = minSize; size < maxSize; size++) {
-        vector<int>& array = arrays[size - minSize];
-        array.resize(size);
-        uint32_t state[4] = { (uint32_t)size, (uint32_t)size, (uint32_t)size, (uint32_t)size };
-        for (size_t i = 0; i < size; i++) {
-            array[i] = randomRange(state, 0, 10000000);
+    {
+        uint32_t seed = (uint32_t)(minSize + maxSize);
+        uint32_t state[4] = { seed, seed, seed, seed };
+        for (size_t size = minSize; size < maxSize; size++) {
+            vector<int>& array = arrays[size - minSize];
+            array.resize(size);
+            for (size_t i = 0; i < size; i++) {
+                array[i] = randomRange(state, 0, 10000000);
+            }
         }
+        allCompareSortInt(sortMethod, arrays, maxSize, "random");
     }
-    startTime = getTimeCounter();
-    for (size_t size = minSize; size < maxSize; size++) {
-        compareSortInt(sortMethod, arrays[size - minSize], scratch);
-    }
-    printf("Tested random in %dms\n", elapsedMsec(startTime));
 
-    for (size_t size = minSize; size < maxSize; size++) {
-        vector<int>& array = arrays[size - minSize];
-        array.resize(size);
-        uint32_t state[4] = { (uint32_t)size, (uint32_t)size, (uint32_t)size, (uint32_t)size };
-        for (size_t i = 0; i < size; i++) {
-            array[i] = randomRange(state, 0, 10);
+    {
+        uint32_t seed = (uint32_t)(minSize + maxSize);
+        uint32_t state[4] = { seed, seed, seed, seed };
+        for (size_t size = minSize; size < maxSize; size++) {
+            vector<int>& array = arrays[size - minSize];
+            array.resize(size);
+            for (size_t i = 0; i < size; i++) {
+                array[i] = randomRange(state, 0, 50);
+            }
         }
+        allCompareSortInt(sortMethod, arrays, maxSize, "random small values");
     }
-    startTime = getTimeCounter();
-    for (size_t size = minSize; size < maxSize; size++) {
-        compareSortInt(sortMethod, arrays[size - minSize], scratch);
-    }
-    printf("Tested random small values in %dms\n", elapsedMsec(startTime));
 
-    for (size_t size = minSize; size < maxSize; size++) {
-        vector<int>& array = arrays[size - minSize];
-        array.resize(size);
-        uint32_t state[4] = { (uint32_t)size, (uint32_t)size, (uint32_t)size, (uint32_t)size };
-        for (size_t i = 0; i < size; i++) {
-            array[i] = randomRange(state, 0, 2);
+    {
+        uint32_t seed = (uint32_t)(minSize + maxSize);
+        uint32_t state[4] = { seed, seed, seed, seed };
+        for (size_t size = minSize; size < maxSize; size++) {
+            vector<int>& array = arrays[size - minSize];
+            array.resize(size);
+            for (size_t i = 0; i < size; i++) {
+                array[i] = randomRange(state, 0, 2);
+            }
         }
+        allCompareSortInt(sortMethod, arrays, maxSize, "random two values");
     }
-    startTime = getTimeCounter();
-    for (size_t size = minSize; size < maxSize; size++) {
-        compareSortInt(sortMethod, arrays[size - minSize], scratch);
-    }
-    printf("Tested random two values in %dms\n", elapsedMsec(startTime));
 
     printf("All int tests on %s [%d-%d) passed in %dms\n", sortMethod, (int)minSize, (int)maxSize, elapsedMsec(totalStartTime));
 }
@@ -290,44 +295,40 @@ void testSortString(char const* sortMethod, size_t minSize, size_t maxSize)
 {
     uint64_t totalStartTime = getTimeCounter();
     printf("Running string tests\n");
-    vector<string> array;
-    vector<string> scratch;
-    array.reserve(maxSize);
-    scratch.reserve(maxSize);
-    uint64_t startTime;
+    // Arrays is all the test data prepared at once.
+    vector<vector<string>> arrays;
+    size_t numTests = maxSize - minSize;
+    arrays.resize(numTests);
 
-    startTime = getTimeCounter();
-    for (size_t size = 0; size < maxSize; size++) {
+    for (size_t size = minSize; size < maxSize; size++) {
+        vector<string>& array = arrays[size - minSize];
         array.resize(size);
         for (size_t i = 0; i < size; i++) {
             stringFromInt(123, 0, &array[i]);
         }
-        compareSortString(sortMethod, array, scratch);
     }
-    printf("Tested one value in %dms\n", elapsedMsec(startTime));
+    allCompareSortString(sortMethod, arrays, maxSize, "one value");
 
-    startTime = getTimeCounter();
-    for (size_t size = 0; size < maxSize; size++) {
+    for (size_t size = minSize; size < maxSize; size++) {
+        vector<string>& array = arrays[size - minSize];
         array.resize(size);
         for (size_t i = 0; i < size; i++) {
             stringFromInt(10000000 + i, 8, &array[i]);
         }
-        compareSortString(sortMethod, array, scratch);
     }
-    printf("Tested ascending in %dms\n", elapsedMsec(startTime));
+    allCompareSortString(sortMethod, arrays, maxSize, "ascending");
 
-    startTime = getTimeCounter();
-    for (size_t size = 0; size < maxSize; size++) {
+    for (size_t size = minSize; size < maxSize; size++) {
+        vector<string>& array = arrays[size - minSize];
         array.resize(size);
         for (size_t i = 0; i < size; i++) {
             stringFromInt(10000000 - i, 8, &array[i]);
         }
-        compareSortString(sortMethod, array, scratch);
     }
-    printf("Tested descending in %dms\n", elapsedMsec(startTime));
+    allCompareSortString(sortMethod, arrays, maxSize, "descending");
 
-    startTime = getTimeCounter();
-    for (size_t size = 0; size < maxSize; size++) {
+    for (size_t size = minSize; size < maxSize; size++) {
+        vector<string>& array = arrays[size - minSize];
         array.resize(size);
         for (size_t i = 0; i < size / 2; i++) {
             stringFromInt(10000000 + i, 8, &array[i]);
@@ -335,13 +336,11 @@ void testSortString(char const* sortMethod, size_t minSize, size_t maxSize)
         for (size_t i = size / 2; i < size; i++) {
             stringFromInt(10000000 + size - i, 8, &array[i]);
         }
-        compareSortString(sortMethod, array, scratch);
     }
-    printf("Tested an ascending and descending in %dms\n", elapsedMsec(startTime));
+    allCompareSortString(sortMethod, arrays, maxSize, "ascending and descending");
 
-
-    startTime = getTimeCounter();
-    for (size_t size = 0; size < maxSize; size++) {
+    for (size_t size = minSize; size < maxSize; size++) {
+        vector<string>& array = arrays[size - minSize];
         array.resize(size);
         for (size_t i = 0; i < size / 2; i++) {
             stringFromInt(10000000 + i, 8, &array[i]);
@@ -349,16 +348,14 @@ void testSortString(char const* sortMethod, size_t minSize, size_t maxSize)
         for (size_t i = size / 2; i < size; i++) {
             stringFromInt(10000000 - size + i, 8, &array[i]);
         }
-        compareSortString(sortMethod, array, scratch);
     }
-    printf("Tested an ascending and ascending in %dms\n", elapsedMsec(startTime));
+    allCompareSortString(sortMethod, arrays, maxSize, "ascending and ascending");
 
-    startTime = getTimeCounter();
-    for (size_t size = 0; size < maxSize; size++) {
+    for (size_t size = minSize; size < maxSize; size++) {
+        vector<string>& array = arrays[size - minSize];
         array.resize(size);
         for (size_t i = 0; i < size / 4; i++) {
             stringFromInt(10000000 + i, 8, &array[i]);
-            array[i] = 10000000 + i;
         }
         for (size_t i = size / 4; i < size * 3 / 4; i++) {
             stringFromInt(10000000 + size / 2, 8, &array[i]);
@@ -366,42 +363,47 @@ void testSortString(char const* sortMethod, size_t minSize, size_t maxSize)
         for (size_t i = size * 3 / 4; i < size; i++) {
             stringFromInt(10000000 + i, 8, &array[i]);
         }
-        compareSortString(sortMethod, array, scratch);
     }
-    printf("Tested an array with a plateu in %dms\n", elapsedMsec(startTime));
+    allCompareSortString(sortMethod, arrays, maxSize, "an array with a plateu");
 
-    startTime = getTimeCounter();
-    for (size_t size = 0; size < maxSize; size++) {
-        array.resize(size);
-        uint32_t state[4] = { (uint32_t)size, (uint32_t)size, (uint32_t)size, (uint32_t)size };
-        for (size_t i = 0; i < size; i++) {
-            stringFromInt(randomRange(state, 0, 10000000), 8, &array[i]);
+    {
+        uint32_t seed = (uint32_t)(minSize + maxSize);
+        uint32_t state[4] = { seed, seed, seed, seed };
+        for (size_t size = minSize; size < maxSize; size++) {
+            vector<string>& array = arrays[size - minSize];
+            array.resize(size);
+            for (size_t i = 0; i < size; i++) {
+                stringFromInt(randomRange(state, 0, 10000000), 8, &array[i]);
+            }
         }
-        compareSortString(sortMethod, array, scratch);
+        allCompareSortString(sortMethod, arrays, maxSize, "random");
     }
-    printf("Tested random in %dms\n", elapsedMsec(startTime));
 
-    startTime = getTimeCounter();
-    for (size_t size = 0; size < maxSize; size++) {
-        array.resize(size);
-        uint32_t state[4] = { (uint32_t)size, (uint32_t)size, (uint32_t)size, (uint32_t)size };
-        for (size_t i = 0; i < size; i++) {
-            stringFromInt(randomRange(state, 0, 10), 2, &array[i]);
+    {
+        uint32_t seed = (uint32_t)(minSize + maxSize);
+        uint32_t state[4] = { seed, seed, seed, seed };
+        for (size_t size = minSize; size < maxSize; size++) {
+            vector<string>& array = arrays[size - minSize];
+            array.resize(size);
+            for (size_t i = 0; i < size; i++) {
+                stringFromInt(randomRange(state, 0, 50), 2, &array[i]);
+            }
         }
-        compareSortString(sortMethod, array, scratch);
+        allCompareSortString(sortMethod, arrays, maxSize, "random small values");
     }
-    printf("Tested random small values in %dms\n", elapsedMsec(startTime));
 
-    startTime = getTimeCounter();
-    for (size_t size = 0; size < maxSize; size++) {
-        array.resize(size);
-        uint32_t state[4] = { (uint32_t)size, (uint32_t)size, (uint32_t)size, (uint32_t)size };
-        for (size_t i = 0; i < size; i++) {
-            stringFromInt(randomRange(state, 0, 2), 1, &array[i]);
+    {
+        uint32_t seed = (uint32_t)(minSize + maxSize);
+        uint32_t state[4] = { seed, seed, seed, seed };
+        for (size_t size = minSize; size < maxSize; size++) {
+            vector<string>& array = arrays[size - minSize];
+            array.resize(size);
+            for (size_t i = 0; i < size; i++) {
+                stringFromInt(randomRange(state, 0, 2), 1, &array[i]);
+            }
         }
-        compareSortString(sortMethod, array, scratch);
+        allCompareSortString(sortMethod, arrays, maxSize, "random two values");
     }
-    printf("Tested random two values in %dms\n", elapsedMsec(startTime));
 
     printf("All string tests on %s [0-%d) passed in %dms\n", sortMethod, (int)maxSize, elapsedMsec(totalStartTime));
 }
@@ -417,7 +419,6 @@ void parseSize(char const* arg, size_t* minSize, size_t* maxSize)
         *maxSize = (size_t)atoll(arg);
     }
 }
-
 
 int main(int argc, char** argv)
 {
