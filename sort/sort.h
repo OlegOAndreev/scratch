@@ -664,9 +664,8 @@ void quickSortDualPivotAltImpl(It first, It last, size_t cutoff, size_t remainin
         // Partition: [first + 1, left1) is less or equal than pivot1, [left1, left2) is greater than pivot1
         // and less or equal than pivot2, [right, last - 1) is greater than pivot2.
         It left1 = first + 1;
-        // Do an initial positioning of left so that
-        // we do not do useless swaps of initial portion
-        // of values in the first partition part.sor
+        // Do an initial positioning of left so that we do not do useless swaps of initial portion
+        // of values in the first partition part.
         while (*left1 <= pivot1 && left1 < last - 1) {
             left1++;
         }
