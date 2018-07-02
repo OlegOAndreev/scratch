@@ -348,7 +348,7 @@ void quickSortImpl(It first, It last, size_t cutoff, size_t remainingDepth, bool
 // An alternative to quickSortImpl: moves the pivot to the temp variable, replacing it with the first element. Also the partition
 // scheme is slightly altered (one less comparison).
 template<typename It>
-void quickSortAltImpl(It first, It last, size_t cutoff, size_t remainingDepth, bool isLeftmost = false)
+void quickSortAltImpl(It first, It last, size_t cutoff, size_t remainingDepth, bool isLeftmost = true)
 {
     while (true) {
         if ((size_t)(last - first) <= cutoff) {
