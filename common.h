@@ -124,12 +124,16 @@ FORCE_INLINE void store_##postfix(void* p, type v) \
 #endif
 
 //
-// Defines load_i8, load_i16, load_i32, load_i64
+// Defines load_i8, load_u8, load_i16, load_u16, load_i32, load_u32, load_i64, load_u64
 //
 DEFINE_LOAD_STORE(int8_t, i8)
+DEFINE_LOAD_STORE(uint8_t, u8)
 DEFINE_LOAD_STORE(int16_t, i16)
+DEFINE_LOAD_STORE(uint16_t, u16)
 DEFINE_LOAD_STORE(int32_t, i32)
+DEFINE_LOAD_STORE(uint32_t, u32)
 DEFINE_LOAD_STORE(int64_t, i64)
+DEFINE_LOAD_STORE(uint64_t, u64)
 
 //
 // Endianess.
