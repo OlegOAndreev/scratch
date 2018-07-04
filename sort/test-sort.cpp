@@ -259,8 +259,7 @@ void compareSortStringView(char const* sortMethod, vector<SimpleStringView>& arr
     callSortMethod(sortMethod, array.begin(), array.end());
     std::sort(scratch.begin(), scratch.end());
     size_t diffIndex = findDiffIndex(array, scratch);
-    if (true) {
-//        if (diffIndex != SIZE_MAX) {
+    if (diffIndex != SIZE_MAX) {
         printf("Sorted arrays [%d] differ at index %d:\n", (int)array.size(), (int)diffIndex);
         for (SimpleStringView v : array) {
             printf("%.*s ", (int)v.length, v.ptr);
@@ -270,7 +269,7 @@ void compareSortStringView(char const* sortMethod, vector<SimpleStringView>& arr
             printf("%.*s ", (int)v.length, v.ptr);
         }
         printf("\n");
-//        exit(1);
+        exit(1);
     }
 }
 
