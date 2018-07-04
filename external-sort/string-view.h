@@ -5,6 +5,10 @@
 
 #include "common.h"
 
+// If defined, enables the "small compare optimization", which adds the inlined comparison of the first few bytes before
+// calling memcmp.
+#define USE_SMALL_COMPARE
+
 // Your minimalist string view.
 struct StringView
 {
@@ -33,7 +37,7 @@ namespace detail {
 // Defines function uintptr_t load_uintptr(void const* p).
 DEFINE_LOAD_STORE(uintptr_t, uintptr)
 
-inline bool strEqual(char const* begin1, size_t length1, char const* begin2, size_t length2)
+FORCE_INLINE bool strEqual(char const* begin1, size_t length1, char const* begin2, size_t length2)
 {
 #if defined(COUNT_STRING_COMPARES)
     compareStrCount++;
@@ -41,6 +45,7 @@ inline bool strEqual(char const* begin1, size_t length1, char const* begin2, siz
     if (length1 != length2) {
         return false;
     }
+#if defined(USE_SMALL_COMPARE)
     if (length1 >= sizeof(intptr_t)) {
         uintptr_t first1 = load_uintptr(begin1);
         uintptr_t first2 = load_uintptr(begin2);
@@ -56,13 +61,17 @@ inline bool strEqual(char const* begin1, size_t length1, char const* begin2, siz
         }
         return true;
     }
+#else
+    return memcmp(begin1, begin2, length1) == 0;
+#endif
 }
 
-inline bool strLess(char const* begin1, size_t length1, char const* begin2, size_t length2)
+FORCE_INLINE bool strLess(char const* begin1, size_t length1, char const* begin2, size_t length2)
 {
 #if defined(COUNT_STRING_COMPARES)
     compareStrCount++;
 #endif
+#if defined(USE_SMALL_COMPARE)
     if (length1 >= sizeof(intptr_t) && length2 >= sizeof(intptr_t)) {
         uintptr_t first1 = load_uintptr(begin1);
         uintptr_t first2 = load_uintptr(begin2);
@@ -90,13 +99,21 @@ inline bool strLess(char const* begin1, size_t length1, char const* begin2, size
         }
         return length1 < length2;
     }
+#else
+    int ret = memcmp(begin1, begin2, std::min(length1, length2));
+    if (ret != 0) {
+        return ret < 0;
+    }
+    return length1 < length2;
+#endif
 }
 
-inline bool strGreater(char const* begin1, size_t length1, char const* begin2, size_t length2)
+FORCE_INLINE bool strGreater(char const* begin1, size_t length1, char const* begin2, size_t length2)
 {
 #if defined(COUNT_STRING_COMPARES)
     compareStrCount++;
 #endif
+#if defined(USE_SMALL_COMPARE)
     if (length1 >= sizeof(intptr_t) && length2 >= sizeof(intptr_t)) {
         uintptr_t first1 = load_uintptr(begin1);
         uintptr_t first2 = load_uintptr(begin2);
@@ -124,99 +141,103 @@ inline bool strGreater(char const* begin1, size_t length1, char const* begin2, s
         }
         return length1 > length2;
     }
+#else
+    int ret = memcmp(begin1, begin2, std::min(length1, length2));
+    if (ret != 0) {
+        return ret > 0;
+    }
+    return length1 > length2;
+#endif
 }
 
 } // namespace detail
 
-inline bool operator==(StringView line1, StringView line2)
+FORCE_INLINE bool operator==(StringView line1, StringView line2)
 {
-    if (line1.length != line2.length) {
-        return false;
-    }
     return detail::strEqual(line1.begin, line1.length, line2.begin, line2.length);
 }
 
-inline bool operator!=(StringView line1, StringView line2)
+FORCE_INLINE bool operator!=(StringView line1, StringView line2)
 {
     return !detail::strEqual(line1.begin, line1.length, line2.begin, line2.length);
 }
 
-inline bool operator<(StringView line1, StringView line2)
+FORCE_INLINE bool operator<(StringView line1, StringView line2)
 {
     return detail::strLess(line1.begin, line1.length, line2.begin, line2.length);
 }
 
-inline bool operator<=(StringView line1, StringView line2)
+FORCE_INLINE bool operator<=(StringView line1, StringView line2)
 {
     return !detail::strGreater(line1.begin, line1.length, line2.begin, line2.length);
 }
 
-inline bool operator>(StringView line1, StringView line2)
+FORCE_INLINE bool operator>(StringView line1, StringView line2)
 {
     return detail::strGreater(line1.begin, line1.length, line2.begin, line2.length);
 }
 
-inline bool operator>=(StringView line1, StringView line2)
+FORCE_INLINE bool operator>=(StringView line1, StringView line2)
 {
     return !detail::strLess(line1.begin, line1.length, line2.begin, line2.length);
 }
 
-inline bool operator==(StringView line1, std::string const& line2)
+FORCE_INLINE bool operator==(StringView line1, std::string const& line2)
 {
     return detail::strEqual(line1.begin, line1.length, line2.c_str(), line2.length());
 }
 
-inline bool operator!=(StringView line1, std::string const& line2)
+FORCE_INLINE bool operator!=(StringView line1, std::string const& line2)
 {
     return !detail::strEqual(line1.begin, line1.length, line2.c_str(), line2.length());
 }
 
-inline bool operator<(StringView line1, std::string const& line2)
+FORCE_INLINE bool operator<(StringView line1, std::string const& line2)
 {
     return detail::strLess(line1.begin, line1.length, line2.c_str(), line2.length());
 }
 
-inline bool operator<=(StringView line1, std::string const& line2)
+FORCE_INLINE bool operator<=(StringView line1, std::string const& line2)
 {
     return !detail::strGreater(line1.begin, line1.length, line2.c_str(), line2.length());
 }
 
-inline bool operator>(StringView line1, std::string const& line2)
+FORCE_INLINE bool operator>(StringView line1, std::string const& line2)
 {
     return detail::strGreater(line1.begin, line1.length, line2.c_str(), line2.length());
 }
 
-inline bool operator>=(StringView line1, std::string const& line2)
+FORCE_INLINE bool operator>=(StringView line1, std::string const& line2)
 {
     return !detail::strLess(line1.begin, line1.length, line2.c_str(), line2.length());
 }
 
-inline bool operator==(std::string const& line1, StringView line2)
+FORCE_INLINE bool operator==(std::string const& line1, StringView line2)
 {
     return detail::strEqual(line1.c_str(), line1.length(), line2.begin, line2.length);
 }
 
-inline bool operator!=(std::string const& line1, StringView line2)
+FORCE_INLINE bool operator!=(std::string const& line1, StringView line2)
 {
     return !detail::strEqual(line1.c_str(), line1.length(), line2.begin, line2.length);
 }
 
-inline bool operator<(std::string const& line1, StringView line2)
+FORCE_INLINE bool operator<(std::string const& line1, StringView line2)
 {
     return detail::strLess(line1.c_str(), line1.length(), line2.begin, line2.length);
 }
 
-inline bool operator<=(std::string const& line1, StringView line2)
+FORCE_INLINE bool operator<=(std::string const& line1, StringView line2)
 {
     return !detail::strGreater(line1.c_str(), line1.length(), line2.begin, line2.length);
 }
 
-inline bool operator>(std::string const& line1, StringView line2)
+FORCE_INLINE bool operator>(std::string const& line1, StringView line2)
 {
     return detail::strGreater(line1.c_str(), line1.length(), line2.begin, line2.length);
 }
 
-inline bool operator>=(std::string const& line1, StringView line2)
+FORCE_INLINE bool operator>=(std::string const& line1, StringView line2)
 {
     return !detail::strLess(line1.c_str(), line1.length(), line2.begin, line2.length);
 }
