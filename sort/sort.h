@@ -10,6 +10,7 @@
 #include <iterator>
 
 #include "pdqsort/pdqsort.h"
+#include "cpp-timsort/timsort.hpp"
 
 // A number of sorting routines.
 
@@ -801,6 +802,8 @@ void callSortMethod(char const* sortMethod, It first, It last)
 {
     if (strcmp(sortMethod, "std") == 0) {
         std::sort(first, last);
+    } else if (strcmp(sortMethod, "stable-std") == 0) {
+        std::stable_sort(first, last);
     } else if (strcmp(sortMethod, "quick") == 0) {
         quickSort(first, last);
     } else if (strcmp(sortMethod, "quick-5") == 0) {
@@ -853,6 +856,8 @@ void callSortMethod(char const* sortMethod, It first, It last)
         pdqsort(first, last);
     } else if (strcmp(sortMethod, "pdqsort-branchless") == 0) {
         pdqsort_branchless(first, last);
+    } else if (strcmp(sortMethod, "timsort") == 0) {
+        gfx::timsort(first, last);
     } else {
         printf("Unknown sorting method %s\n", sortMethod);
         exit(1);
