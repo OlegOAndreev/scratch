@@ -51,7 +51,7 @@ static_assert(sizeof(size_t) == sizeof(uintptr_t), "Very strange platform");
 //
 // Returns the exponent e such that 2^(e - 1) <= v < 2^e.
 //
-inline int nextLog2(size_t v)
+FORCE_INLINE int nextLog2(size_t v)
 {
 #if defined(__clang__) || defined(__GNUC__)
     if (v == 0) {
@@ -152,30 +152,30 @@ DEFINE_LOAD_STORE(uint64_t, u64)
 // Byte swapping
 //
 #if defined(__clang__) || defined(__GNUC__)
-uint16_t byteSwap(uint16_t v)
+FORCE_INLINE uint16_t byteSwap(uint16_t v)
 {
     return __builtin_bswap16(v);
 }
-uint32_t byteSwap(uint32_t v)
+FORCE_INLINE uint32_t byteSwap(uint32_t v)
 {
     return __builtin_bswap32(v);
 }
-uint64_t byteSwap(uint64_t v)
+FORCE_INLINE uint64_t byteSwap(uint64_t v)
 {
     return __builtin_bswap64(v);
 }
 #elif defined(_MSC_VER)
-uint16_t byteSwap(uint16_t v)
+FORCE_INLINE uint16_t byteSwap(uint16_t v)
 {
     static_assert(sizeof(unsigned short) == 2, "Sanity check failed");
     return _byteswap_ushort(v);
 }
-uint32_t byteSwap(uint32_t v)
+FORCE_INLINE uint32_t byteSwap(uint32_t v)
 {
     static_assert(sizeof(unsigned long) == 4, "Sanity check failed");
     return _byteswap_ulong(v);
 }
-uint64_t byteSwap(uint64_t v)
+FORCE_INLINE uint64_t byteSwap(uint64_t v)
 {
     static_assert(sizeof(unsigned __int64) == 8, "Sanity check failed");
     return _byteswap_uint64(v);
@@ -186,25 +186,25 @@ uint64_t byteSwap(uint64_t v)
 #endif
 
 // Signed versions of byteSwap(), the unsigned -> signed conversions are implementation-defined.
-int16_t byteSwap(int16_t v)
+FORCE_INLINE int16_t byteSwap(int16_t v)
 {
     return (int16_t)byteSwap((uint16_t)v);
 }
-int32_t byteSwap(int32_t v)
+FORCE_INLINE int32_t byteSwap(int32_t v)
 {
     return (int32_t)byteSwap((uint32_t)v);
 }
-int64_t byteSwap(int64_t v)
+FORCE_INLINE int64_t byteSwap(int64_t v)
 {
     return (int64_t)byteSwap((uint64_t)v);
 }
 #if SIZE_T_BITS == 32
-size_t byteSwap(size_t v)
+FORCE_INLINE size_t byteSwap(size_t v)
 {
     return (size_t)byteSwap((uint32_t)v);
 }
 #elif SIZE_T_BITS == 64
-size_t byteSwap(size_t v)
+FORCE_INLINE size_t byteSwap(size_t v)
 {
     return (size_t)byteSwap((uint64_t)v);
 }
@@ -212,18 +212,27 @@ size_t byteSwap(size_t v)
 #error "Unsupported SIZE_T_BITS"
 #endif
 #if SIZE_T_BITS == 32
-size_t byteSwap(ptrdiff_t v)
+inline size_t byteSwap(ptrdiff_t v)
 {
     return (ptrdiff_t)byteSwap((int32_t)v);
 }
 #elif SIZE_T_BITS == 64
-ptrdiff_t byteSwap(ptrdiff_t v)
+FORCE_INLINE ptrdiff_t byteSwap(ptrdiff_t v)
 {
     return (ptrdiff_t)byteSwap((int64_t)v);
 }
 #else
 #error "Unsupported SIZE_T_BITS"
 #endif
+
+// Returns the first pointer after ptr, which is aligned according to alignment.
+template<typename T>
+FORCE_INLINE T* nextAlignedPtr(T* ptr, size_t alignment)
+{
+    size_t remainder = alignment - 1 - ((uintptr_t)ptr + alignment - 1) % alignment;
+    return (T*)((uintptr_t)ptr + remainder);
+}
+
 
 //
 // Time-related functions.
