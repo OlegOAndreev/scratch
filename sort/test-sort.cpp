@@ -14,6 +14,33 @@ using std::unique_ptr;
 using std::string;
 using std::vector;
 
+// Small compare optimization: only load the few bytes from the start of the strings and compare them. If they are
+// equal, compare the rest.
+
+// If defined, use inlined small compare optimization with intptr_t, is exclusive with USE_SMALL_COMPARE_INT32.
+#define USE_SMALL_COMPARE_INTPTR
+// If defined, use inlined small compare optimization with int32_t, is exclusive with USE_SMALL_COMPARE_INTPTR.
+//#define USE_SMALL_COMPARE_INT32
+
+#if defined(USE_SMALL_COMPARE_INTPTR)
+using SmallCompareType = intptr_t;
+
+// Defines function intptr_t load_iptr(void const* p).
+DEFINE_LOAD_STORE(intptr_t, iptr)
+
+FORCE_INLINE SmallCompareType load_smallCompareType(void const* p)
+{
+    return load_iptr(p);
+}
+#elif defined(USE_SMALL_COMPARE_INT32)
+using SmallCompareType = int32_t;
+
+FORCE_INLINE SmallCompareType load_smallCompareType(void const* p)
+{
+    return load_i32(p);
+}
+#endif
+
 // Simple string view for tests.
 struct SimpleStringView
 {
@@ -37,17 +64,65 @@ struct SimpleStringView
         if (length != other.length) {
             return false;
         }
+#if defined(USE_SMALL_COMPARE_INTPTR) || defined(USE_SMALL_COMPARE_INT32)
+        char const* ptr1 = ptr;
+        char const* ptr2 = other.ptr;
+        size_t length1 = length;
+        if (length1 >= sizeof(SmallCompareType)) {
+            SmallCompareType start1 = load_smallCompareType(ptr1);
+            SmallCompareType start2 = load_smallCompareType(ptr2);
+            if (start1 != start2) {
+                return false;
+            }
+            ptr1 += sizeof(SmallCompareType);
+            ptr2 += sizeof(SmallCompareType);
+            length1 -= sizeof(SmallCompareType);
+        }
+        return memcmp(ptr1, ptr2, length1) == 0;
+#else
         return memcmp(ptr, other.ptr, length) == 0;
+#endif
     }
+
 
     bool operator<(SimpleStringView const& other) const
     {
+#if defined(USE_SMALL_COMPARE_INTPTR) || defined(USE_SMALL_COMPARE_INT32)
+        char const* ptr1 = ptr;
+        char const* ptr2 = other.ptr;
+        size_t length1 = length;
+        size_t length2 = other.length;
+        if (length1 >= sizeof(SmallCompareType) && length2 >= sizeof(SmallCompareType)) {
+            SmallCompareType start1 = load_smallCompareType(ptr1);
+            SmallCompareType start2 = load_smallCompareType(ptr2);
+            if (start1 != start2) {
+                // start1 and start2 must be loaded as big-endian in order to be compared
+                // (the first bytes are the most important).
+#if defined(COMMON_LITTLE_ENDIAN)
+                start1 = byteSwap(start1);
+                start2 = byteSwap(start2);
+#endif
+                return start1 < start2;
+            }
+            ptr1 += sizeof(SmallCompareType);
+            ptr2 += sizeof(SmallCompareType);
+            length1 -= sizeof(SmallCompareType);
+            length2 -= sizeof(SmallCompareType);
+        }
+        int ret = memcmp(ptr1, ptr2, std::min(length1, length2));
+        if (ret != 0) {
+            return ret < 0;
+        } else {
+            return length1 < length2;
+        }
+#else
         int ret = memcmp(ptr, other.ptr, std::min(length, other.length));
         if (ret != 0) {
             return ret < 0;
         } else {
             return length < other.length;
         }
+#endif
     }
 };
 
@@ -103,7 +178,7 @@ template<typename T>
 size_t findDiffIndex(vector<T> const& array1, vector<T> const& array2)
 {
     for (size_t i = 0; i < array1.size(); i++) {
-        if (array1[i] != array2[i]) {
+        if (!(array1[i] == array2[i])) {
             return i;
         }
     }
@@ -150,8 +225,9 @@ void compareSortString(char const* sortMethod, vector<string>& array, vector<str
     scratch = array;
     callSortMethod(sortMethod, array.begin(), array.end());
     std::sort(scratch.begin(), scratch.end());
-    if (!std::equal(array.begin(), array.end(), scratch.begin())) {
-        printf("Sorted arrays [%d] differ:\n", (int)array.size());
+    size_t diffIndex = findDiffIndex(array, scratch);
+    if (diffIndex != SIZE_MAX) {
+        printf("Sorted arrays [%d] differ at index %d:\n", (int)array.size(), (int)diffIndex);
         for (string const& v : array) {
             printf("%s ", v.c_str());
         }
@@ -182,8 +258,10 @@ void compareSortStringView(char const* sortMethod, vector<SimpleStringView>& arr
     scratch = array;
     callSortMethod(sortMethod, array.begin(), array.end());
     std::sort(scratch.begin(), scratch.end());
-    if (!std::equal(array.begin(), array.end(), scratch.begin())) {
-        printf("Sorted arrays [%d] differ:\n", (int)array.size());
+    size_t diffIndex = findDiffIndex(array, scratch);
+    if (true) {
+//        if (diffIndex != SIZE_MAX) {
+        printf("Sorted arrays [%d] differ at index %d:\n", (int)array.size(), (int)diffIndex);
         for (SimpleStringView v : array) {
             printf("%.*s ", (int)v.length, v.ptr);
         }
@@ -192,7 +270,7 @@ void compareSortStringView(char const* sortMethod, vector<SimpleStringView>& arr
             printf("%.*s ", (int)v.length, v.ptr);
         }
         printf("\n");
-        exit(1);
+//        exit(1);
     }
 }
 
@@ -463,7 +541,7 @@ SimpleStringView stringViewFromInt(SimpleStringRope* rope, int value, int maxLen
     if (printed < maxLen) {
         SimpleStringView result = rope->allocString(maxLen);
         memset(result.ptr, '0', maxLen - printed);
-        memcpy(result.ptr, buf + maxLen - printed, printed);
+        memcpy(result.ptr + maxLen - printed, buf, printed);
         return result;
     } else {
         SimpleStringView result = rope->allocString(printed);
