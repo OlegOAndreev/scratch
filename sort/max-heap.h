@@ -53,6 +53,9 @@ void siftDown(It first, size_t size, size_t idx)
 template<typename It>
 void makeHeap(It first, It last)
 {
+    if (last - first <= 1) {
+        return;
+    }
     size_t size = last - first;
     size_t halfSize = size / 2;
     // I hate unsigned arithmetic.
