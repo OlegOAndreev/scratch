@@ -18,22 +18,22 @@ using std::vector;
 // equal, compare the rest.
 
 // If defined, use inlined small compare optimization with intptr_t, is exclusive with USE_SMALL_COMPARE_INT32.
-#define USE_SMALL_COMPARE_INTPTR
+#define USE_SMALL_COMPARE_UINTPTR
 // If defined, use inlined small compare optimization with int32_t, is exclusive with USE_SMALL_COMPARE_INTPTR.
-//#define USE_SMALL_COMPARE_INT32
+//#define USE_SMALL_COMPARE_UINT32
 
-#if defined(USE_SMALL_COMPARE_INTPTR)
-using SmallCompareType = intptr_t;
+#if defined(USE_SMALL_COMPARE_UINTPTR)
+using SmallCompareType = size_t;
 
-// Defines function intptr_t load_iptr(void const* p).
-DEFINE_LOAD_STORE(intptr_t, iptr)
+// Defines function uintptr_t load_uintptr(void const* p).
+DEFINE_LOAD_STORE(uintptr_t, uintptr)
 
 FORCE_INLINE SmallCompareType load_smallCompareType(void const* p)
 {
-    return load_iptr(p);
+    return load_uintptr(p);
 }
-#elif defined(USE_SMALL_COMPARE_INT32)
-using SmallCompareType = int32_t;
+#elif defined(USE_SMALL_COMPARE_UINT32)
+using SmallCompareType = uint32_t;
 
 FORCE_INLINE SmallCompareType load_smallCompareType(void const* p)
 {
@@ -64,7 +64,7 @@ struct SimpleStringView
         if (length != other.length) {
             return false;
         }
-#if defined(USE_SMALL_COMPARE_INTPTR) || defined(USE_SMALL_COMPARE_INT32)
+#if defined(USE_SMALL_COMPARE_UINTPTR) || defined(USE_SMALL_COMPARE_UINT32)
         char const* ptr1 = ptr;
         char const* ptr2 = other.ptr;
         size_t length1 = length;
@@ -87,7 +87,7 @@ struct SimpleStringView
 
     bool operator<(SimpleStringView const& other) const
     {
-#if defined(USE_SMALL_COMPARE_INTPTR) || defined(USE_SMALL_COMPARE_INT32)
+#if defined(USE_SMALL_COMPARE_UINTPTR) || defined(USE_SMALL_COMPARE_UINT32)
         char const* ptr1 = ptr;
         char const* ptr2 = other.ptr;
         size_t length1 = length;
