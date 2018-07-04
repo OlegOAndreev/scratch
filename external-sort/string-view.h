@@ -30,42 +30,100 @@ extern size_t compareStrCount;
 
 namespace detail {
 
-// Endianess will be used in compareStr when subtracting two ptrdiff_t.
-#if !defined(COMMON_LITTLE_ENDIAN)
-#error "Big endian not supported"
-#endif
+// Defines function uintptr_t load_uintptr(void const* p).
+DEFINE_LOAD_STORE(uintptr_t, uintptr)
 
-// Defines function ptrdiff_t load_ptrdiff(void const* p).
-DEFINE_LOAD_STORE(ptrdiff_t, ptrdiff)
-
-// Returns <0 if (begin1, length1) < (begin2, length2), 0 if (begin1, length1) == (begin2, length2), >0 otherwise.
-// intptr_t is used, becaue it is 8-byte signed integer on 64-bit archs, unlike int.
-inline intptr_t compareStr(char const* begin1, size_t length1, char const* begin2, size_t length2)
+inline bool strEqual(char const* begin1, size_t length1, char const* begin2, size_t length2)
 {
 #if defined(COUNT_STRING_COMPARES)
     compareStrCount++;
 #endif
-//   // Optimize the common case: both strings have at least sizeof(ptrdiff_t) bytes.
-//    if (length1 >= sizeof(intptr_t) && length2 >= sizeof(intptr_t)) {
-//        intptr_t start1 = load_ptrdiff(begin1);
-//        intptr_t start2 = load_ptrdiff(begin2);
-//        if (start1 != start2) {
-//            this is bad, remove at least one bit or do three compares
-//            // This is a valid, because the first differing byte will be the most significant different byte
-//            // (because we assumed little endian before and byteSwap to big endian now).
-//            return byteSwap(start1) - byteSwap(start2);
-//        }
-
-        int ret = memcmp(begin1, begin2, std::min(length1, length2));
-        if (ret != 0) {
-            return ret;
-        } else {
-            // This is implementation-defined casting size_t -> ptrdiff_t.
-            return length1 - length2;
+    if (length1 != length2) {
+        return false;
+    }
+    if (length1 >= sizeof(intptr_t)) {
+        uintptr_t first1 = load_uintptr(begin1);
+        uintptr_t first2 = load_uintptr(begin2);
+        if (first1 != first2) {
+            return false;
         }
-//    } else {
-//        ...
-//    }
+        return memcmp(begin1 + sizeof(uintptr_t), begin2 + sizeof(uintptr_t), length1 - sizeof(uintptr_t)) == 0;
+    } else {
+        for (size_t i = 0; i < length1; i++) {
+            if (begin1[i] != begin2[i]) {
+                return false;
+            }
+        }
+        return true;
+    }
+}
+
+inline bool strLess(char const* begin1, size_t length1, char const* begin2, size_t length2)
+{
+#if defined(COUNT_STRING_COMPARES)
+    compareStrCount++;
+#endif
+    if (length1 >= sizeof(intptr_t) && length2 >= sizeof(intptr_t)) {
+        uintptr_t first1 = load_uintptr(begin1);
+        uintptr_t first2 = load_uintptr(begin2);
+        if (first1 != first2) {
+            // This is required, because the first differing byte will be the least significant different byte in case of
+            // little endian loads.
+#if defined(COMMON_LITTLE_ENDIAN)
+            first1 = byteSwap(first1);
+            first2 = byteSwap(first2);
+#endif
+            return first1 < first2;
+        }
+        int ret = memcmp(begin1 + sizeof(uintptr_t), begin2 + sizeof(uintptr_t), std::min(length1, length2) - sizeof(uintptr_t));
+        if (ret != 0) {
+            return ret < 0;
+        } else {
+            return length1 < length2;
+        }
+    } else {
+        size_t minLength = std::min(length1, length2);
+        for (size_t i = 0; i < minLength; i++) {
+            if (begin1[i] != begin2[i]) {
+                return (unsigned char)begin1[i] < (unsigned char)begin2[i];
+            }
+        }
+        return length1 < length2;
+    }
+}
+
+inline bool strGreater(char const* begin1, size_t length1, char const* begin2, size_t length2)
+{
+#if defined(COUNT_STRING_COMPARES)
+    compareStrCount++;
+#endif
+    if (length1 >= sizeof(intptr_t) && length2 >= sizeof(intptr_t)) {
+        uintptr_t first1 = load_uintptr(begin1);
+        uintptr_t first2 = load_uintptr(begin2);
+        if (first1 != first2) {
+            // This is required, because the first differing byte will be the least significant different byte in case of
+            // little endian loads.
+#if defined(COMMON_LITTLE_ENDIAN)
+            first1 = byteSwap(first1);
+            first2 = byteSwap(first2);
+#endif
+            return first1 > first2;
+        }
+        int ret = memcmp(begin1 + sizeof(uintptr_t), begin2 + sizeof(uintptr_t), std::min(length1, length2) - sizeof(uintptr_t));
+        if (ret != 0) {
+            return ret > 0;
+        } else {
+            return length1 > length2;
+        }
+    } else {
+        size_t minLength = std::min(length1, length2);
+        for (size_t i = 0; i < minLength; i++) {
+            if (begin1[i] != begin2[i]) {
+                return (unsigned char)begin1[i] > (unsigned char)begin2[i];
+            }
+        }
+        return length1 > length2;
+    }
 }
 
 } // namespace detail
@@ -75,96 +133,90 @@ inline bool operator==(StringView line1, StringView line2)
     if (line1.length != line2.length) {
         return false;
     }
-    return detail::compareStr(line1.begin, line1.length, line2.begin, line2.length) == 0;
+    return detail::strEqual(line1.begin, line1.length, line2.begin, line2.length);
 }
 
 inline bool operator!=(StringView line1, StringView line2)
 {
-    return detail::compareStr(line1.begin, line1.length, line2.begin, line2.length) != 0;
+    return !detail::strEqual(line1.begin, line1.length, line2.begin, line2.length);
 }
 
 inline bool operator<(StringView line1, StringView line2)
 {
-    return detail::compareStr(line1.begin, line1.length, line2.begin, line2.length) < 0;
+    return detail::strLess(line1.begin, line1.length, line2.begin, line2.length);
 }
 
 inline bool operator<=(StringView line1, StringView line2)
 {
-    return detail::compareStr(line1.begin, line1.length, line2.begin, line2.length) <= 0;
+    return !detail::strGreater(line1.begin, line1.length, line2.begin, line2.length);
 }
 
 inline bool operator>(StringView line1, StringView line2)
 {
-    return detail::compareStr(line1.begin, line1.length, line2.begin, line2.length) > 0;
+    return detail::strGreater(line1.begin, line1.length, line2.begin, line2.length);
 }
 
 inline bool operator>=(StringView line1, StringView line2)
 {
-    return detail::compareStr(line1.begin, line1.length, line2.begin, line2.length) >= 0;
+    return !detail::strLess(line1.begin, line1.length, line2.begin, line2.length);
 }
 
 inline bool operator==(StringView line1, std::string const& line2)
 {
-    if (line1.length != line2.length()) {
-        return false;
-    }
-    return detail::compareStr(line1.begin, line1.length, line2.c_str(), line2.length()) == 0;
+    return detail::strEqual(line1.begin, line1.length, line2.c_str(), line2.length());
 }
 
 inline bool operator!=(StringView line1, std::string const& line2)
 {
-    return detail::compareStr(line1.begin, line1.length, line2.c_str(), line2.length()) != 0;
+    return !detail::strEqual(line1.begin, line1.length, line2.c_str(), line2.length());
 }
 
 inline bool operator<(StringView line1, std::string const& line2)
 {
-    return detail::compareStr(line1.begin, line1.length, line2.c_str(), line2.length()) < 0;
+    return detail::strLess(line1.begin, line1.length, line2.c_str(), line2.length());
 }
 
 inline bool operator<=(StringView line1, std::string const& line2)
 {
-    return detail::compareStr(line1.begin, line1.length, line2.c_str(), line2.length()) <= 0;
+    return !detail::strGreater(line1.begin, line1.length, line2.c_str(), line2.length());
 }
 
 inline bool operator>(StringView line1, std::string const& line2)
 {
-    return detail::compareStr(line1.begin, line1.length, line2.c_str(), line2.length()) > 0;
+    return detail::strGreater(line1.begin, line1.length, line2.c_str(), line2.length());
 }
 
 inline bool operator>=(StringView line1, std::string const& line2)
 {
-    return detail::compareStr(line1.begin, line1.length, line2.c_str(), line2.length()) >= 0;
+    return !detail::strLess(line1.begin, line1.length, line2.c_str(), line2.length());
 }
 
 inline bool operator==(std::string const& line1, StringView line2)
 {
-    if (line1.length() != line2.length) {
-        return false;
-    }
-    return detail::compareStr(line1.c_str(), line1.length(), line2.begin, line2.length) == 0;
+    return detail::strEqual(line1.c_str(), line1.length(), line2.begin, line2.length);
 }
 
 inline bool operator!=(std::string const& line1, StringView line2)
 {
-    return detail::compareStr(line1.c_str(), line1.length(), line2.begin, line2.length) != 0;
+    return !detail::strEqual(line1.c_str(), line1.length(), line2.begin, line2.length);
 }
 
 inline bool operator<(std::string const& line1, StringView line2)
 {
-    return detail::compareStr(line1.c_str(), line1.length(), line2.begin, line2.length) < 0;
+    return detail::strLess(line1.c_str(), line1.length(), line2.begin, line2.length);
 }
 
 inline bool operator<=(std::string const& line1, StringView line2)
 {
-    return detail::compareStr(line1.c_str(), line1.length(), line2.begin, line2.length) <= 0;
+    return !detail::strGreater(line1.c_str(), line1.length(), line2.begin, line2.length);
 }
 
 inline bool operator>(std::string const& line1, StringView line2)
 {
-    return detail::compareStr(line1.c_str(), line1.length(), line2.begin, line2.length) > 0;
+    return detail::strGreater(line1.c_str(), line1.length(), line2.begin, line2.length);
 }
 
 inline bool operator>=(std::string const& line1, StringView line2)
 {
-    return detail::compareStr(line1.c_str(), line1.length(), line2.begin, line2.length) >= 0;
+    return !detail::strLess(line1.c_str(), line1.length(), line2.begin, line2.length);
 }
