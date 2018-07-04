@@ -110,9 +110,9 @@ FORCE_INLINE size_t median3(It first, size_t i0, size_t i1, size_t i2)
             return i0;
         }
     } else {
-        if (*(first + i1) > *(first + i2)) {
+        if (*(first + i2) < *(first + i1)) {
             return i1;
-        } else if (*(first + i0) > *(first + i2)) {
+        } else if (*(first + i2) < *(first + i0)) {
             return i2;
         } else {
             return i0;
@@ -124,31 +124,31 @@ template<typename It>
 FORCE_INLINE size_t median5(It first, size_t i0, size_t i1, size_t i2, size_t i3, size_t i4)
 {
     // Sorting network for 5 elements.
-    if (*(first + i0) > *(first + i1)) {
+    if (*(first + i1) < *(first + i0)) {
         std::swap(i0, i1);
     }
-    if (*(first + i3) > *(first + i4)) {
+    if (*(first + i4) < *(first + i3)) {
         std::swap(i3, i4);
     }
-    if (*(first + i2) > *(first + i4)) {
+    if (*(first + i4) < *(first + i2)) {
         std::swap(i2, i4);
     }
-    if (*(first + i2) > *(first + i3)) {
+    if (*(first + i3) < *(first + i2)) {
         std::swap(i2, i3);
     }
-    if (*(first + i0) > *(first + i3)) {
+    if (*(first + i3) < *(first + i0)) {
         std::swap(i0, i3);
     }
-    if (*(first + i0) > *(first + i2)) {
+    if (*(first + i2) < *(first + i0)) {
         std::swap(i0, i2);
     }
-    if (*(first + i1) > *(first + i4)) {
+    if (*(first + i4) < *(first + i1)) {
         std::swap(i1, i4);
     }
-    if (*(first + i1) > *(first + i3)) {
+    if (*(first + i3) < *(first + i1)) {
         std::swap(i1, i3);
     }
-    if (*(first + i1) > *(first + i2)) {
+    if (*(first + i2) < *(first + i1)) {
         std::swap(i1, i2);
     }
     return i2;
@@ -163,37 +163,37 @@ FORCE_INLINE bool smallSort(It first, It last)
     case 1:
         return true;
     case 2:
-        if (*first > *(first + 1)) {
+        if (*(first + 1) < *first) {
             std::swap(*first, *(first + 1));
         }
         return true;
     case 3:
         // Sorting network for 3 elements.
-        if (*first > *(first + 1)) {
+        if (*(first + 1) < *first) {
             std::swap(*first, *(first + 1));
         }
-        if (*first > *(first + 2)) {
+        if (*(first + 2) < *first) {
             std::swap(*first, *(first + 2));
         }
-        if (*(first + 1) > *(first + 2)) {
+        if (*(first + 2) < *(first + 1)) {
             std::swap(*(first + 1), *(first + 2));
         }
         return true;
     case 4:
         // Sorting network for 4 elements.
-        if (*first > *(first + 1)) {
+        if (*(first + 1) < *first) {
             std::swap(*first, *(first + 1));
         }
-        if (*(first + 2) > *(first + 3)) {
+        if (*(first + 3) < *(first + 2)) {
             std::swap(*(first + 2), *(first + 3));
         }
-        if (*first > *(first + 2)) {
+        if (*(first + 2) < *first) {
             std::swap(*first, *(first + 2));
         }
-        if (*(first + 1) > *(first + 3)) {
+        if (*(first + 3) < *(first + 1)) {
             std::swap(*(first + 1), *(first + 3));
         }
-        if (*(first + 1) > *(first + 2)) {
+        if (*(first + 2) < *(first + 1)) {
             std::swap(*(first + 1), *(first + 2));
         }
         return true;
@@ -214,7 +214,7 @@ void selectionSort(It first, It last)
         It minI = i;
         auto minV = *i;
         for (It j = i + 1; j < last; ++j) {
-            if (minV > *j) {
+            if (*j < minV) {
                 minI = j;
                 minV = *j;
             }
@@ -235,7 +235,7 @@ void insertionSortImpl(It first, It last, bool isLeftmost)
     }
     if (isLeftmost) {
         for (It i = first + 1; i != last; ++i) {
-            if (*i > *(i - 1)) {
+            if (*(i - 1) < *i) {
                 continue;
             }
             auto v = std::move(*i);
@@ -247,7 +247,7 @@ void insertionSortImpl(It first, It last, bool isLeftmost)
         }
     } else {
         for (It i = first + 1; i != last; ++i) {
-            if (*i > *(i - 1)) {
+            if (*(i - 1) < *i) {
                 continue;
             }
             auto v = std::move(*i);
@@ -490,19 +490,19 @@ void dualPivotSelection(It first, It last, size_t* pivot1Idx, size_t* pivot2Idx)
     size_t i1 = size / 3;
     size_t i2 = i1 * 2;
     size_t i3 = size - 1;
-    if (*(first + i0) > *(first + i1)) {
+    if (*(first + i1) < *(first + i0)) {
         std::swap(i0, i1);
     }
-    if (*(first + i2) > *(first + i3)) {
+    if (*(first + i3) < *(first + i2)) {
         std::swap(i2, i3);
     }
-    if (*(first + i0) > *(first + i2)) {
+    if (*(first + i2) < *(first + i0)) {
         std::swap(i0, i2);
     }
-    if (*(first + i1) > *(first + i3)) {
+    if (*(first + i3) < *(first + i1)) {
         std::swap(i1, i3);
     }
-    if (*(first + i1) > *(first + i2)) {
+    if (*(first + i2) < *(first + i1)) {
         std::swap(i1, i2);
     }
     *pivot1Idx = i1;
@@ -549,10 +549,10 @@ void quickSortDualPivotImpl(It first, It last, size_t cutoff, size_t remainingDe
         It right = last - 1;
 
         while (left2 < right) {
-            if (*left2 > pivot2) {
+            if (pivot2 < *left2) {
                 --right;
                 std::swap(*left2, *right);
-            } else if (*left2 >= pivot1) {
+            } else if (!(*left2 < pivot1)) {
                 ++left2;
             } else {
                 std::swap(*left1, *left2);
@@ -634,7 +634,7 @@ void quickSortDualPivotAltImpl(It first, It last, size_t cutoff, size_t remainin
             size_t i;
             size_t size = last - first;
             for (i = 0; i < size; i++) {
-                if (*(first + i) != *(first + pivot1Idx)) {
+                if (!(*(first + i) == *(first + pivot1Idx))) {
                     pivot2Idx = i;
                     break;
                 }
@@ -644,7 +644,7 @@ void quickSortDualPivotAltImpl(It first, It last, size_t cutoff, size_t remainin
                 return;
             }
             // Correct ordering of pivot1 and pivot2.
-            if (*(first + pivot1Idx) > *(first + pivot2Idx)) {
+            if (*(first + pivot2Idx) < *(first + pivot1Idx)) {
                 std::swap(pivot1Idx, pivot2Idx);
             }
         }
@@ -666,17 +666,17 @@ void quickSortDualPivotAltImpl(It first, It last, size_t cutoff, size_t remainin
         It left1 = first + 1;
         // Do an initial positioning of left so that we do not do useless swaps of initial portion
         // of values in the first partition part.
-        while (*left1 <= pivot1 && left1 < last - 1) {
+        while (!(pivot1 < *left1) && left1 < last - 1) {
             left1++;
         }
         It left2 = left1;
         It right = last - 1;
 
         while (left2 < right) {
-            if (*left2 > pivot2) {
+            if (pivot2 < *left2) {
                 --right;
                 std::swap(*left2, *right);
-            } else if (*left2 > pivot1) {
+            } else if (pivot1 < *left2) {
                 ++left2;
             } else {
                 std::swap(*left1, *left2);

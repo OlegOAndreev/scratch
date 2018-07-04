@@ -20,10 +20,24 @@ struct SimpleStringView
     char* ptr;
     size_t length;
 
+    SimpleStringView()
+        : ptr(nullptr)
+        , length(0)
+    {
+    }
+
     SimpleStringView(char* _ptr, size_t _length)
         : ptr(_ptr)
         , length(_length)
     {
+    }
+
+    bool operator==(SimpleStringView const& other) const
+    {
+        if (length != other.length) {
+            return false;
+        }
+        return memcmp(ptr, other.ptr, length) == 0;
     }
 
     bool operator<(SimpleStringView const& other) const
@@ -157,6 +171,39 @@ void allCompareSortString(char const* sortMethod, vector<vector<string>>& arrays
     uint64_t startTime = getTimeCounter();
     for (vector<string>& array : arrays) {
         compareSortString(sortMethod, array, scratch);
+    }
+    printf("Tested %s in %dms\n", arrayType, elapsedMsec(startTime));
+}
+
+// We cannot simply run sort and check that everything is ok, because we can have out of bounds accesses or some other
+// errors which will generate the correctly sorted array with different values.
+void compareSortStringView(char const* sortMethod, vector<SimpleStringView>& array, vector<SimpleStringView>& scratch)
+{
+    scratch = array;
+    callSortMethod(sortMethod, array.begin(), array.end());
+    std::sort(scratch.begin(), scratch.end());
+    if (!std::equal(array.begin(), array.end(), scratch.begin())) {
+        printf("Sorted arrays [%d] differ:\n", (int)array.size());
+        for (SimpleStringView v : array) {
+            printf("%.*s ", (int)v.length, v.ptr);
+        }
+        printf("\nvs\n");
+        for (SimpleStringView v : scratch) {
+            printf("%.*s ", (int)v.length, v.ptr);
+        }
+        printf("\n");
+        exit(1);
+    }
+}
+
+void allCompareSortStringView(char const* sortMethod, vector<vector<SimpleStringView>>& arrays, size_t maxSize,
+                              char const* arrayType)
+{
+    vector<SimpleStringView> scratch;
+    scratch.reserve(maxSize);
+    uint64_t startTime = getTimeCounter();
+    for (vector<SimpleStringView>& array : arrays) {
+        compareSortStringView(sortMethod, array, scratch);
     }
     printf("Tested %s in %dms\n", arrayType, elapsedMsec(startTime));
 }
@@ -408,6 +455,142 @@ void testSortString(char const* sortMethod, size_t minSize, size_t maxSize)
     printf("All string tests on %s [0-%d) passed in %dms\n", sortMethod, (int)maxSize, elapsedMsec(totalStartTime));
 }
 
+// Prints integer to the result, padding it to the required number of symbols with '0'.
+SimpleStringView stringViewFromInt(SimpleStringRope* rope, int value, int maxLen)
+{
+    char buf[1000];
+    int printed = sprintf(buf, "%d", value);
+    if (printed < maxLen) {
+        SimpleStringView result = rope->allocString(maxLen);
+        memset(result.ptr, '0', maxLen - printed);
+        memcpy(result.ptr, buf + maxLen - printed, printed);
+        return result;
+    } else {
+        SimpleStringView result = rope->allocString(printed);
+        memcpy(result.ptr, buf, printed);
+        return result;
+    }
+}
+
+// Preparers string test data and runs sorting method on the data, using std::sort to validate the results.
+void testSortStringView(char const* sortMethod, size_t minSize, size_t maxSize)
+{
+    uint64_t totalStartTime = getTimeCounter();
+    printf("Running string view tests\n");
+    // Arrays is all the test data prepared at once.
+    vector<vector<SimpleStringView>> arrays;
+    SimpleStringRope rope;
+    size_t numTests = maxSize - minSize;
+    arrays.resize(numTests);
+
+    for (size_t size = minSize; size < maxSize; size++) {
+        vector<SimpleStringView>& array = arrays[size - minSize];
+        array.resize(size);
+        for (size_t i = 0; i < size; i++) {
+            array[i] = stringViewFromInt(&rope, 123, 0);
+        }
+    }
+    allCompareSortStringView(sortMethod, arrays, maxSize, "one value");
+
+    for (size_t size = minSize; size < maxSize; size++) {
+        vector<SimpleStringView>& array = arrays[size - minSize];
+        array.resize(size);
+        for (size_t i = 0; i < size; i++) {
+            array[i] = stringViewFromInt(&rope, 10000000 + i, 8);
+        }
+    }
+    allCompareSortStringView(sortMethod, arrays, maxSize, "ascending");
+
+    for (size_t size = minSize; size < maxSize; size++) {
+        vector<SimpleStringView>& array = arrays[size - minSize];
+        array.resize(size);
+        for (size_t i = 0; i < size; i++) {
+            array[i] = stringViewFromInt(&rope, 10000000 - i, 8);
+        }
+    }
+    allCompareSortStringView(sortMethod, arrays, maxSize, "descending");
+
+    for (size_t size = minSize; size < maxSize; size++) {
+        vector<SimpleStringView>& array = arrays[size - minSize];
+        array.resize(size);
+        for (size_t i = 0; i < size / 2; i++) {
+            array[i] = stringViewFromInt(&rope, 10000000 + i, 8);
+        }
+        for (size_t i = size / 2; i < size; i++) {
+            array[i] = stringViewFromInt(&rope, 10000000 + size - i, 8);
+        }
+    }
+    allCompareSortStringView(sortMethod, arrays, maxSize, "ascending and descending");
+
+    for (size_t size = minSize; size < maxSize; size++) {
+        vector<SimpleStringView>& array = arrays[size - minSize];
+        array.resize(size);
+        for (size_t i = 0; i < size / 2; i++) {
+            array[i] = stringViewFromInt(&rope, 10000000 + i, 8);
+        }
+        for (size_t i = size / 2; i < size; i++) {
+            array[i] = stringViewFromInt(&rope, 10000000 - size + i, 8);
+        }
+    }
+    allCompareSortStringView(sortMethod, arrays, maxSize, "ascending and ascending");
+
+    for (size_t size = minSize; size < maxSize; size++) {
+        vector<SimpleStringView>& array = arrays[size - minSize];
+        array.resize(size);
+        for (size_t i = 0; i < size / 4; i++) {
+            array[i] = stringViewFromInt(&rope, 10000000 + i, 8);
+        }
+        for (size_t i = size / 4; i < size * 3 / 4; i++) {
+            array[i] = stringViewFromInt(&rope, 10000000 + size / 2, 8);
+        }
+        for (size_t i = size * 3 / 4; i < size; i++) {
+            array[i] = stringViewFromInt(&rope, 10000000 + i, 8);
+        }
+    }
+    allCompareSortStringView(sortMethod, arrays, maxSize, "an array with a plateu");
+
+    {
+        uint32_t seed = (uint32_t)(minSize + maxSize);
+        uint32_t state[4] = { seed, seed, seed, seed };
+        for (size_t size = minSize; size < maxSize; size++) {
+            vector<SimpleStringView>& array = arrays[size - minSize];
+            array.resize(size);
+            for (size_t i = 0; i < size; i++) {
+                array[i] = stringViewFromInt(&rope, randomRange(state, 0, 10000000), 8);
+            }
+        }
+        allCompareSortStringView(sortMethod, arrays, maxSize, "random");
+    }
+
+    {
+        uint32_t seed = (uint32_t)(minSize + maxSize);
+        uint32_t state[4] = { seed, seed, seed, seed };
+        for (size_t size = minSize; size < maxSize; size++) {
+            vector<SimpleStringView>& array = arrays[size - minSize];
+            array.resize(size);
+            for (size_t i = 0; i < size; i++) {
+                array[i] = stringViewFromInt(&rope, randomRange(state, 0, 50), 2);
+            }
+        }
+        allCompareSortStringView(sortMethod, arrays, maxSize, "random small values");
+    }
+
+    {
+        uint32_t seed = (uint32_t)(minSize + maxSize);
+        uint32_t state[4] = { seed, seed, seed, seed };
+        for (size_t size = minSize; size < maxSize; size++) {
+            vector<SimpleStringView>& array = arrays[size - minSize];
+            array.resize(size);
+            for (size_t i = 0; i < size; i++) {
+                array[i] = stringViewFromInt(&rope, randomRange(state, 0, 2), 1);
+            }
+        }
+        allCompareSortStringView(sortMethod, arrays, maxSize, "random two values");
+    }
+
+    printf("All string tests on %s [0-%d) passed in %dms\n", sortMethod, (int)maxSize, elapsedMsec(totalStartTime));
+}
+
 void parseSize(char const* arg, size_t* minSize, size_t* maxSize)
 {
     char const* sep = strchr(arg, '-');
@@ -423,7 +606,7 @@ void parseSize(char const* arg, size_t* minSize, size_t* maxSize)
 int main(int argc, char** argv)
 {
     if (argc != 3 && argc != 4) {
-        printf("Usage: %s sort-method size[-size] [int|string]\n", argv[0]);
+        printf("Usage: %s sort-method size[-size] [int|string|string-view]\n", argv[0]);
         return 1;
     }
 
@@ -437,6 +620,9 @@ int main(int argc, char** argv)
     }
     if (type == nullptr || strcmp(type, "string") == 0) {
         testSortString(sortMethod, minSize, maxSize);
+    }
+    if (type == nullptr || strcmp(type, "string-view") == 0) {
+        testSortStringView(sortMethod, minSize, maxSize);
     }
     return 0;
 }

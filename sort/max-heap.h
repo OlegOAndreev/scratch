@@ -31,13 +31,13 @@ void siftDown(It first, size_t size, size_t idx)
         size_t childRIdx = childIdx + 1;
         // Check if there is a right child and it is larger than the left child.
         if (childRIdx < size && *(first + childIdx) < *(first + childRIdx)) {
-            if (*(first + childRIdx) <= newValue) {
+            if (!(newValue < *(first + childRIdx))) {
                 break;
             }
             *(first + idx) = std::move(*(first + childRIdx));
             idx = childRIdx;
         } else {
-            if (*(first + childIdx) <= newValue) {
+            if (!(newValue < *(first + childIdx))) {
                 break;
             }
             *(first + idx) = std::move(*(first + childIdx));
