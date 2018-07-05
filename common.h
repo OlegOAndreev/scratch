@@ -1,5 +1,6 @@
 #pragma once
 
+#include <climits>
 #include <cstddef>
 #include <cstdint>
 
@@ -18,12 +19,33 @@
 //
 
 //
-// Defines SIZE_T_BITS.
+// Defines COMMON_INT_BITS, COMMON_LONG_BITS, COMMON_LONG_LONG_BITS and COMMON_SIZE_T_BITS.
 //
+#if UINT_MAX == 0xFFFFFFFF
+#define COMMON_INT_BITS 32
+#elif UINT_MAX == 0xFFFFFFFFFFFFFFFF
+#define COMMON_INT_BITS 64
+#else
+#error "Unsupported UINT_MAX"
+#endif
+#if ULONG_MAX == 0xFFFFFFFF
+#define COMMON_LONG_BITS 32
+#elif ULONG_MAX == 0xFFFFFFFFFFFFFFFF
+#define COMMON_LONG_BITS 64
+#else
+#error "Unsupported ULONG_MAX"
+#endif
+#if ULLONG_MAX == 0xFFFFFFFF
+#define COMMON_LONG_LONG_BITS 32
+#elif ULLONG_MAX == 0xFFFFFFFFFFFFFFFF
+#define COMMON_LONG_LONG_BITS 64
+#else
+#error "Unsupported ULLONG_MAX"
+#endif
 #if SIZE_MAX == 0xFFFFFFFF
-#define SIZE_T_BITS 32
+#define COMMON_SIZE_T_BITS 32
 #elif SIZE_MAX == 0xFFFFFFFFFFFFFFFF
-#define SIZE_T_BITS 64
+#define COMMON_SIZE_T_BITS 64
 #else
 #error "Unsupported SIZE_MAX"
 #endif
@@ -57,23 +79,23 @@ FORCE_INLINE int nextLog2(size_t v)
     if (v == 0) {
         return 0;
     } else {
-#if SIZE_T_BITS == 32
+#if COMMON_SIZE_T_BITS == 32
         return sizeof(size_t) * 8 - __builtin_clz(v);
-#elif SIZE_T_BITS == 64
+#elif COMMON_SIZE_T_BITS == 64
         return sizeof(size_t) * 8 - __builtin_clzl(v);
 #else
-#error "Unsupported SIZE_T_BITS"
+#error "Unsupported COMMON_SIZE_T_BITS"
 #endif
     }
 #elif defined(_MSC_VER)
     unsigned char nonzero;
     unsigned long index;
-#if SIZE_T_BITS == 32
+#if COMMON_SIZE_T_BITS == 32
     nonzero = _BitScanReverse(&index, v);
-#elif SIZE_T_BITS == 64
+#elif COMMON_SIZE_T_BITS == 64
     nonzero = _BitScanReverse64(&index, v);
 #else
-#error "Unsupported SIZE_T_BITS"
+#error "Unsupported COMMON_SIZE_T_BITS"
 #endif
     if (nonzero) {
         return index + 1;
@@ -152,32 +174,56 @@ DEFINE_LOAD_STORE(uint64_t, u64)
 // Byte swapping
 //
 #if defined(__clang__) || defined(__GNUC__)
-FORCE_INLINE uint16_t byteSwap(uint16_t v)
+FORCE_INLINE unsigned short byteSwap(unsigned short v)
 {
+    static_assert(sizeof(unsigned short) == 2, "Unsupported short size");
     return __builtin_bswap16(v);
 }
-FORCE_INLINE uint32_t byteSwap(uint32_t v)
+FORCE_INLINE unsigned int byteSwap(unsigned int v)
 {
+#if COMMON_INT_BITS == 32
     return __builtin_bswap32(v);
-}
-FORCE_INLINE uint64_t byteSwap(uint64_t v)
-{
+#elif COMMON_INT_BITS == 64
     return __builtin_bswap64(v);
+#else
+#error "Unsupported COMMON_INT_BITS value"
+#endif
+}
+FORCE_INLINE unsigned long byteSwap(unsigned long v)
+{
+#if COMMON_LONG_BITS == 32
+    return __builtin_bswap32(v);
+#elif COMMON_LONG_BITS == 64
+    return __builtin_bswap64(v);
+#else
+#error "Unsupported COMMON_LONG_BITS value"
+#endif
+}
+FORCE_INLINE unsigned long long byteSwap(unsigned long long v)
+{
+#if COMMON_LONG_LONG_BITS == 32
+    return __builtin_bswap32(v);
+#elif COMMON_LONG_LONG_BITS == 64
+    return __builtin_bswap64(v);
+#else
+#error "Unsupported COMMON_LONG_LONG_BITS value"
+#endif
 }
 #elif defined(_MSC_VER)
-FORCE_INLINE uint16_t byteSwap(uint16_t v)
+FORCE_INLINE unsigned int byteSwap(unsigned int v)
 {
-    static_assert(sizeof(unsigned short) == 2, "Sanity check failed");
     return _byteswap_ushort(v);
 }
-FORCE_INLINE uint32_t byteSwap(uint32_t v)
+FORCE_INLINE unsigned __int32 byteSwap(unsigned int v)
 {
-    static_assert(sizeof(unsigned long) == 4, "Sanity check failed");
     return _byteswap_ulong(v);
 }
-FORCE_INLINE uint64_t byteSwap(uint64_t v)
+FORCE_INLINE unsigned long byteSwap(unsigned long v)
 {
-    static_assert(sizeof(unsigned __int64) == 8, "Sanity check failed");
+    return _byteswap_ulong(v);
+}
+FORCE_INLINE unsigned __int64 byteSwap(unsigned __int64 v)
+{
     return _byteswap_uint64(v);
 }
 #else
@@ -186,44 +232,22 @@ FORCE_INLINE uint64_t byteSwap(uint64_t v)
 #endif
 
 // Signed versions of byteSwap(), the unsigned -> signed conversions are implementation-defined.
-FORCE_INLINE int16_t byteSwap(int16_t v)
+FORCE_INLINE short byteSwap(short v)
 {
-    return (int16_t)byteSwap((uint16_t)v);
+    return (short)byteSwap((unsigned short)v);
 }
-FORCE_INLINE int32_t byteSwap(int32_t v)
+FORCE_INLINE int byteSwap(int v)
 {
-    return (int32_t)byteSwap((uint32_t)v);
+    return (int)byteSwap((unsigned int)v);
 }
-FORCE_INLINE int64_t byteSwap(int64_t v)
+FORCE_INLINE long byteSwap(long v)
 {
-    return (int64_t)byteSwap((uint64_t)v);
+    return (long)byteSwap((unsigned long)v);
 }
-#if SIZE_T_BITS == 32
-FORCE_INLINE size_t byteSwap(size_t v)
+FORCE_INLINE long long byteSwap(long long v)
 {
-    return (size_t)byteSwap((uint32_t)v);
+    return (long long)byteSwap((unsigned long long)v);
 }
-#elif SIZE_T_BITS == 64
-FORCE_INLINE size_t byteSwap(size_t v)
-{
-    return (size_t)byteSwap((uint64_t)v);
-}
-#else
-#error "Unsupported SIZE_T_BITS"
-#endif
-#if SIZE_T_BITS == 32
-inline size_t byteSwap(ptrdiff_t v)
-{
-    return (ptrdiff_t)byteSwap((int32_t)v);
-}
-#elif SIZE_T_BITS == 64
-FORCE_INLINE ptrdiff_t byteSwap(ptrdiff_t v)
-{
-    return (ptrdiff_t)byteSwap((int64_t)v);
-}
-#else
-#error "Unsupported SIZE_T_BITS"
-#endif
 
 // Returns the first pointer after ptr, which is aligned according to alignment.
 template<typename T>
@@ -232,7 +256,6 @@ FORCE_INLINE T* nextAlignedPtr(T* ptr, size_t alignment)
     size_t remainder = alignment - 1 - ((uintptr_t)ptr + alignment - 1) % alignment;
     return (T*)((uintptr_t)ptr + remainder);
 }
-
 
 //
 // Time-related functions.
