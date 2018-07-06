@@ -7,9 +7,13 @@ namespace detail {
 template<typename It>
 void siftUp(It first, size_t idx)
 {
+    // Fast exit for already heap case.
+    if (*(first + idx) < *(first + (idx - 1) / 2)) {
+        return;
+    }
     auto newValue = std::move(*(first + idx));
     while (idx > 0) {
-        It parentIdx = (idx - 1) / 2;
+        size_t parentIdx = (idx - 1) / 2;
         if (newValue < *(first + parentIdx)) {
             break;
         }
@@ -28,7 +32,7 @@ void siftDown(It first, size_t size, size_t idx)
     while (idx < halfSize) {
         // Find which of the children is the smaller one.
         size_t childIdx = idx * 2 + 1;
-        size_t childRIdx = childIdx + 1;
+        size_t childRIdx = idx * 2 + 2;
         // Check if there is a right child and it is larger than the left child.
         if (childRIdx < size && *(first + childIdx) < *(first + childRIdx)) {
             if (!(newValue < *(first + childRIdx))) {
@@ -71,7 +75,7 @@ void pushHeap(It first, It last)
     detail::siftUp(first, last - first - 1);
 }
 
-// Moves the element at first to last - 1 and replaces it with minimal from [first + 1, last)
+// Moves the element at first to last - 1 and replaces it with maximum from [first + 1, last)
 // and makes [first, last - 1) max-heap again.
 template<typename It>
 void popHeap(It first, It last)
