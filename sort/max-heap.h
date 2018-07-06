@@ -30,23 +30,18 @@ void siftDown(It first, size_t size, size_t idx)
     // If idx >= halfSize, we are in a leaf.
     size_t halfSize = size / 2;
     while (idx < halfSize) {
-        // Find which of the children is the smaller one.
+        // Index of the first child which is guaranteed to exist.
         size_t childIdx = idx * 2 + 1;
         size_t childRIdx = idx * 2 + 2;
         // Check if there is a right child and it is larger than the left child.
         if (childRIdx < size && *(first + childIdx) < *(first + childRIdx)) {
-            if (!(newValue < *(first + childRIdx))) {
-                break;
-            }
-            *(first + idx) = std::move(*(first + childRIdx));
-            idx = childRIdx;
-        } else {
-            if (!(newValue < *(first + childIdx))) {
-                break;
-            }
-            *(first + idx) = std::move(*(first + childIdx));
-            idx = childIdx;
+            childIdx = childRIdx;
         }
+        if (!(newValue < *(first + childIdx))) {
+            break;
+        }
+        *(first + idx) = std::move(*(first + childIdx));
+        idx = childIdx;
     }
     *(first + idx) = std::move(newValue);
 }
