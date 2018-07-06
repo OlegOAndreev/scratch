@@ -26,6 +26,7 @@ void siftUp(It first, size_t idx)
 template<typename It>
 void siftDown(It first, size_t size, size_t idx)
 {
+    // No fast-exit here, it is a un-optimization both on gcc and clang for int, string and stringview in my experience.
     auto newValue = std::move(*(first + idx));
     // If idx >= halfSize, we are in a leaf.
     size_t halfSize = size / 2;

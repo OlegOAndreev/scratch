@@ -287,7 +287,6 @@ void heapSort(It first, It last, bool useStdHeap = false)
             popHeap(first, first + i);
         }
     }
-
 }
 
 namespace detail {
