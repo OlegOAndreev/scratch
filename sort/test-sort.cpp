@@ -529,7 +529,8 @@ void testSortString(char const* sortMethod, size_t minSize, size_t maxSize)
         allCompareSortString(sortMethod, arrays, maxSize, "random two values");
     }
 
-    printf("All string tests on %s [0-%d) passed in %dms\n", sortMethod, (int)maxSize, elapsedMsec(totalStartTime));
+    printf("All string tests on %s [%d-%d) passed in %dms\n", sortMethod, (int)minSize, (int)maxSize,
+           elapsedMsec(totalStartTime));
 }
 
 // Prints integer to the result, padding it to the required number of symbols with '0'.
@@ -665,7 +666,8 @@ void testSortStringView(char const* sortMethod, size_t minSize, size_t maxSize)
         allCompareSortStringView(sortMethod, arrays, maxSize, "random two values");
     }
 
-    printf("All string tests on %s [0-%d) passed in %dms\n", sortMethod, (int)maxSize, elapsedMsec(totalStartTime));
+    printf("All string tests on %s [%d-%d) passed in %dms\n", sortMethod, (int)minSize, (int)maxSize,
+           elapsedMsec(totalStartTime));
 }
 
 void parseSize(char const* arg, size_t* minSize, size_t* maxSize)
