@@ -158,54 +158,6 @@ FORCE_INLINE size_t median5(It first, size_t i0, size_t i1, size_t i2, size_t i3
     return i2;
 }
 
-// "Small" sort: if the sizes are small, sort and return true, otherwise return false.
-template<typename It>
-FORCE_INLINE bool smallSort(It first, It last)
-{
-    switch (last - first) {
-    case 0:
-    case 1:
-        return true;
-    case 2:
-        if (*(first + 1) < *first) {
-            std::swap(*first, *(first + 1));
-        }
-        return true;
-    case 3:
-        // Sorting network for 3 elements.
-        if (*(first + 1) < *first) {
-            std::swap(*first, *(first + 1));
-        }
-        if (*(first + 2) < *first) {
-            std::swap(*first, *(first + 2));
-        }
-        if (*(first + 2) < *(first + 1)) {
-            std::swap(*(first + 1), *(first + 2));
-        }
-        return true;
-    case 4:
-        // Sorting network for 4 elements.
-        if (*(first + 1) < *first) {
-            std::swap(*first, *(first + 1));
-        }
-        if (*(first + 3) < *(first + 2)) {
-            std::swap(*(first + 2), *(first + 3));
-        }
-        if (*(first + 2) < *first) {
-            std::swap(*first, *(first + 2));
-        }
-        if (*(first + 3) < *(first + 1)) {
-            std::swap(*(first + 1), *(first + 3));
-        }
-        if (*(first + 2) < *(first + 1)) {
-            std::swap(*(first + 1), *(first + 2));
-        }
-        return true;
-    default:
-        return false;
-    }
-}
-
 } // namespace detail
 
 template<typename It>
@@ -232,7 +184,7 @@ void selectionSort(It first, It last)
 // An optimization to regular insertion sort: if isLeftmost is false, assume that there is a (first - 1) element which
 // is not larger than all the elements in [first, last)
 template<typename It>
-void insertionSortImpl(It first, It last, bool isLeftmost)
+FORCE_INLINE void insertionSortImpl(It first, It last, bool isLeftmost)
 {
     if (first == last) {
         return;
@@ -271,6 +223,55 @@ void insertionSort(It first, It last)
     insertionSortImpl(first, last, true);
 }
 
+// "Small" sort: specific sorts for sizes 2-3-4 and insertion sort for everything else.
+template<typename It>
+FORCE_INLINE void smallSort(It first, It last, bool isLeftmost = true)
+{
+    switch (last - first) {
+    case 0:
+    case 1:
+        break;
+    case 2:
+        if (*(first + 1) < *first) {
+            std::swap(*first, *(first + 1));
+        }
+        break;
+    case 3:
+        // Sorting network for 3 elements.
+        if (*(first + 1) < *first) {
+            std::swap(*first, *(first + 1));
+        }
+        if (*(first + 2) < *first) {
+            std::swap(*first, *(first + 2));
+        }
+        if (*(first + 2) < *(first + 1)) {
+            std::swap(*(first + 1), *(first + 2));
+        }
+        break;
+    case 4:
+        // Sorting network for 4 elements.
+        if (*(first + 1) < *first) {
+            std::swap(*first, *(first + 1));
+        }
+        if (*(first + 3) < *(first + 2)) {
+            std::swap(*(first + 2), *(first + 3));
+        }
+        if (*(first + 2) < *first) {
+            std::swap(*first, *(first + 2));
+        }
+        if (*(first + 3) < *(first + 1)) {
+            std::swap(*(first + 1), *(first + 3));
+        }
+        if (*(first + 2) < *(first + 1)) {
+            std::swap(*(first + 1), *(first + 2));
+        }
+        break;
+    default:
+        insertionSortImpl(first, last, isLeftmost);
+        break;
+    }
+}
+
 // A heap-sort implementation. If useStdHeap is true, uses std::make_heap/std::push_heap/std::pop_heap to make the heap,
 // otherwise uses makeHeap/pushHeap/popHeap.
 template<typename It>
@@ -299,15 +300,13 @@ void quickSortImpl(It first, It last, size_t cutoff, size_t remainingDepth, bool
 {
     while (true) {
         if ((size_t)(last - first) <= cutoff) {
-            if (!smallSort(first, last)) {
-                insertionSortImpl(first, last, isLeftmost);
-            }
-            break;
+            smallSort(first, last, isLeftmost);
+            return;
         }
 
         if (remainingDepth == 0) {
             heapSort(first, last);
-            break;
+            return;
         }
         remainingDepth--;
 
@@ -352,9 +351,7 @@ void quickSortAltImpl(It first, It last, size_t cutoff, size_t remainingDepth, b
 {
     while (true) {
         if ((size_t)(last - first) <= cutoff) {
-            if (!smallSort(first, last)) {
-                insertionSortImpl(first, last, isLeftmost);
-            }
+            smallSort(first, last, isLeftmost);
             return;
         }
 
@@ -427,9 +424,7 @@ void quickSortThreeWayImpl(It first, It last, size_t cutoff, size_t remainingDep
 {
     while (true) {
         if ((size_t)(last - first) <= cutoff) {
-            if (!smallSort(first, last)) {
-                insertionSortImpl(first, last, isLeftmost);
-            }
+            smallSort(first, last, isLeftmost);
             return;
         }
 
@@ -514,15 +509,13 @@ void quickSortDualPivotImpl(It first, It last, size_t cutoff, size_t remainingDe
 {
     while (true) {
         if ((size_t)(last - first) <= cutoff) {
-            if (!smallSort(first, last)) {
-                insertionSortImpl(first, last, isLeftmost);
-            }
-            break;
+            smallSort(first, last, isLeftmost);
+            return;
         }
 
         if (remainingDepth == 0) {
             heapSort(first, last);
-            break;
+            return;
         }
         remainingDepth--;
 
@@ -614,15 +607,13 @@ void quickSortDualPivotAltImpl(It first, It last, size_t cutoff, size_t remainin
 {
     while (true) {
         if ((size_t)(last - first) <= cutoff) {
-            if (!smallSort(first, last)) {
-                insertionSortImpl(first, last, isLeftmost);
-            }
-            break;
+            smallSort(first, last, isLeftmost);
+            return;
         }
 
         if (remainingDepth == 0) {
             heapSort(first, last);
-            break;
+            return;
         }
         remainingDepth--;
 
@@ -731,45 +722,91 @@ void quickSortDualPivotAltImpl(It first, It last, size_t cutoff, size_t remainin
     }
 }
 
+template<typename It, typename V>
+FORCE_INLINE V* mergeUninit(It first1, It last1, It first2, It last2, V* out)
+{
+    while (first1 != last1 && first2 != last2) {
+        if (*first1 < *first2) {
+            new(out) V(std::move(*first1));
+            ++first1;
+        } else {
+            new(out) V(std::move(*first2));
+            ++first2;
+        }
+        out++;
+    }
+    for (; first1 != last1; ++first1) {
+        new(out) V(std::move(*first1));
+        out++;
+    }
+    for (; first2 != last2; ++first2) {
+        new(out) V(std::move(*first2));
+        out++;
+    }
+    return out;
+}
+
+template<typename It, typename V>
+FORCE_INLINE V* moveUninit(It first, It last, V* out)
+{
+    for (It it = first; it != last; ++it) {
+        new(out) V(std::move(*it));
+        out++;
+    }
+    return out;
+}
+
+template<typename It1, typename It2>
+FORCE_INLINE It2 mergeInit(It1 first1, It1 last1, It1 first2, It1 last2, It2 out)
+{
+    while (first1 != last1 && first2 != last2) {
+        if (*first1 < *first2) {
+            *out = std::move(*first1);
+            ++first1;
+        } else {
+            *out = std::move(*first2);
+            ++first2;
+        }
+        ++out;
+    }
+    for (; first1 != last1; ++first1) {
+        *out = std::move(*first1);
+        ++out;
+    }
+    for (; first2 != last2; ++first2) {
+        *out = std::move(*first2);
+        ++out;
+    }
+    return out;
+}
+
+template<typename It1, typename It2>
+FORCE_INLINE It2 moveInit(It1 first, It1 last, It2 out)
+{
+    for (It1 it = first; it != last; ++it) {
+        *out = std::move(*it);
+        ++out;
+    }
+    return out;
+}
+
 // Merges sorted chunks of size chunkLen into sorted chunks of size chunkLen * 2 into uninitialized buffer.
 template<typename It, typename V>
-void mergeChunksUninitialized(It first, It last, size_t chunkLen, V* buffer)
+void mergeChunksUninit(It first, It last, size_t chunkLen, V* buffer)
 {
     // It's way too easy to mess up with iterators and invoke UB, so let's use indices.
     size_t size = last - first;
     size_t in;
-    V* out = buffer;
     // There must be at least two chunks to merge.
     for (in = 0; in + chunkLen < size; in += chunkLen * 2) {
-        It i1 = first + in;
-        It e1 = i1 + chunkLen;
-        It i2 = e1;
-        It e2 = i2 + std::min((ptrdiff_t)chunkLen, last - i2);
-        while (i1 != e1 && i2 != e2) {
-            if (*i1 < *i2) {
-                new(out) V(std::move(*i1));
-                ++i1;
-            } else {
-                new(out) V(std::move(*i2));
-                ++i2;
-            }
-            out++;
-        }
-        for (; i1 != e1; ++i1) {
-            new(out) V(std::move(*i1));
-            out++;
-        }
-        for (; i2 != e2; ++i2) {
-            new(out) V(std::move(*i2));
-            out++;
-        }
+        It first1 = first + in;
+        It mid = first1 + chunkLen;
+        It last2 = mid + std::min((ptrdiff_t)chunkLen, last - mid);
+        buffer = mergeUninit(first1, mid, mid, last2, buffer);
     }
     // Move the remainder (it can be from 0 to chunkLen - 1).
     if (in < size) {
-        for (It it = first + in; it != last; ++it) {
-            new(out) V(std::move(*it));
-            out++;
-        }
+        moveUninit(first + in, last, buffer);
     }
 }
 
@@ -782,35 +819,14 @@ void mergeChunks(It1 first, It1 last, size_t chunkLen, It2 out)
     size_t in;
     // There must be at least two chunks to merge.
     for (in = 0; in + chunkLen < size; in += chunkLen * 2) {
-        It1 i1 = first + in;
-        It1 e1 = i1 + chunkLen;
-        It1 i2 = e1;
-        It1 e2 = i2 + std::min((ptrdiff_t)chunkLen, last - i2);
-        while (i1 != e1 && i2 != e2) {
-            if (*i1 < *i2) {
-                *out = std::move(*i1);
-                ++i1;
-            } else {
-                *out = std::move(*i2);
-                ++i2;
-            }
-            ++out;
-        }
-        for (; i1 != e1; ++i1) {
-            *out = std::move(*i1);
-            ++out;
-        }
-        for (; i2 != e2; ++i2) {
-            *out = std::move(*i2);
-            ++out;
-        }
+        It1 first1 = first + in;
+        It1 mid = first1 + chunkLen;
+        It1 last2 = mid + std::min((ptrdiff_t)chunkLen, last - mid);
+        out = mergeInit(first1, mid, mid, last2, out);
     }
     // Move the remainder (it can be from 0 to chunkLen - 1).
     if (in < size) {
-        for (It1 it = first + in; it != last; ++it) {
-            *out = std::move(*it);
-            ++out;
-        }
+        moveInit(first + in, last, out);
     }
 }
 
@@ -848,7 +864,7 @@ void mergeSortWithBufImpl(It first, It last, size_t chunkLen, V* buffer)
     }
 
     // Buffer is uninitialized, so first time merge the chunks with placement new.
-    mergeChunksUninitialized(first, last, chunkLen, buffer);
+    mergeChunksUninit(first, last, chunkLen, buffer);
     chunkLen *= 2;
 
     // Merge two times: from buffer to original range and back to buffer.
@@ -878,21 +894,18 @@ void mergeSortWithBufImpl(It first, It last, size_t chunkLen, V* buffer)
 }
 
 // Bottom-up merge sort, which always assumes it can allocate the temporary buffer either on stack or on heap
-// and switches to insertion sort after cutoff.
+// and starts from insertion sort with chunks of size chunkLen.
 template<typename It>
 void mergeSortImpl(It first, It last, size_t chunkLen)
 {
     if ((size_t)(last - first) <= chunkLen) {
-        if (!smallSort(first, last)) {
-            insertionSort(first, last);
-        }
+        smallSort(first, last, true);
         return;
     }
 
     using V = typename std::remove_reference<decltype(*first)>::type;
-    size_t const requiredAlign = alignof(V);
     // Add space to fix the alignment.
-    size_t requiredBufferSize = (last - first) * sizeof(V) + requiredAlign - 1;
+    size_t requiredBufferSize = (last - first) * sizeof(V) + alignof(V) - 1;
     // Either use stack buffer or allocate on the heap.
     char stackBuffer[detail::kMaxStackBufferSize];
     char* heapBuffer = nullptr;
@@ -904,9 +917,99 @@ void mergeSortImpl(It first, It last, size_t chunkLen)
         buffer = stackBuffer;
     }
     // Align buffer.
-    buffer = nextAlignedPtr(buffer, requiredAlign);
+    buffer = nextAlignedPtr(buffer, alignof(V));
 
     mergeSortWithBufImpl(first, last, chunkLen, (V*)buffer);
+
+    if (heapBuffer != nullptr) {
+        delete[] heapBuffer;
+    }
+}
+
+
+// Top-down merge sorts starting with chunkLen size. Assumes that buffer is at least of size (last - first) * sizeof(*first).
+// The invariant is that [first, last) becomes sorted and buffer is only a temporary.
+template<typename It, typename V>
+void mergeSortAltWithBufImpl(It first, It last, size_t cutoff, V* buffer)
+{
+    size_t size = last - first;
+    It mid1 = first + size / 4;
+    It mid2 = first + size / 2;
+    It mid3 = first + size / 2 + size / 4;
+    V* bufferMid1 = buffer + size / 4;
+    V* bufferMid2 = buffer + size / 2;
+    V* bufferMid3 = buffer + size / 2 + size / 4;
+    V* bufferLast = buffer + size;
+    // We want to do four sorts and two merges in one function call. It allows assuming that buffer is uninitialized
+    // (the callers will the assume that buffer is already initialized).
+    if (size <= cutoff * 4) {
+        if (size > cutoff * 2) {
+            // Do all 4 sorts and 2 merges.
+            smallSort(first, mid1, true);
+            smallSort(mid1, mid2, true);
+            smallSort(mid2, mid3, true);
+            smallSort(mid3, last, true);
+            mergeUninit(first, mid1, mid1, mid2, buffer);
+            mergeUninit(mid2, mid3, mid3, last, bufferMid2);
+            mergeInit(buffer, bufferMid2, bufferMid2, bufferLast, first);
+        } else if (size > cutoff) {
+            // Do 2 sorts, merge and move back from buffer.
+            smallSort(first, mid2, true);
+            smallSort(mid2, last, true);
+            mergeUninit(first, mid2, mid2, last, buffer);
+            moveInit(buffer, bufferLast, first);
+        } else {
+            // Do in-place sort. Unfortunately, we need to initialize the buffer, otherwise we break the predicate.
+            smallSort(first, last, true);
+            for (size_t i = 0; i < size; i++) {
+                new(buffer + i) V();
+            }
+        }
+        return;
+    }
+
+    // Split in 4 parts and do round-trip to buffer and back.
+    mergeSortAltWithBufImpl(first, mid1, cutoff, buffer);
+    mergeSortAltWithBufImpl(mid1, mid2, cutoff, bufferMid1);
+    mergeSortAltWithBufImpl(mid2, mid3, cutoff, bufferMid2);
+    mergeSortAltWithBufImpl(mid3, last, cutoff, bufferMid3);
+    mergeInit(first, mid1, mid1, mid2, buffer);
+    mergeInit(mid2, mid3, mid3, last, bufferMid2);
+    mergeInit(buffer, bufferMid2, bufferMid2, bufferLast, first);
+}
+// Top-down merge sort, which always assumes it can allocate the temporary buffer either on stack or on heap
+// and switches to insertion sort after cutoff.
+template<typename It>
+void mergeSortAltImpl(It first, It last, size_t cutoff)
+{
+    size_t size = last - first;
+    if (size <= cutoff) {
+        smallSort(first, last, true);
+        return;
+    }
+
+    using V = typename std::remove_reference<decltype(*first)>::type;
+    // Add space to fix the alignment.
+    size_t requiredBufferSize = (last - first) * sizeof(V) + alignof(V) - 1;
+    // Either use stack buffer or allocate on the heap.
+    char stackBuffer[detail::kMaxStackBufferSize];
+    char* heapBuffer = nullptr;
+    char* buffer;
+    if (requiredBufferSize > sizeof(stackBuffer)) {
+        heapBuffer = new char[requiredBufferSize];
+        buffer = heapBuffer;
+    } else {
+        buffer = stackBuffer;
+    }
+    // Align buffer.
+    buffer = nextAlignedPtr(buffer, alignof(V));
+
+    mergeSortAltWithBufImpl(first, last, cutoff, (V*)buffer);
+
+    // Clean up the buffer.
+    for (size_t i = 0; i < size; i++) {
+        ((V*)buffer)[i].~V();
+    }
 
     if (heapBuffer != nullptr) {
         delete[] heapBuffer;
@@ -988,6 +1091,17 @@ void mergeSort(It first, It last, size_t chunkLen = 0)
     detail::mergeSortImpl(first, last, chunkLen);
 }
 
+template<typename It>
+void mergeSortAlt(It first, It last, size_t cutoff = 0)
+{
+    if (cutoff == 0) {
+        cutoff = detail::defaultCutoff<typename std::remove_reference<decltype(*first)>::type>();
+    } else if (cutoff < detail::kMinSortCutoff) {
+        cutoff = detail::kMinSortCutoff;
+    }
+    detail::mergeSortAltImpl(first, last, cutoff);
+}
+
 // A helper to call the required method by name.
 template<typename It>
 void callSortMethod(char const* sortMethod, It first, It last)
@@ -1054,6 +1168,16 @@ void callSortMethod(char const* sortMethod, It first, It last)
         mergeSort(first, last, 10);
     } else if (strcmp(sortMethod, "merge-30") == 0) {
         mergeSort(first, last, 30);
+    } else if (strcmp(sortMethod, "merge-alt") == 0) {
+        mergeSortAlt(first, last);
+    } else if (strcmp(sortMethod, "merge-alt-5") == 0) {
+        mergeSortAlt(first, last, 5);
+    } else if (strcmp(sortMethod, "merge-alt-15") == 0) {
+        mergeSortAlt(first, last, 15);
+    } else if (strcmp(sortMethod, "merge-alt-10") == 0) {
+        mergeSortAlt(first, last, 10);
+    } else if (strcmp(sortMethod, "merge-alt-30") == 0) {
+        mergeSortAlt(first, last, 30);
     } else if (strcmp(sortMethod, "pdqsort") == 0) {
         pdqsort(first, last);
     } else if (strcmp(sortMethod, "pdqsort-branchless") == 0) {
