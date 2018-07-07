@@ -14,6 +14,61 @@ using std::unique_ptr;
 using std::string;
 using std::vector;
 
+// An int with a destructive move behavior.
+struct SaferInt
+{
+    SaferInt()
+        : value(INT_MIN)
+    {
+    }
+
+    SaferInt(int _value)
+        : value(_value)
+    {
+    }
+
+    SaferInt(SaferInt const& other)
+        : value(other.value)
+    {
+    }
+
+    SaferInt(SaferInt&& other) noexcept
+        : value(other.value)
+    {
+        other.value = INT_MIN;
+    }
+
+    ~SaferInt()
+    {
+        value = INT_MIN;
+    }
+
+    SaferInt& operator=(SaferInt const& other)
+    {
+        value = other.value;
+        return *this;
+    }
+
+    SaferInt& operator=(SaferInt&& other) noexcept
+    {
+        value = other.value;
+        other.value = INT_MIN;
+        return *this;
+    }
+
+    bool operator==(SaferInt const& other) const
+    {
+        return value == other.value;
+    }
+
+    bool operator<(SaferInt const& other) const
+    {
+        return value < other.value;
+    }
+
+    int value;
+};
+
 // Small compare optimization: only load the few bytes from the start of the strings and compare them. If they are
 // equal, compare the rest.
 
@@ -220,6 +275,39 @@ void allCompareSortInt(char const* sortMethod, vector<vector<int>>& arrays, size
 
 // We cannot simply run sort and check that everything is ok, because we can have out of bounds accesses or some other
 // errors which will generate the correctly sorted array with different values.
+void compareSortSaferInt(char const* sortMethod, vector<SaferInt>& array, vector<SaferInt>& scratch)
+{
+    scratch = array;
+    callSortMethod(sortMethod, array.begin(), array.end());
+    std::sort(scratch.begin(), scratch.end());
+    size_t diffIndex = findDiffIndex(array, scratch);
+    if (diffIndex != SIZE_MAX) {
+        printf("Sorted arrays [%d] differ at index %d:\n", (int)array.size(), (int)diffIndex);
+        for (SaferInt const& v : array) {
+            printf("%d ", v.value);
+        }
+        printf("\nshould be\n");
+        for (SaferInt const& v : scratch) {
+            printf("%d ", v.value);
+        }
+        printf("\n");
+        exit(1);
+    }
+}
+
+void allCompareSortSaferInt(char const* sortMethod, vector<vector<SaferInt>>& arrays, size_t maxSize, char const* arrayType)
+{
+    vector<SaferInt> scratch;
+    scratch.reserve(maxSize);
+    uint64_t startTime = getTimeCounter();
+    for (vector<SaferInt>& array : arrays) {
+        compareSortSaferInt(sortMethod, array, scratch);
+    }
+    printf("Tested %s in %dms\n", arrayType, elapsedMsec(startTime));
+}
+
+// We cannot simply run sort and check that everything is ok, because we can have out of bounds accesses or some other
+// errors which will generate the correctly sorted array with different values.
 void compareSortString(char const* sortMethod, vector<string>& array, vector<string>& scratch)
 {
     scratch = array;
@@ -261,11 +349,11 @@ void compareSortStringView(char const* sortMethod, vector<SimpleStringView>& arr
     size_t diffIndex = findDiffIndex(array, scratch);
     if (diffIndex != SIZE_MAX) {
         printf("Sorted arrays [%d] differ at index %d:\n", (int)array.size(), (int)diffIndex);
-        for (SimpleStringView v : array) {
+        for (SimpleStringView const& v : array) {
             printf("%.*s ", (int)v.length, v.ptr);
         }
         printf("\nvs\n");
-        for (SimpleStringView v : scratch) {
+        for (SimpleStringView const& v : scratch) {
             printf("%.*s ", (int)v.length, v.ptr);
         }
         printf("\n");
@@ -398,6 +486,125 @@ void testSortInt(char const* sortMethod, size_t minSize, size_t maxSize)
             }
         }
         allCompareSortInt(sortMethod, arrays, maxSize, "random two values");
+    }
+
+    printf("All int tests on %s [%d-%d) passed in %dms\n", sortMethod, (int)minSize, (int)maxSize, elapsedMsec(totalStartTime));
+}
+
+
+// Preparers SafeInt test data and runs sorting method on the data, using std::sort to validate the results.
+void testSortSaferInt(char const* sortMethod, size_t minSize, size_t maxSize)
+{
+    uint64_t totalStartTime = getTimeCounter();
+    printf("Running SaferInt tests\n");
+    // Arrays is all the test data prepared at once.
+    vector<vector<SaferInt>> arrays;
+    size_t numTests = maxSize - minSize;
+    arrays.resize(numTests);
+
+    for (size_t size = minSize; size < maxSize; size++) {
+        vector<SaferInt>& array = arrays[size - minSize];
+        array.resize(size);
+        for (size_t i = 0; i < size; i++) {
+            array[i] = 123;
+        }
+    }
+    allCompareSortSaferInt(sortMethod, arrays, maxSize, "one value");
+
+    for (size_t size = minSize; size < maxSize; size++) {
+        vector<SaferInt>& array = arrays[size - minSize];
+        array.resize(size);
+        for (size_t i = 0; i < size; i++) {
+            array[i] = 10000000 + i;
+        }
+    }
+    allCompareSortSaferInt(sortMethod, arrays, maxSize, "ascending");
+
+    for (size_t size = minSize; size < maxSize; size++) {
+        vector<SaferInt>& array = arrays[size - minSize];
+        array.resize(size);
+        for (size_t i = 0; i < size; i++) {
+            array[i] = 10000000 - i;
+        }
+    }
+    allCompareSortSaferInt(sortMethod, arrays, maxSize, "descending");
+
+    for (size_t size = minSize; size < maxSize; size++) {
+        vector<SaferInt>& array = arrays[size - minSize];
+        array.resize(size);
+        for (size_t i = 0; i < size / 2; i++) {
+            array[i] = 10000000 + i;
+        }
+        for (size_t i = size / 2; i < size; i++) {
+            array[i] = 10000000 + size - i;
+        }
+    }
+    allCompareSortSaferInt(sortMethod, arrays, maxSize, "ascending and descending");
+
+    for (size_t size = minSize; size < maxSize; size++) {
+        vector<SaferInt>& array = arrays[size - minSize];
+        array.resize(size);
+        for (size_t i = 0; i < size / 2; i++) {
+            array[i] = 10000000 + i;
+        }
+        for (size_t i = size / 2; i < size; i++) {
+            array[i] = 10000000 - size + i;
+        }
+    }
+    allCompareSortSaferInt(sortMethod, arrays, maxSize, "ascending and ascending");
+
+    for (size_t size = minSize; size < maxSize; size++) {
+        vector<SaferInt>& array = arrays[size - minSize];
+        array.resize(size);
+        for (size_t i = 0; i < size / 4; i++) {
+            array[i] = 10000000 + i;
+        }
+        for (size_t i = size / 4; i < size * 3 / 4; i++) {
+            array[i] = 10000000 + size / 2;
+        }
+        for (size_t i = size * 3 / 4; i < size; i++) {
+            array[i] = 10000000 + i;
+        }
+    }
+    allCompareSortSaferInt(sortMethod, arrays, maxSize, "an array with a plateu");
+
+    {
+        uint32_t seed = (uint32_t)(minSize + maxSize);
+        uint32_t state[4] = { seed, seed, seed, seed };
+        for (size_t size = minSize; size < maxSize; size++) {
+            vector<SaferInt>& array = arrays[size - minSize];
+            array.resize(size);
+            for (size_t i = 0; i < size; i++) {
+                array[i] = randomRange(state, 0, 10000000);
+            }
+        }
+        allCompareSortSaferInt(sortMethod, arrays, maxSize, "random");
+    }
+
+    {
+        uint32_t seed = (uint32_t)(minSize + maxSize);
+        uint32_t state[4] = { seed, seed, seed, seed };
+        for (size_t size = minSize; size < maxSize; size++) {
+            vector<SaferInt>& array = arrays[size - minSize];
+            array.resize(size);
+            for (size_t i = 0; i < size; i++) {
+                array[i] = randomRange(state, 0, 50);
+            }
+        }
+        allCompareSortSaferInt(sortMethod, arrays, maxSize, "random small values");
+    }
+
+    {
+        uint32_t seed = (uint32_t)(minSize + maxSize);
+        uint32_t state[4] = { seed, seed, seed, seed };
+        for (size_t size = minSize; size < maxSize; size++) {
+            vector<SaferInt>& array = arrays[size - minSize];
+            array.resize(size);
+            for (size_t i = 0; i < size; i++) {
+                array[i] = randomRange(state, 0, 2);
+            }
+        }
+        allCompareSortSaferInt(sortMethod, arrays, maxSize, "random two values");
     }
 
     printf("All int tests on %s [%d-%d) passed in %dms\n", sortMethod, (int)minSize, (int)maxSize, elapsedMsec(totalStartTime));
@@ -685,7 +892,7 @@ void parseSize(char const* arg, size_t* minSize, size_t* maxSize)
 int main(int argc, char** argv)
 {
     if (argc != 3 && argc != 4) {
-        printf("Usage: %s sort-method size[-size] [int|string|string-view]\n", argv[0]);
+        printf("Usage: %s sort-method size[-size] [int|safer-int|string|string-view]\n", argv[0]);
         return 1;
     }
 
@@ -696,6 +903,9 @@ int main(int argc, char** argv)
     char const* type = argc > 3 ? argv[3] : nullptr;
     if (type == nullptr || strcmp(type, "int") == 0) {
         testSortInt(sortMethod, minSize, maxSize);
+    }
+    if (type == nullptr || strcmp(type, "safer-int") == 0) {
+        testSortSaferInt(sortMethod, minSize, maxSize);
     }
     if (type == nullptr || strcmp(type, "string") == 0) {
         testSortString(sortMethod, minSize, maxSize);
