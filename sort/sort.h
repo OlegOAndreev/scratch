@@ -379,7 +379,7 @@ void quickSortAltImpl(It first, It last, size_t cutoff, size_t remainingDepth, b
             // NOTE: Unlike the quickSortImpl, this version requires that pivot is median of 3 or more elements
             // for the following two while loops to not go outside of bounds:
             //  1) it guarantees that there is at least one element less or equal to pivot and at least one or two elements
-            //     greater or equal to pivot, so both loops will terminate in the first iteration of outer while loop;
+            //     greater or equal to pivot, so both loops will terminate in the first iteration of the while (true) loop;
             //  2) after that either left >= right and the loop terminates, or left < right and then the swapped elements
             //     will serve as sentinels.
             while (pivot < *(right - 1)) {
@@ -959,7 +959,7 @@ void mergeSortAltWithBufImpl(It first, It last, size_t cutoff, V* buffer)
             mergeUninit(first, mid2, mid2, last, buffer);
             moveInit(buffer, bufferLast, first);
         } else {
-            // Do in-place sort. Unfortunately, we need to initialize the buffer, otherwise we break the predicate.
+            // Do in-place sort.
             smallSort(first, last, true);
             for (size_t i = 0; i < size; i++) {
                 new(buffer + i) V();
