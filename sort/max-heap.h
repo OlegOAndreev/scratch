@@ -28,23 +28,41 @@ void siftDown(It first, size_t size, size_t idx)
 {
     // No fast-exit here, it is a un-optimization both on gcc and clang for int, string and stringview in my experience.
     auto newValue = std::move(*(first + idx));
-    // If idx >= halfSize, we are in a leaf.
-    size_t halfSize = size / 2;
+    // if idx < halfSize, there are both children available, the case of parent with only one child is processed separately
+    // after the main loop.
+    size_t halfSize = (size - 1) / 2;
     while (idx < halfSize) {
-        // Index of the first child which is guaranteed to exist.
+        // Index of the first child.
         size_t childIdx = idx * 2 + 1;
-        size_t childRIdx = idx * 2 + 2;
-        // Check if there is a right child and it is larger than the left child.
-        if (childRIdx < size && *(first + childIdx) < *(first + childRIdx)) {
-            childIdx = childRIdx;
+        // Making childIt a separate local var improves optimization in clang.
+        It childIt = first + childIdx;
+        if (*childIt < *(childIt + 1)) {
+            ++childIdx;
+            ++childIt;
         }
-        if (!(newValue < *(first + childIdx))) {
-            break;
+        if (!(newValue < *childIt)) {
+            *(first + idx) = std::move(newValue);
+            return;
         }
-        *(first + idx) = std::move(*(first + childIdx));
+        *(first + idx) = std::move(*childIt);
         idx = childIdx;
     }
-    *(first + idx) = std::move(newValue);
+
+    // Check if this is the case where there is one element with only one child. This can happen only if the size is even
+    // and we reached here because the index was larger or equal to halfSize.
+    if (idx == halfSize && size % 2 == 0) {
+        size_t childIdx = idx * 2 + 1;
+        It childIt = first + childIdx;
+        if (newValue < *childIt) {
+            *(first + idx) = std::move(*childIt);
+            *(first + childIdx) = std::move(newValue);
+        } else {
+            *(first + idx) = std::move(newValue);
+        }
+    } else {
+        *(first + idx) = std::move(newValue);
+    }
+
 }
 
 } // namespace detail
