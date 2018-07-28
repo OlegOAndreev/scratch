@@ -587,16 +587,22 @@ int main(int argc, char** argv)
         // Some default sizes, which are not too slow and not too fast on my machine (Macbook Pro 13 2015).
         testSortInt(sortMethod1, sortMethod2, 0, 8000);
         testSortInt(sortMethod1, sortMethod2, 10000, 11000);
+        testSortInt(sortMethod1, sortMethod2, 1000000, 1000005);
         testSortSaferInt(sortMethod1, sortMethod2, 0, 8000);
         testSortSaferInt(sortMethod1, sortMethod2, 10000, 11000);
+        testSortSaferInt(sortMethod1, sortMethod2, 1000000, 1000005);
         testSortDouble(sortMethod1, sortMethod2, 0, 8000);
         testSortDouble(sortMethod1, sortMethod2, 10000, 11000);
+        testSortDouble(sortMethod1, sortMethod2, 1000000, 1000005);
         testSortString(sortMethod1, sortMethod2, 0, 3000);
         testSortString(sortMethod1, sortMethod2, 10000, 10250);
+        testSortString(sortMethod1, sortMethod2, 100000, 100050);
         testSortBigString(sortMethod1, sortMethod2, 0, 2000);
         testSortBigString(sortMethod1, sortMethod2, 10000, 10200);
+        testSortBigString(sortMethod1, sortMethod2, 100000, 100020);
         testSortStringView(sortMethod1, sortMethod2, 0, 4000);
         testSortStringView(sortMethod1, sortMethod2, 10000, 10500);
+        testSortStringView(sortMethod1, sortMethod2, 100000, 100050);
     } else {
         size_t minSize;
         size_t maxSize;
