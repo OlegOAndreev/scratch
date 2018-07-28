@@ -1,0 +1,19 @@
+#!/bin/sh
+
+# Script to run from build directory.
+
+set -x
+
+NDK_DIRECTORY=/Users/ooandreev/Library/Android/sdk/ndk-bundle
+NDK_ARCH_ABI=arm64-v8a
+#NDK_ARCH_ABI=armeabi-v7a
+NDK_VERSION=23
+NDK_TOOLCHAIN_VERSION=clang
+
+cmake -DCMAKE_SYSTEM_NAME=Android \
+  -DCMAKE_ANDROID_NDK=$NDK_DIRECTORY \
+  -DCMAKE_ANDROID_ARCH_ABI=$NDK_ARCH_ABI \
+  -DCMAKE_SYSTEM_VERSION=$NDK_VERSION \
+  -DCMAKE_ANDROID_STL_TYPE=c++_static \
+  -DCMAKE_ANDROID_NDK_TOOLCHAIN_VERSION=$NDK_TOOLCHAIN_VERSION \
+  $*
