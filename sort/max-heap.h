@@ -63,24 +63,24 @@ void siftDown(It first, size_t size, size_t idx)
     }
 #else
     // No fast-exit here, it is a un-optimization both on gcc and clang for int, string and stringview in my experience.
-     auto newValue = std::move(*(first + idx));
-     // If idx >= halfSize, we are in a leaf.
-     size_t halfSize = size / 2;
-     while (idx < halfSize) {
-         // Index of the first child which is guaranteed to exist.
-         size_t childIdx = idx * 2 + 1;
-         size_t childRIdx = idx * 2 + 2;
-         // Check if there is a right child and it is larger than the left child.
-         if (childRIdx < size && *(first + childIdx) < *(first + childRIdx)) {
-             childIdx = childRIdx;
-         }
-         if (!(newValue < *(first + childIdx))) {
-             break;
-         }
-         *(first + idx) = std::move(*(first + childIdx));
-         idx = childIdx;
-     }
-     *(first + idx) = std::move(newValue);
+    auto newValue = std::move(*(first + idx));
+    // If idx >= halfSize, we are in a leaf.
+    size_t halfSize = size / 2;
+    while (idx < halfSize) {
+        // Index of the first child which is guaranteed to exist.
+        size_t childIdx = idx * 2 + 1;
+        size_t childRIdx = idx * 2 + 2;
+        // Check if there is a right child and it is larger than the left child.
+        if (childRIdx < size && *(first + childIdx) < *(first + childRIdx)) {
+            childIdx = childRIdx;
+        }
+        if (!(newValue < *(first + childIdx))) {
+            break;
+        }
+        *(first + idx) = std::move(*(first + childIdx));
+        idx = childIdx;
+    }
+    *(first + idx) = std::move(newValue);
 #endif
 }
 
