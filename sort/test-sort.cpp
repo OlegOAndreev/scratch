@@ -8,6 +8,17 @@
 #include "common.h"
 #include "sort.h"
 
+// Exclude other testing arrays, use only randomly generated.
+#define ONLY_RANDOM
+
+// If defined, count each SaferInt and SimpleStringView compare.
+//#define COUNT_COMPARES
+
+#if defined(COUNT_COMPARES)
+int numSaferIntCompares = 0;
+int numStringViewCompares = 0;
+#endif
+
 // Sort testing utilities.
 
 using std::unique_ptr;
@@ -63,6 +74,9 @@ struct SaferInt
 
     bool operator<(SaferInt const& other) const
     {
+#if defined(COUNT_COMPARES)
+        numSaferIntCompares++;
+#endif
         return value < other.value;
     }
 
@@ -95,6 +109,7 @@ FORCE_INLINE SmallCompareType load_smallCompareType(void const* p)
     return load_i32(p);
 }
 #endif
+
 
 // Simple string view for tests.
 struct SimpleStringView
@@ -142,6 +157,9 @@ struct SimpleStringView
 
     bool operator<(SimpleStringView const& other) const
     {
+#if defined(COUNT_COMPARES)
+        numStringViewCompares++;
+#endif
 #if defined(USE_SMALL_COMPARE_UINTPTR) || defined(USE_SMALL_COMPARE_UINT32)
         char const* ptr1 = ptr;
         char const* ptr2 = other.ptr;
@@ -240,6 +258,21 @@ size_t findDiffIndex(vector<T> const& array1, vector<T> const& array2)
     return SIZE_MAX;
 }
 
+void printFaster(char const* sortMethod1, char const* sortMethod2, double ratio)
+{
+    if (ratio > 1.2) {
+        printf("%s MUCH faster", sortMethod2);
+    } else if (ratio > 1.02) {
+        printf("%s faster", sortMethod2);
+    } else if (ratio < 0.8) {
+        printf("%s MUCH faster", sortMethod1);
+    } else if (ratio < 0.98) {
+        printf("%s faster", sortMethod1);
+    } else {
+        printf("equal");
+    }
+}
+
 template<typename T, typename ToStdout>
 void allCompareSort(ToStdout const& toStdout, char const* sortMethod1, char const* sortMethod2,
                     vector<vector<T>>& arrays, char const* arrayType)
@@ -270,7 +303,7 @@ void allCompareSort(ToStdout const& toStdout, char const* sortMethod1, char cons
                 toStdout(v);
                 printf(" ");
             }
-            printf("\vs\n");
+            printf("\nvs\n");
             for (T const& v : array2) {
                 toStdout(v);
                 printf(" ");
@@ -281,8 +314,9 @@ void allCompareSort(ToStdout const& toStdout, char const* sortMethod1, char cons
     }
 
     double ratio = (double)runTime1 / runTime2;
-    char const* faster = ratio > 1 ? sortMethod2 : sortMethod1;
-    printf("%s: %dms vs %dms (%.2f, %s faster)\n", arrayType, runTime1, runTime2, ratio, faster);
+    printf("%s: %dms vs %dms (%.2f, ", arrayType, runTime1, runTime2, ratio);
+    printFaster(sortMethod1, sortMethod2, ratio);
+    printf(")\n");
 }
 
 // Preparers test data and runs sorting method on the data, using std::sort to validate the results.
@@ -300,6 +334,7 @@ void testSortImpl(char const* typeName, Generator const& generator, ToStdout con
     size_t numTests = maxSize - minSize;
     arrays.resize(numTests);
 
+#if !defined(ONLY_RANDOM)
     for (size_t size = minSize; size < maxSize; size++) {
         vector<T>& array = arrays[size - minSize];
         array.resize(size);
@@ -308,7 +343,9 @@ void testSortImpl(char const* typeName, Generator const& generator, ToStdout con
         }
     }
     allCompareSort<T>(toStdout, sortMethod1, sortMethod2, arrays, "one value");
+#endif
 
+#if !defined(ONLY_RANDOM)
     for (size_t size = minSize; size < maxSize; size++) {
         vector<T>& array = arrays[size - minSize];
         array.resize(size);
@@ -317,7 +354,9 @@ void testSortImpl(char const* typeName, Generator const& generator, ToStdout con
         }
     }
     allCompareSort<T>(toStdout, sortMethod1, sortMethod2, arrays, "ascending");
+#endif
 
+#if !defined(ONLY_RANDOM)
     for (size_t size = minSize; size < maxSize; size++) {
         vector<T>& array = arrays[size - minSize];
         array.resize(size);
@@ -326,7 +365,9 @@ void testSortImpl(char const* typeName, Generator const& generator, ToStdout con
         }
     }
     allCompareSort<T>(toStdout, sortMethod1, sortMethod2, arrays, "descending");
+#endif
 
+#if !defined(ONLY_RANDOM)
     for (size_t size = minSize; size < maxSize; size++) {
         vector<T>& array = arrays[size - minSize];
         array.resize(size);
@@ -338,7 +379,9 @@ void testSortImpl(char const* typeName, Generator const& generator, ToStdout con
         }
     }
     allCompareSort<T>(toStdout, sortMethod1, sortMethod2, arrays, "ascending and descending");
+#endif
 
+#if !defined(ONLY_RANDOM)
     for (size_t size = minSize; size < maxSize; size++) {
         vector<T>& array = arrays[size - minSize];
         array.resize(size);
@@ -350,7 +393,9 @@ void testSortImpl(char const* typeName, Generator const& generator, ToStdout con
         }
     }
     allCompareSort<T>(toStdout, sortMethod1, sortMethod2, arrays, "ascending and ascending");
+#endif
 
+#if !defined(ONLY_RANDOM)
     for (size_t size = minSize; size < maxSize; size++) {
         vector<T>& array = arrays[size - minSize];
         array.resize(size);
@@ -365,6 +410,7 @@ void testSortImpl(char const* typeName, Generator const& generator, ToStdout con
         }
     }
     allCompareSort<T>(toStdout, sortMethod1, sortMethod2, arrays, "an array with a plateu");
+#endif
 
     {
         uint32_t seed = (uint32_t)(minSize + maxSize);
@@ -379,6 +425,7 @@ void testSortImpl(char const* typeName, Generator const& generator, ToStdout con
         allCompareSort<T>(toStdout, sortMethod1, sortMethod2, arrays, "random");
     }
 
+#if !defined(ONLY_RANDOM)
     {
         uint32_t seed = (uint32_t)(minSize + maxSize);
         uint32_t state[4] = { seed, seed, seed, seed };
@@ -391,7 +438,9 @@ void testSortImpl(char const* typeName, Generator const& generator, ToStdout con
         }
         allCompareSort<T>(toStdout, sortMethod1, sortMethod2, arrays, "random small values");
     }
+#endif
 
+#if !defined(ONLY_RANDOM)
     {
         uint32_t seed = (uint32_t)(minSize + maxSize);
         uint32_t state[4] = { seed, seed, seed, seed };
@@ -404,6 +453,7 @@ void testSortImpl(char const* typeName, Generator const& generator, ToStdout con
         }
         allCompareSort<T>(toStdout, sortMethod1, sortMethod2, arrays, "random two values");
     }
+#endif
 
     printf("All %s tests on %s vs %s [%d-%d) passed in %dms\n",
            typeName, sortMethod1, sortMethod2, (int)minSize, (int)maxSize, elapsedMsec(totalStartTime));
@@ -571,5 +621,10 @@ int main(int argc, char** argv)
             testSortStringView(sortMethod1, sortMethod2, minSize, maxSize);
         }
     }
+
+#if defined(COUNT_COMPARES)
+    printf("Number compares: SaferInt %d, SimpleStringView %d\n", numSaferIntCompares, numStringViewCompares);
+#endif
+
     return 0;
 }
