@@ -272,21 +272,33 @@ FORCE_INLINE void smallSort(It first, It last, bool isLeftmost = true)
     }
 }
 
-// A heap-sort implementation. If useStdHeap is true, uses std::make_heap/std::push_heap/std::pop_heap to make the heap,
-// otherwise uses makeHeap/pushHeap/popHeap.
+// A heap-sort implementation, using makeHeap/popHeap from max-heap.h.
 template<typename It>
-void heapSort(It first, It last, bool useStdHeap = false)
+void heapSort(It first, It last)
 {
-    if (useStdHeap) {
-        std::make_heap(first, last);
-        for (size_t i = last - first; i > 1; i--) {
-            std::pop_heap(first, first + i);
-        }
-    } else {
-        makeHeap(first, last);
-        for (size_t i = last - first; i > 1; i--) {
-            popHeap(first, first + i);
-        }
+    makeHeap(first, last);
+    for (size_t i = last - first; i > 1; i--) {
+        popHeap(first, first + i);
+    }
+}
+
+// A heap-sort implementation, using std::make_heap/std::pop_heap.
+template<typename It>
+void heapStdSort(It first, It last)
+{
+    std::make_heap(first, last);
+    for (size_t i = last - first; i > 1; i--) {
+        std::pop_heap(first, first + i);
+    }
+}
+
+// A heap-sort implementation, using makeHeapAlt/popHeapAlt with alternative implementation from max-heap.h.
+template<typename It>
+void heapSortAlt(It first, It last)
+{
+    makeHeapAlt(first, last);
+    for (size_t i = last - first; i > 1; i--) {
+        popHeapAlt(first, first + i);
     }
 }
 
@@ -1151,9 +1163,11 @@ void callSortMethod(char const* sortMethod, It first, It last)
     } else if (strcmp(sortMethod, "quick-2pivot-alt-30") == 0) {
         quickSortDualPivotAlt(first, last, 30);
     } else if (strcmp(sortMethod, "heap") == 0) {
-        heapSort(first, last, false);
+        heapSort(first, last);
+    } else if (strcmp(sortMethod, "heap-alt") == 0) {
+        heapSortAlt(first, last);
     } else if (strcmp(sortMethod, "heap-std") == 0) {
-        heapSort(first, last, true);
+        heapStdSort(first, last);
     } else if (strcmp(sortMethod, "selection") == 0) {
         selectionSort(first, last);
     } else if (strcmp(sortMethod, "insertion") == 0) {
