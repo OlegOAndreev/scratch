@@ -8,25 +8,23 @@ template<typename It>
 void siftUp(It first, size_t idx)
 {
     // Fast exit for already heap case.
-    if (*(first + idx) < *(first + (idx - 1) / 2)) {
+    size_t parentIdx = (idx - 1) / 2;
+    if (*(first + idx) < *(first + parentIdx)) {
         return;
     }
     auto newValue = std::move(*(first + idx));
-    while (idx > 0) {
-        size_t parentIdx = (idx - 1) / 2;
-        if (newValue < *(first + parentIdx)) {
-            break;
-        }
+    do {
         *(first + idx) = std::move(*(first + parentIdx));
         idx = parentIdx;
-    }
+        parentIdx = (idx - 1) / 2;
+    } while (idx > 0 && *(first + parentIdx) < newValue);
     *(first + idx) = std::move(newValue);
 }
 
 template<typename It>
 void siftDown(It first, size_t size, size_t idx)
 {
-#if 0
+#if 1
     // No fast-exit here, it is a un-optimization both on gcc and clang for int, string and stringview in my experience.
     auto newValue = std::move(*(first + idx));
     // if idx < halfSize, there are both children available, the case of parent with only one child is processed separately
@@ -86,9 +84,52 @@ void siftDown(It first, size_t size, size_t idx)
 #endif
 }
 
+// An optimization from libstdc++: start with moving the value into the leaf and the do a siftUp. This is an optimization
+// because the new value has a very large probability of being a leaf value (or near-leaf), so we skip a lot of useless
+// value compares. Ideally, alt version should be used for int/float-type values.
+template<typename It>
+void siftDownAlt(It first, size_t size, size_t idx)
+{
+    size_t startIdx = idx;
+    // No fast-exit here, it is a un-optimization both on gcc and clang for int, string and stringview in my experience.
+    auto newValue = std::move(*(first + idx));
+    // if idx < halfSize, there are both children available, the case of parent with only one child is processed separately
+    // after the main loop.
+    size_t halfSize = (size - 1) / 2;
+    while (idx < halfSize) {
+        // Index of the first child.
+        size_t childIdx = idx * 2 + 1;
+        // Making childIt a separate local var improves optimization in clang.
+        It childIt = first + childIdx;
+        if (*childIt < *(childIt + 1)) {
+            ++childIdx;
+            ++childIt;
+        }
+        *(first + idx) = std::move(*childIt);
+        idx = childIdx;
+    }
+
+    // Check if this is the case where there is one element with only one child. This can happen only if the size is even
+    // and we reached here because the index was larger or equal to halfSize.
+    if (idx == halfSize && size % 2 == 0) {
+        size_t childIdx = idx * 2 + 1;
+        *(first + idx) = std::move(*(first + childIdx));
+        idx = childIdx;
+    }
+
+    // We now overshot the target index and the idx is the leaf index. Return newValue to where it belongs.
+    size_t parentIdx = (idx - 1) / 2;
+    while (idx > startIdx && *(first + parentIdx) < newValue) {
+        *(first + idx) = std::move(*(first + parentIdx));
+        idx = parentIdx;
+        parentIdx = (idx - 1) / 2;
+    }
+    *(first + idx) = std::move(newValue);
+}
+
 } // namespace detail
 
-// Makes the max-heap in the range [first, last)
+// Makes the max-heap in the range [first, last).
 template<typename It>
 void makeHeap(It first, It last)
 {
@@ -100,6 +141,21 @@ void makeHeap(It first, It last)
     // I hate unsigned arithmetic.
     for (size_t idx = halfSize + 1; idx > 0; idx--) {
         detail::siftDown(first, size, idx - 1);
+    }
+}
+
+// A verson of makeHeap, using alternative implementation of siftDown.
+template<typename It>
+void makeHeapAlt(It first, It last)
+{
+    if (last - first <= 1) {
+        return;
+    }
+    size_t size = last - first;
+    size_t halfSize = size / 2;
+    // I hate unsigned arithmetic.
+    for (size_t idx = halfSize + 1; idx > 0; idx--) {
+        detail::siftDownAlt(first, size, idx - 1);
     }
 }
 
@@ -120,4 +176,15 @@ void popHeap(It first, It last)
     }
     std::swap(*first, *(last - 1));
     detail::siftDown(first, last - first - 1, 0);
+}
+
+// A version of popHeap, using alternative implementation of siftDown.
+template<typename It>
+void popHeapAlt(It first, It last)
+{
+    if (last - first <= 1) {
+        return;
+    }
+    std::swap(*first, *(last - 1));
+    detail::siftDownAlt(first, last - first - 1, 0);
 }
