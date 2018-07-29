@@ -8,22 +8,25 @@
 #include "common.h"
 #include "sort.h"
 
+// If defined, count each SaferInt and SimpleStringView compare, copy and move.
+#define COUNT_OPS
+
 // Exclude other testing arrays, use only randomly generated.
 #define ONLY_RANDOM
-
-// If defined, count each SaferInt and SimpleStringView compare.
-//#define COUNT_COMPARES
-
-#if defined(COUNT_COMPARES)
-int numSaferIntCompares = 0;
-int numStringViewCompares = 0;
-#endif
-
-// Sort testing utilities.
 
 using std::unique_ptr;
 using std::string;
 using std::vector;
+
+#if defined(COUNT_OPS)
+int numSaferIntCompares = 0;
+int numSaferIntCopies = 0;
+int numSaferIntMoves = 0;
+int numStringViewCompares = 0;
+int numStringViewCopies = 0;
+int numStringViewMoves = 0;
+#endif
+
 
 // An int with a destructive move behavior.
 struct SaferInt
@@ -41,11 +44,17 @@ struct SaferInt
     SaferInt(SaferInt const& other)
         : value(other.value)
     {
+#if defined(COUNT_OPS)
+        numSaferIntCopies++;
+#endif
     }
 
     SaferInt(SaferInt&& other) noexcept
         : value(other.value)
     {
+#if defined(COUNT_OPS)
+        numSaferIntMoves++;
+#endif
         other.value = INT_MIN;
     }
 
@@ -56,12 +65,18 @@ struct SaferInt
 
     SaferInt& operator=(SaferInt const& other)
     {
+#if defined(COUNT_OPS)
+        numSaferIntCopies++;
+#endif
         value = other.value;
         return *this;
     }
 
     SaferInt& operator=(SaferInt&& other) noexcept
     {
+#if defined(COUNT_OPS)
+        numSaferIntMoves++;
+#endif
         value = other.value;
         other.value = INT_MIN;
         return *this;
@@ -74,7 +89,7 @@ struct SaferInt
 
     bool operator<(SaferInt const& other) const
     {
-#if defined(COUNT_COMPARES)
+#if defined(COUNT_OPS)
         numSaferIntCompares++;
 #endif
         return value < other.value;
@@ -123,10 +138,48 @@ struct SimpleStringView
     {
     }
 
+    SimpleStringView(SimpleStringView const& other)
+        : ptr(other.ptr)
+        , length(other.length)
+    {
+#if defined(COUNT_OPS)
+        numStringViewCopies++;
+#endif
+    }
+
+    SimpleStringView(SimpleStringView&& other) noexcept
+        : ptr(other.ptr)
+        , length(other.length)
+    {
+#if defined(COUNT_OPS)
+        numStringViewMoves++;
+#endif
+    }
+
     SimpleStringView(char* _ptr, size_t _length)
         : ptr(_ptr)
         , length(_length)
     {
+    }
+
+    SimpleStringView& operator=(SimpleStringView const& other)
+    {
+#if defined(COUNT_OPS)
+        numStringViewCopies++;
+#endif
+        ptr = other.ptr;
+        length = other.length;
+        return *this;
+    }
+
+    SimpleStringView& operator=(SimpleStringView&& other) noexcept
+    {
+#if defined(COUNT_OPS)
+        numStringViewMoves++;
+#endif
+        ptr = other.ptr;
+        length = other.length;
+        return *this;
     }
 
     bool operator==(SimpleStringView const& other) const
@@ -157,7 +210,7 @@ struct SimpleStringView
 
     bool operator<(SimpleStringView const& other) const
     {
-#if defined(COUNT_COMPARES)
+#if defined(COUNT_OPS)
         numStringViewCompares++;
 #endif
 #if defined(USE_SMALL_COMPARE_UINTPTR) || defined(USE_SMALL_COMPARE_UINT32)
@@ -628,7 +681,9 @@ int main(int argc, char** argv)
         }
     }
 
-#if defined(COUNT_COMPARES)
+#if defined(COUNT_OPS)
+    printf("Number copies: SaferInt %d, SimpleStringView %d\n", numSaferIntCopies, numStringViewCopies);
+    printf("Number moves: SaferInt %d, SimpleStringView %d\n", numSaferIntMoves, numStringViewMoves);
     printf("Number compares: SaferInt %d, SimpleStringView %d\n", numSaferIntCompares, numStringViewCompares);
 #endif
 
