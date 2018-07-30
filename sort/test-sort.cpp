@@ -629,54 +629,62 @@ void parseSize(char const* arg, size_t* minSize, size_t* maxSize)
 int main(int argc, char** argv)
 {
     if (argc < 3 || argc > 5) {
-        printf("Usage: %s sort-method sort-method size[-size] [int|safer-int|double|string|big-string|string-view]\n", argv[0]);
+        printf("Usage: %s sort-method sort-method [int|safer-int|double|string|big-string|string-view] [size[-size]]\n", argv[0]);
         return 1;
     }
 
     char const* sortMethod1 = argv[1];
     char const* sortMethod2 = argv[2];
-    if (argc == 3) {
-        printf("Running all with default sizes\n");
+    if (argc == 3 || argc == 4) {
+        printf("Running with default sizes\n");
+        char const* type = argc > 3 ? argv[3] : nullptr;
         // Some default sizes, which are not too slow and not too fast on my machine (Macbook Pro 13 2015).
-        testSortInt(sortMethod1, sortMethod2, 0, 8000);
-        testSortInt(sortMethod1, sortMethod2, 10000, 11000);
-        testSortInt(sortMethod1, sortMethod2, 1000000, 1000005);
-        testSortSaferInt(sortMethod1, sortMethod2, 0, 8000);
-        testSortSaferInt(sortMethod1, sortMethod2, 10000, 11000);
-        testSortSaferInt(sortMethod1, sortMethod2, 1000000, 1000005);
-        testSortDouble(sortMethod1, sortMethod2, 0, 8000);
-        testSortDouble(sortMethod1, sortMethod2, 10000, 11000);
-        testSortDouble(sortMethod1, sortMethod2, 1000000, 1000005);
-        testSortString(sortMethod1, sortMethod2, 0, 3000);
-        testSortString(sortMethod1, sortMethod2, 10000, 10250);
-        testSortString(sortMethod1, sortMethod2, 100000, 100050);
-        testSortBigString(sortMethod1, sortMethod2, 0, 2000);
-        testSortBigString(sortMethod1, sortMethod2, 10000, 10200);
-        testSortBigString(sortMethod1, sortMethod2, 100000, 100020);
-        testSortStringView(sortMethod1, sortMethod2, 0, 4000);
-        testSortStringView(sortMethod1, sortMethod2, 10000, 10500);
-        testSortStringView(sortMethod1, sortMethod2, 100000, 100050);
-    } else {
-        size_t minSize;
-        size_t maxSize;
-        parseSize(argv[3], &minSize, &maxSize);
-        char const* type = argc > 4 ? argv[4] : nullptr;
         if (type == nullptr || strcmp(type, "int") == 0) {
-            testSortInt(sortMethod1, sortMethod2, minSize, maxSize);
+            testSortInt(sortMethod1, sortMethod2, 0, 8000);
+            testSortInt(sortMethod1, sortMethod2, 10000, 11000);
+            testSortInt(sortMethod1, sortMethod2, 1000000, 1000005);
         }
         if (type == nullptr || strcmp(type, "safer-int") == 0) {
-            testSortSaferInt(sortMethod1, sortMethod2, minSize, maxSize);
+            testSortSaferInt(sortMethod1, sortMethod2, 0, 8000);
+            testSortSaferInt(sortMethod1, sortMethod2, 10000, 11000);
+            testSortSaferInt(sortMethod1, sortMethod2, 1000000, 1000005);
         }
         if (type == nullptr || strcmp(type, "double") == 0) {
-            testSortDouble(sortMethod1, sortMethod2, minSize, maxSize);
+            testSortDouble(sortMethod1, sortMethod2, 0, 8000);
+            testSortDouble(sortMethod1, sortMethod2, 10000, 11000);
+            testSortDouble(sortMethod1, sortMethod2, 1000000, 1000005);
         }
         if (type == nullptr || strcmp(type, "string") == 0) {
-            testSortString(sortMethod1, sortMethod2, minSize, maxSize);
+            testSortString(sortMethod1, sortMethod2, 0, 3000);
+            testSortString(sortMethod1, sortMethod2, 10000, 10250);
+            testSortString(sortMethod1, sortMethod2, 100000, 100050);
         }
         if (type == nullptr || strcmp(type, "big-string") == 0) {
-            testSortBigString(sortMethod1, sortMethod2, minSize, maxSize);
+            testSortBigString(sortMethod1, sortMethod2, 0, 2000);
+            testSortBigString(sortMethod1, sortMethod2, 10000, 10200);
+            testSortBigString(sortMethod1, sortMethod2, 100000, 100020);
         }
         if (type == nullptr || strcmp(type, "string-view") == 0) {
+            testSortStringView(sortMethod1, sortMethod2, 0, 4000);
+            testSortStringView(sortMethod1, sortMethod2, 10000, 10500);
+            testSortStringView(sortMethod1, sortMethod2, 100000, 100050);
+        }
+    } else {
+        char const* type = argv[3];
+        size_t minSize;
+        size_t maxSize;
+        parseSize(argv[4], &minSize, &maxSize);
+        if (strcmp(type, "int") == 0) {
+            testSortInt(sortMethod1, sortMethod2, minSize, maxSize);
+        } else if (strcmp(type, "safer-int") == 0) {
+            testSortSaferInt(sortMethod1, sortMethod2, minSize, maxSize);
+        } else if (strcmp(type, "double") == 0) {
+            testSortDouble(sortMethod1, sortMethod2, minSize, maxSize);
+        } else if (strcmp(type, "string") == 0) {
+            testSortString(sortMethod1, sortMethod2, minSize, maxSize);
+        } else if (strcmp(type, "big-string") == 0) {
+            testSortBigString(sortMethod1, sortMethod2, minSize, maxSize);
+        } else if (strcmp(type, "string-view") == 0) {
             testSortStringView(sortMethod1, sortMethod2, minSize, maxSize);
         }
     }
