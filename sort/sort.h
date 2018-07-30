@@ -985,7 +985,7 @@ void mergeSortAltWithBufImpl(It first, It last, size_t cutoff, V* buffer)
             mergeUninit(mid2, mid3, mid3, last, bufferMid2);
             mergeInit(buffer, bufferMid2, bufferMid2, bufferLast, first);
         } else if (size > cutoff) {
-            // Do 2 sorts, merge and move back from buffer.
+            // Do 2 sorts directly to buffer, and merge back from buffer.
             insertionSortToUninit(first, mid2, buffer);
             insertionSortToUninit(mid2, last, bufferMid2);
             mergeInit(buffer, bufferMid2, bufferMid2, bufferLast, first);
