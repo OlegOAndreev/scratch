@@ -1,6 +1,3 @@
-#define RTE_MACHINE_CPUFLAG_AVX2
-#include "rte_memcpy.h"
-
 #include <algorithm>
 #include <stdio.h>
 #include <stdint.h>
@@ -8,6 +5,16 @@
 #include <string.h>
 
 #include "common.h"
+
+#if defined(CPU_IS_X86_64)
+#define RTE_MACHINE_CPUFLAG_AVX2
+#include "rte_memcpy.h"
+#endif
+
+// Defines if we have an assembly file with memcpy.
+#if defined(__GNUC__)
+#define HAS_ASM_MEMCPY
+#endif
 
 // Usage:
 //   memcpy-test                runs benchmarks for all buffer sizes (L1, L2, MAIN) and all predefined block sizes,
@@ -45,13 +52,15 @@ void libcMemcpy(char* dst, const char* src, size_t size)
     memcpy(dst, src, size);
 }
 
+#if defined(CPU_IS_X86_64)
 void rteMemcpy(char* dst, const char* src, size_t size)
 {
     rte_memcpy(dst, src, size);
 }
+#endif
 
 // MSVC cannot compile the asm source anyway, use it only to verify MinGW results.
-#if !defined(_MSC_VER)
+#if defined(CPU_IS_X86_64) && defined(HAS_ASM_MEMCPY)
 bool isAvxSupported() asm("_isAvxSupported");
 #else
 bool isAvxSupported()
@@ -60,13 +69,19 @@ bool isAvxSupported()
 }
 #endif
 
-void naiveSseMemcpyUnrolledV2Cpp(char* dst, const char* src, size_t size);
+#if defined(CPU_IS_X86_64) || defined(CPU_IS_AARCH64)
+void naiveSseOrNeonMemcpyUnrolledV2Cpp(char* dst, const char* src, size_t size);
+#endif
+
+#if defined (CPU_IS_X86_64)
 void naiveAvxMemcpyUnrolledV2Cpp(char* dst, const char* src, size_t size);
 void naiveAvxMemcpyUnrolledV3Cpp(char* dst, const char* src, size_t size);
-#if !defined(_MSC_VER)
-void naiveMemcpy(char* dst, const char* src, size_t size) asm("_naiveMemcpy");
-void naiveMemcpyAligned(char* dst, const char* src, size_t size) asm("_naiveMemcpyAligned");
-void naiveMemcpyUnrolled(char* dst, const char* src, size_t size) asm("_naiveMemcpyUnrolled");
+#endif
+
+#if defined(CPU_IS_X86_64) && defined(HAS_ASM_MEMCPY)
+void naiveMemcpy_x86_64(char* dst, const char* src, size_t size) asm("_naiveMemcpy_x86_64");
+void naiveMemcpyAligned_x86_64(char* dst, const char* src, size_t size) asm("_naiveMemcpyAligned_x86_64");
+void naiveMemcpyUnrolled_x86_64(char* dst, const char* src, size_t size) asm("_naiveMemcpyUnrolled_x86_64");
 void naiveSseMemcpy(char* dst, const char* src, size_t size) asm("_naiveSseMemcpy");
 void naiveSseMemcpyAligned(char* dst, const char* src, size_t size) asm("_naiveSseMemcpyAligned");
 void naiveSseMemcpyUnrolledBody(char* dst, const char* src, size_t size) asm("_naiveSseMemcpyUnrolledBody");
@@ -79,7 +94,7 @@ void naiveAvxMemcpyUnrolledV2(char* dst, const char* src, size_t size) asm("_nai
 void naiveAvxMemcpyUnrolledNT(char* dst, const char* src, size_t size) asm("_naiveAvxMemcpyUnrolledNT");
 void repMovsbMemcpy(char* dst, const char* src, size_t size) asm("_repMovsbMemcpy");
 void repMovsqMemcpy(char* dst, const char* src, size_t size) asm("_repMovsqMemcpy");
-void memcpyFromMusl(char* dst, const char* src, size_t size) asm("_memcpyFromMusl");
+void memcpyFromMusl_x86_64(char* dst, const char* src, size_t size) asm("_memcpyFromMusl_x86_64");
 void folly_memcpy(char* dst, const char* src, size_t size) asm("_folly_memcpy");
 #endif
 
@@ -93,14 +108,21 @@ struct {
     bool avxRequired;
 } memcpyFuncs[] = {
     DECLARE_MEMCPY_FUNC(libcMemcpy, false),
-    DECLARE_MEMCPY_FUNC(naiveSseMemcpyUnrolledV2Cpp, false),
-    DECLARE_MEMCPY_FUNC(naiveAvxMemcpyUnrolledV2Cpp, true),
-    DECLARE_MEMCPY_FUNC(naiveAvxMemcpyUnrolledV3Cpp, true),
+
+#if defined(CPU_IS_X86_64) || defined(CPU_IS_AARCH64)
+    DECLARE_MEMCPY_FUNC(naiveSseOrNeonMemcpyUnrolledV2Cpp, false),
+#endif
+
+#if defined(CPU_IS_X86_64)
+    DECLARE_MEMCPY_FUNC(naiveAvxOrNeonMemcpyUnrolledV2Cpp, true),
+    DECLARE_MEMCPY_FUNC(naiveAvxOrNeonMemcpyUnrolledV3Cpp, true),
     DECLARE_MEMCPY_FUNC(rteMemcpy, true),
-#if !defined(_MSC_VER)
-//    DECLARE_MEMCPY_FUNC(naiveMemcpy, false),
-//    DECLARE_MEMCPY_FUNC(naiveMemcpyAligned, false),
-//    DECLARE_MEMCPY_FUNC(naiveMemcpyUnrolled, false),
+#endif
+
+#if defined(CPU_IS_X86_64) && defined(HAS_ASM_MEMCPY)
+//    DECLARE_MEMCPY_FUNC(naiveMemcpy_x86_64, false),
+//    DECLARE_MEMCPY_FUNC(naiveMemcpyAligned_x86_64, false),
+//    DECLARE_MEMCPY_FUNC(naiveMemcpyUnrolled_x86_64, false),
 //    DECLARE_MEMCPY_FUNC(naiveSseMemcpy, false),
 //    DECLARE_MEMCPY_FUNC(naiveSseMemcpyAligned, false),
 //    DECLARE_MEMCPY_FUNC(naiveSseMemcpyUnrolledBody, false),
@@ -112,9 +134,9 @@ struct {
     DECLARE_MEMCPY_FUNC(naiveAvxMemcpyUnrolledV2, true),
 //    DECLARE_MEMCPY_FUNC(naiveAvxMemcpyUnrolledNT, true),
     DECLARE_MEMCPY_FUNC(repMovsbMemcpy, false),
-//    DECLARE_MEMCPY_FUNC(repMovsqMemcpy, false),
-    DECLARE_MEMCPY_FUNC(memcpyFromMusl, false),
-//    DECLARE_MEMCPY_FUNC(folly_memcpy, true),
+    DECLARE_MEMCPY_FUNC(repMovsqMemcpy, false),
+    DECLARE_MEMCPY_FUNC(memcpyFromMusl_x86_64, false),
+    DECLARE_MEMCPY_FUNC(folly_memcpy, true),
 #endif
 };
 

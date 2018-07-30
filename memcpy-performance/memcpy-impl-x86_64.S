@@ -38,8 +38,8 @@ _isAvxSupported:
 
 /* The basic unaligned memcpy: does 8-byte copies, then 1-byte copies the rest */
 .p2align 4
-.global _naiveMemcpy
-_naiveMemcpy:
+.global _naiveMemcpy_x86_64
+_naiveMemcpy_x86_64:
 	PROLOGUE
     /* rcx = 8-byte aligned size, rdx = rest of size */
     mov %rdx, %rcx
@@ -70,8 +70,8 @@ _naiveMemcpy:
 
 // The basic unaligned memcpy: aligns the dst with 1-byte copies, does 8-byte copies, then 1-byte copies the rest. */
 .p2align 4
-.global _naiveMemcpyAligned
-_naiveMemcpyAligned:
+.global _naiveMemcpyAligned_x86_64
+_naiveMemcpyAligned_x86_64:
     PROLOGUE
     cmp $8, %rdx
     jb 3f
@@ -117,8 +117,8 @@ _naiveMemcpyAligned:
 
 /* The unrolled memcpy: unrolled 8-byte copies (32 per loop), then unrolled copies the rest. */
 .p2align 4
-.global _naiveMemcpyUnrolled
-_naiveMemcpyUnrolled:
+.global _naiveMemcpyUnrolled_x86_64
+_naiveMemcpyUnrolled_x86_64:
     PROLOGUE
     /* rcx = 32-byte aligned size, rdx = rest of size. */
     mov %rdx, %rcx
@@ -1008,8 +1008,8 @@ _repMovsqMemcpy:
 
 /* A copy of memcpy from musl src/string/x86_64/memcpy.s */
 .p2align 4
-.global _memcpyFromMusl
-_memcpyFromMusl:
+.global _memcpyFromMusl_x86_64
+_memcpyFromMusl_x86_64:
     PROLOGUE
     mov %rdi, %rax
     cmp $8, %rdx

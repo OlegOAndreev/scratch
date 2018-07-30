@@ -1,7 +1,11 @@
-#include <immintrin.h>
-#include <stdint.h>
-
 #include "common.h"
+
+#if defined(CPU_IS_X86_64)
+#include <immintrin.h>
+#elif defined(CPU_IS_AARCH64)
+#include <arm_neon.h>
+#endif
+#include <stdint.h>
 
 #if defined(WITH_IACA_SUPPORT)
 #include <iacaMarks.h>
@@ -10,36 +14,6 @@
 #define IACA_END
 #endif
 
-FORCE_INLINE __m128 load_f128(const char* p)
-{
-    return _mm_loadu_ps((const float*)p);
-}
-
-FORCE_INLINE void store_f128(char* p, __m128 v)
-{
-    return _mm_storeu_ps((float*)p, v);
-}
-
-FORCE_INLINE void storea_f128(char* p, __m128 v)
-{
-    return _mm_store_ps((float*)p, v);
-}
-
-FORCE_INLINE __m256 load_f256(const char* p)
-{
-    return _mm256_loadu_ps((const float*)p);
-}
-
-FORCE_INLINE void store_f256(char* p, __m256 v)
-{
-    return _mm256_storeu_ps((float*)p, v);
-}
-
-FORCE_INLINE void storea_f256(char* p, __m256 v)
-{
-    return _mm256_store_ps((float*)p, v);
-}
-
 // Returns the distance to the next aligned pointer after p.
 template <size_t alignment>
 FORCE_INLINE size_t toAlignPtr(char* p)
@@ -47,18 +21,78 @@ FORCE_INLINE size_t toAlignPtr(char* p)
     return (UINTPTR_MAX - (uintptr_t)p + 1) & (alignment - 1);
 }
 
-// A C++ reimplementation of naiveSseMemcpyUnrolledV2.
-void naiveSseMemcpyUnrolledV2Cpp(char* dst, const char* src, size_t size)
+#if defined(CPU_IS_X86_64)
+
+using vector128_t = __m128;
+using vector256_t = __m256;
+
+FORCE_INLINE vector128_t load_v128(const char* p)
+{
+    return _mm_loadu_ps((const float*)p);
+}
+
+FORCE_INLINE void store_v128(char* p, vector128_t v)
+{
+    return _mm_storeu_ps((float*)p, v);
+}
+
+FORCE_INLINE void storea_v128(char* p, vector128_t v)
+{
+    return _mm_store_ps((float*)p, v);
+}
+
+FORCE_INLINE vector256_t load_v256(const char* p)
+{
+    return _mm256_loadu_ps((const float*)p);
+}
+
+FORCE_INLINE void store_v256(char* p, vector256_t v)
+{
+    return _mm256_storeu_ps((float*)p, v);
+}
+
+FORCE_INLINE void storea_v256(char* p, vector256_t v)
+{
+    return _mm256_store_ps((float*)p, v);
+}
+
+#elif defined(CPU_IS_AARCH64)
+
+using vector128_t = int8x16_t;
+
+FORCE_INLINE vector128_t load_v128(const char* p)
+{
+    return vld1q_s8((const int8_t*)p);
+}
+
+FORCE_INLINE void store_v128(char* p, vector128_t v)
+{
+    return vst1q_s8((int8_t*)p, v);
+}
+
+FORCE_INLINE void storea_v128(char* p, vector128_t v)
+{
+    return vst1q_s8((int8_t*)p, v);
+}
+
+#else
+
+#error "Arch unsupported"
+
+#endif
+
+// A C++ reimplementation of naiveSseMemcpyUnrolledV2, including primitive support for ARM NEON.
+void naiveSseOrNeonMemcpyUnrolledV2Cpp(char* dst, const char* src, size_t size)
 {
     IACA_START
     if (size <= 32) {
         // Copy [17-32], [9-16], [5-8] via two load/stores, the 1-4 bytes via single load/stores with branches.
         if (size > 16) {
             // Copy the first 16 bytes and the last 16 bytes (potentially overlapping).
-            __m128 x0 = load_f128(src);
-            __m128 x1 = load_f128(src + size - 16);
-            store_f128(dst, x0);
-            store_f128(dst + size - 16, x1);
+            vector128_t x0 = load_v128(src);
+            vector128_t x1 = load_v128(src + size - 16);
+            store_v128(dst, x0);
+            store_v128(dst + size - 16, x1);
         } else if (size > 8) {
             // Copy the first 8 bytes and the last 8 bytes (potentially overlapping).
             int64_t i0 = load_i64(src);
@@ -89,35 +123,37 @@ void naiveSseMemcpyUnrolledV2Cpp(char* dst, const char* src, size_t size)
         size_t toAlignedDst = toAlignPtr<16>(dst);
         if (toAlignedDst != 0) {
             // We have at least 32 bytes, copy the first 16 one (including toAlignedDst bytes).
-            __m128 x0 = load_f128(src);
+            vector128_t x0 = load_v128(src);
             src += toAlignedDst;
-            store_f128(dst, x0);
+            store_v128(dst, x0);
             dst += toAlignedDst;
             size -= toAlignedDst;
         }
 
         // Load the last 32 bytes. Useful if size % 32 != 0.
-        __m128 xlast0 = load_f128(src + size - 32);
-        __m128 xlast1 = load_f128(src + size - 16);
+        vector128_t xlast0 = load_v128(src + size - 32);
+        vector128_t xlast1 = load_v128(src + size - 16);
         char* lastDst = dst + size - 32;
 
         // Main loop: do 32-byte iters (one less iter if size % 64 == 0, because we have already loaded the last 64
         // bytes).
         for (size_t i = (size - 1) / 32; i != 0; i--) {
-            __m128 x0 = load_f128(src);
-            __m128 x1 = load_f128(src + 16);
+            vector128_t x0 = load_v128(src);
+            vector128_t x1 = load_v128(src + 16);
             src += 32;
-            storea_f128(dst, x0);
-            storea_f128(dst + 16, x1);
+            storea_v128(dst, x0);
+            storea_v128(dst + 16, x1);
             dst += 32;
         }
 
         // Store the last 32 bytes (potentially overlapping with the last iter).
-        store_f128(lastDst, xlast0);
-        store_f128(lastDst + 16, xlast1);
+        store_v128(lastDst, xlast0);
+        store_v128(lastDst + 16, xlast1);
     }
     IACA_END
 }
+
+#if defined(CPU_IS_X86_64)
 
 // A C++ reimplementation of naiveAvxMemcpyUnrolledV2.
 void naiveAvxMemcpyUnrolledV2Cpp(char* dst, const char* src, size_t size)
@@ -127,17 +163,17 @@ void naiveAvxMemcpyUnrolledV2Cpp(char* dst, const char* src, size_t size)
         // Copy [33-64], [17-32], [9-16], [5-8] via two load/stores, the 1-4 bytes via single
         // load/stores with branches.
         if (size > 32) {
-            __m256 y0 = load_f256(src);
-            __m256 y1 = load_f256(src + size - 32);
-            store_f256(dst, y0);
-            store_f256(dst + size - 32, y1);
+            vector256_t y0 = load_v256(src);
+            vector256_t y1 = load_v256(src + size - 32);
+            store_v256(dst, y0);
+            store_v256(dst + size - 32, y1);
             _mm256_zeroupper();
         } else if (size > 16) {
             // Copy the first 16 bytes and the last 16 bytes (potentially overlapping).
-            __m128 x0 = load_f128(src);
-            __m128 x1 = load_f128(src + size - 16);
-            store_f128(dst, x0);
-            store_f128(dst + size - 16, x1);
+            vector128_t x0 = load_v128(src);
+            vector128_t x1 = load_v128(src + size - 16);
+            store_v128(dst, x0);
+            store_v128(dst + size - 16, x1);
         } else if (size > 8) {
             // Copy the first 8 bytes and the last 8 bytes (potentially overlapping).
             int64_t i0 = load_i64(src);
@@ -168,32 +204,32 @@ void naiveAvxMemcpyUnrolledV2Cpp(char* dst, const char* src, size_t size)
         size_t toAlignedDst = toAlignPtr<32>(dst);
         if (toAlignedDst != 0) {
             // We have at least 64 bytes, copy the first 32 one (including toAlignedDst bytes).
-            __m256 y0 = load_f256(src);
+            vector256_t y0 = load_v256(src);
             src += toAlignedDst;
-            store_f256(dst, y0);
+            store_v256(dst, y0);
             dst += toAlignedDst;
             size -= toAlignedDst;
         }
 
         // Load the last 64 bytes. Useful if size % 64 != 0.
-        __m256 ylast0 = load_f256(src + size - 64);
-        __m256 ylast1 = load_f256(src + size - 32);
+        vector256_t ylast0 = load_v256(src + size - 64);
+        vector256_t ylast1 = load_v256(src + size - 32);
         char* lastDst = dst + size - 64;
 
         // Main loop: do 64-byte iters (one less iter if size % 64 == 0, because we have already loaded the last 64
         // bytes).
         for (size_t i = (size - 1) / 64; i != 0; i--) {
-            __m256 y0 = load_f256(src);
-            __m256 y1 = load_f256(src + 32);
+            vector256_t y0 = load_v256(src);
+            vector256_t y1 = load_v256(src + 32);
             src += 64;
-            storea_f256(dst, y0);
-            storea_f256(dst + 32, y1);
+            storea_v256(dst, y0);
+            storea_v256(dst + 32, y1);
             dst += 64;
         }
 
         // Store the last 64 bytes (potentially overlapping with the last iter).
-        store_f256(lastDst, ylast0);
-        store_f256(lastDst + 32, ylast1);
+        store_v256(lastDst, ylast0);
+        store_v256(lastDst + 32, ylast1);
         _mm256_zeroupper();
     }
     IACA_END
@@ -207,17 +243,17 @@ void naiveAvxMemcpyUnrolledV3Cpp(char* dst, const char* src, size_t size)
         // Copy [33-64], [17-32], [9-16], [5-8] via two load/stores, the 1-4 bytes via single
         // load/stores with branches.
         if (size > 32) {
-            __m256 y0 = load_f256(src);
-            __m256 y1 = load_f256(src + size - 32);
-            store_f256(dst, y0);
-            store_f256(dst + size - 32, y1);
+            vector256_t y0 = load_v256(src);
+            vector256_t y1 = load_v256(src + size - 32);
+            store_v256(dst, y0);
+            store_v256(dst + size - 32, y1);
             _mm256_zeroupper();
         } else if (size > 16) {
             // Copy the first 16 bytes and the last 16 bytes (potentially overlapping).
-            __m128 x0 = load_f128(src);
-            __m128 x1 = load_f128(src + size - 16);
-            store_f128(dst, x0);
-            store_f128(dst + size - 16, x1);
+            vector128_t x0 = load_v128(src);
+            vector128_t x1 = load_v128(src + size - 16);
+            store_v128(dst, x0);
+            store_v128(dst + size - 16, x1);
         } else if (size > 8) {
             // Copy the first 8 bytes and the last 8 bytes (potentially overlapping).
             int64_t i0 = load_i64(src);
@@ -244,51 +280,51 @@ void naiveAvxMemcpyUnrolledV3Cpp(char* dst, const char* src, size_t size)
             }
         }
     } else {
-        __m256 ylast0 = load_f256(src + size - 64);
-        __m256 ylast1 = load_f256(src + size - 32);
+        vector256_t ylast0 = load_v256(src + size - 64);
+        vector256_t ylast1 = load_v256(src + size - 32);
         char* lastDst = dst + size - 64;
 
         if (size <= 512) {
             if (size >= 256) {
-                __m256 y0 = load_f256(src);
-                __m256 y1 = load_f256(src + 32);
-                __m256 y2 = load_f256(src + 64);
-                __m256 y3 = load_f256(src + 96);
-                __m256 y4 = load_f256(src + 128);
-                __m256 y5 = load_f256(src + 160);
-                __m256 y6 = load_f256(src + 192);
-                __m256 y7 = load_f256(src + 224);
+                vector256_t y0 = load_v256(src);
+                vector256_t y1 = load_v256(src + 32);
+                vector256_t y2 = load_v256(src + 64);
+                vector256_t y3 = load_v256(src + 96);
+                vector256_t y4 = load_v256(src + 128);
+                vector256_t y5 = load_v256(src + 160);
+                vector256_t y6 = load_v256(src + 192);
+                vector256_t y7 = load_v256(src + 224);
                 src += 256;
-                store_f256(dst, y0);
-                store_f256(dst + 32, y1);
-                store_f256(dst + 64, y2);
-                store_f256(dst + 96, y3);
-                store_f256(dst + 128, y4);
-                store_f256(dst + 160, y5);
-                store_f256(dst + 192, y6);
-                store_f256(dst + 224, y7);
+                store_v256(dst, y0);
+                store_v256(dst + 32, y1);
+                store_v256(dst + 64, y2);
+                store_v256(dst + 96, y3);
+                store_v256(dst + 128, y4);
+                store_v256(dst + 160, y5);
+                store_v256(dst + 192, y6);
+                store_v256(dst + 224, y7);
                 dst += 256;
                 size -= 256;
             }
             if (size >= 128) {
-                __m256 y0 = load_f256(src);
-                __m256 y1 = load_f256(src + 32);
-                __m256 y2 = load_f256(src + 64);
-                __m256 y3 = load_f256(src + 96);
+                vector256_t y0 = load_v256(src);
+                vector256_t y1 = load_v256(src + 32);
+                vector256_t y2 = load_v256(src + 64);
+                vector256_t y3 = load_v256(src + 96);
                 src += 128;
-                store_f256(dst, y0);
-                store_f256(dst + 32, y1);
-                store_f256(dst + 64, y2);
-                store_f256(dst + 96, y3);
+                store_v256(dst, y0);
+                store_v256(dst + 32, y1);
+                store_v256(dst + 64, y2);
+                store_v256(dst + 96, y3);
                 dst += 128;
                 size -= 128;
             }
             if (size >= 64) {
-                __m256 y0 = load_f256(src);
-                __m256 y1 = load_f256(src + 32);
+                vector256_t y0 = load_v256(src);
+                vector256_t y1 = load_v256(src + 32);
                 src += 64;
-                store_f256(dst, y0);
-                store_f256(dst + 32, y1);
+                store_v256(dst, y0);
+                store_v256(dst + 32, y1);
                 dst += 64;
                 size -= 64;
             }
@@ -297,9 +333,9 @@ void naiveAvxMemcpyUnrolledV3Cpp(char* dst, const char* src, size_t size)
             size_t toAlignedDst = toAlignPtr<32>(dst);
             if (toAlignedDst != 0) {
                 // We have at least 64 bytes, copy the first 32 one (including toAlignedDst bytes).
-                __m256 y0 = load_f256(src);
+                vector256_t y0 = load_v256(src);
                 src += toAlignedDst;
-                store_f256(dst, y0);
+                store_v256(dst, y0);
                 dst += toAlignedDst;
                 size -= toAlignedDst;
             }
@@ -307,19 +343,21 @@ void naiveAvxMemcpyUnrolledV3Cpp(char* dst, const char* src, size_t size)
             // Main loop: do 64-byte iters (one less iter if size % 64 == 0, because we have already loaded the last 64
             // bytes).
             for (size_t i = (size - 1) / 64; i != 0; i--) {
-                __m256 y0 = load_f256(src);
-                __m256 y1 = load_f256(src + 32);
+                vector256_t y0 = load_v256(src);
+                vector256_t y1 = load_v256(src + 32);
                 src += 64;
-                storea_f256(dst, y0);
-                storea_f256(dst + 32, y1);
+                storea_v256(dst, y0);
+                storea_v256(dst + 32, y1);
                 dst += 64;
             }
         }
 
         // Store the last 64 bytes (potentially overlapping with the last iter).
-        store_f256(lastDst, ylast0);
-        store_f256(lastDst + 32, ylast1);
+        store_v256(lastDst, ylast0);
+        store_v256(lastDst + 32, ylast1);
         _mm256_zeroupper();
     }
     IACA_END
 }
+
+#endif // CPU_IS_X86_64
