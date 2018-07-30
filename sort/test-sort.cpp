@@ -313,7 +313,7 @@ size_t findDiffIndex(vector<T> const& array1, vector<T> const& array2)
 
 void printFaster(char const* sortMethod1, char const* sortMethod2, double ratio)
 {
-    if (ratio > 1.2) {
+    if (ratio > 1.25) {
         printf("%s MUCH faster", sortMethod2);
     } else if (ratio > 1.02) {
         printf("%s faster", sortMethod2);
@@ -327,28 +327,24 @@ void printFaster(char const* sortMethod1, char const* sortMethod2, double ratio)
 }
 
 template<typename T, typename ToStdout>
-void allCompareSort(ToStdout const& toStdout, char const* sortMethod1, char const* sortMethod2,
-                    vector<vector<T>>& arrays, char const* arrayType)
+double compareSortImpl(ToStdout const& toStdout, char const* sortMethod1, char const* sortMethod2,
+                       vector<vector<T>>& arrays1, vector<vector<T>>& arrays2,
+                       char const* arrayType)
 {
-    vector<vector<T>> arraysCopy;
-    for (vector<T> const& array : arrays) {
-        arraysCopy.push_back(array);
-    }
-
     uint64_t startTime1 = getTimeCounter();
-    for (vector<T>& array : arrays) {
+    for (vector<T>& array : arrays1) {
         callSortMethod(sortMethod1, array.begin(), array.end());
     }
     int runTime1 = elapsedMsec(startTime1);
     uint64_t startTime2 = getTimeCounter();
-    for (vector<T>& array : arraysCopy) {
+    for (vector<T>& array : arrays2) {
         callSortMethod(sortMethod2, array.begin(), array.end());
     }
     int runTime2 = elapsedMsec(startTime2);
 
-    for (size_t i = 0; i < arrays.size(); i++) {
-        vector<T> const& array1 = arrays[i];
-        vector<T> const& array2 = arraysCopy[i];
+    for (size_t i = 0; i < arrays1.size(); i++) {
+        vector<T> const& array1 = arrays1[i];
+        vector<T> const& array2 = arrays2[i];
         size_t diffIndex = findDiffIndex(array1, array2);
         if (diffIndex != SIZE_MAX) {
             printf("Sorted arrays [%d] differ at index %d:\n", (int)array1.size(), (int)diffIndex);
@@ -367,9 +363,27 @@ void allCompareSort(ToStdout const& toStdout, char const* sortMethod1, char cons
     }
 
     double ratio = (double)runTime1 / runTime2;
-    printf("%s: %dms vs %dms (%.2f, ", arrayType, runTime1, runTime2, ratio);
+    printf("%s: %dms (%s) vs %dms (%s) (%.2f, ", arrayType, runTime1, sortMethod1, runTime2, sortMethod2, ratio);
     printFaster(sortMethod1, sortMethod2, ratio);
     printf(")\n");
+    return ratio;
+}
+
+template<typename T, typename ToStdout>
+void compareSort(ToStdout const& toStdout, char const* sortMethod1, char const* sortMethod2,
+                 vector<vector<T>>& arrays, char const* arrayType)
+{
+    // Sort two times, compare the ratios.
+    vector<vector<T>> arraysCopy1 = arrays;
+    vector<vector<T>> arraysCopy2 = arrays;
+    double ratio1 = compareSortImpl(toStdout, sortMethod1, sortMethod2, arraysCopy1, arraysCopy2, arrayType);
+    arraysCopy1 = arrays;
+    arraysCopy2 = arrays;
+    double ratio2 = compareSortImpl(toStdout, sortMethod2, sortMethod1, arraysCopy1, arraysCopy2, arrayType);
+    double diff = ratio1 * ratio2;
+    if (diff > 1.1 || diff < 0.9) {
+        printf("== WARNING: FLAKY RESULTS ==\n");
+    }
 }
 
 // Preparers test data and runs sorting method on the data, using std::sort to validate the results.
@@ -395,7 +409,7 @@ void testSortImpl(char const* typeName, Generator const& generator, ToStdout con
             array[i] = generator(123);
         }
     }
-    allCompareSort<T>(toStdout, sortMethod1, sortMethod2, arrays, "one value");
+    compareSort<T>(toStdout, sortMethod1, sortMethod2, arrays, "one value");
 #endif
 
 #if !defined(ONLY_RANDOM)
@@ -406,7 +420,7 @@ void testSortImpl(char const* typeName, Generator const& generator, ToStdout con
             array[i] = generator(10000000 + i);
         }
     }
-    allCompareSort<T>(toStdout, sortMethod1, sortMethod2, arrays, "ascending");
+    compareSort<T>(toStdout, sortMethod1, sortMethod2, arrays, "ascending");
 #endif
 
 #if !defined(ONLY_RANDOM)
@@ -417,7 +431,7 @@ void testSortImpl(char const* typeName, Generator const& generator, ToStdout con
             array[i] = generator(10000000 - i);
         }
     }
-    allCompareSort<T>(toStdout, sortMethod1, sortMethod2, arrays, "descending");
+    compareSort<T>(toStdout, sortMethod1, sortMethod2, arrays, "descending");
 #endif
 
 #if !defined(ONLY_RANDOM)
@@ -431,7 +445,7 @@ void testSortImpl(char const* typeName, Generator const& generator, ToStdout con
             array[i] = generator(10000000 + size - i);
         }
     }
-    allCompareSort<T>(toStdout, sortMethod1, sortMethod2, arrays, "ascending and descending");
+    compareSort<T>(toStdout, sortMethod1, sortMethod2, arrays, "ascending and descending");
 #endif
 
 #if !defined(ONLY_RANDOM)
@@ -445,7 +459,7 @@ void testSortImpl(char const* typeName, Generator const& generator, ToStdout con
             array[i] = generator(10000000 - size + i);
         }
     }
-    allCompareSort<T>(toStdout, sortMethod1, sortMethod2, arrays, "ascending and ascending");
+    compareSort<T>(toStdout, sortMethod1, sortMethod2, arrays, "ascending and ascending");
 #endif
 
 #if !defined(ONLY_RANDOM)
@@ -462,7 +476,7 @@ void testSortImpl(char const* typeName, Generator const& generator, ToStdout con
             array[i] = generator(10000000 + i);
         }
     }
-    allCompareSort<T>(toStdout, sortMethod1, sortMethod2, arrays, "an array with a plateu");
+    compareSort<T>(toStdout, sortMethod1, sortMethod2, arrays, "an array with a plateu");
 #endif
 
     {
@@ -475,7 +489,7 @@ void testSortImpl(char const* typeName, Generator const& generator, ToStdout con
                 array[i] = generator(randomRange(state, 0, 10000000));
             }
         }
-        allCompareSort<T>(toStdout, sortMethod1, sortMethod2, arrays, "random");
+        compareSort<T>(toStdout, sortMethod1, sortMethod2, arrays, "random");
     }
 
 #if !defined(ONLY_RANDOM)
@@ -489,7 +503,7 @@ void testSortImpl(char const* typeName, Generator const& generator, ToStdout con
                 array[i] = generator(randomRange(state, 0, 50));
             }
         }
-        allCompareSort<T>(toStdout, sortMethod1, sortMethod2, arrays, "random small values");
+        compareSort<T>(toStdout, sortMethod1, sortMethod2, arrays, "random small values");
     }
 #endif
 
@@ -504,7 +518,7 @@ void testSortImpl(char const* typeName, Generator const& generator, ToStdout con
                 array[i] = generator(randomRange(state, 0, 2));
             }
         }
-        allCompareSort<T>(toStdout, sortMethod1, sortMethod2, arrays, "random two values");
+        compareSort<T>(toStdout, sortMethod1, sortMethod2, arrays, "random two values");
     }
 #endif
 
