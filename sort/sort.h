@@ -223,6 +223,27 @@ void insertionSort(It first, It last)
     insertionSortImpl(first, last, true);
 }
 
+// An insertion sort which writes the results to the uninitialized target buffer.
+template<typename It, typename T>
+FORCE_INLINE void insertionSortToUninit(It first, It last, T* buffer)
+{
+    new(buffer) T(std::move(*first));
+    T* dst = buffer + 1;
+    for (It i = first + 1; i != last; ++i, ++dst) {
+        if (*(dst - 1) < *i) {
+            new(dst) T(std::move(*i));
+            continue;
+        }
+        // Move the elements until the new position for v is found.
+        new(dst) T(std::move(*(dst - 1)));
+        T* j = dst - 1;
+        for (; j > buffer && *i < *(j - 1); j--) {
+            *j = std::move(*(j - 1));
+        }
+        *j = std::move(*i);
+    }
+}
+
 // "Small" sort: specific sorts for sizes 2-3-4 and insertion sort for everything else.
 template<typename It>
 FORCE_INLINE void smallSort(It first, It last, bool isLeftmost = true)
@@ -938,8 +959,7 @@ void mergeSortImpl(It first, It last, size_t chunkLen)
     }
 }
 
-
-// Top-down merge sorts starting with chunkLen size. Assumes that buffer is at least of size (last - first) * sizeof(*first).
+// Top-down merge sorts starting with chunkLen size. Assumes that buffer is at least of size (last - first) * sizeof(V).
 // The invariant is that [first, last) becomes sorted and buffer is only a temporary.
 template<typename It, typename V>
 void mergeSortAltWithBufImpl(It first, It last, size_t cutoff, V* buffer)
@@ -957,22 +977,21 @@ void mergeSortAltWithBufImpl(It first, It last, size_t cutoff, V* buffer)
     if (size <= cutoff * 4) {
         if (size > cutoff * 2) {
             // Do all 4 sorts and 2 merges.
-            smallSort(first, mid1, true);
-            smallSort(mid1, mid2, true);
-            smallSort(mid2, mid3, true);
-            smallSort(mid3, last, true);
+            insertionSort(first, mid1);
+            insertionSort(mid1, mid2);
+            insertionSort(mid2, mid3);
+            insertionSort(mid3, last);
             mergeUninit(first, mid1, mid1, mid2, buffer);
             mergeUninit(mid2, mid3, mid3, last, bufferMid2);
             mergeInit(buffer, bufferMid2, bufferMid2, bufferLast, first);
         } else if (size > cutoff) {
             // Do 2 sorts, merge and move back from buffer.
-            smallSort(first, mid2, true);
-            smallSort(mid2, last, true);
-            mergeUninit(first, mid2, mid2, last, buffer);
-            moveInit(buffer, bufferLast, first);
+            insertionSortToUninit(first, mid2, buffer);
+            insertionSortToUninit(mid2, last, bufferMid2);
+            mergeInit(buffer, bufferMid2, bufferMid2, bufferLast, first);
         } else {
-            // Do in-place sort.
-            smallSort(first, last, true);
+            // Do in-place sort and init the buffer.
+            smallSort(first, last);
             for (size_t i = 0; i < size; i++) {
                 new(buffer + i) V();
             }
@@ -989,6 +1008,7 @@ void mergeSortAltWithBufImpl(It first, It last, size_t cutoff, V* buffer)
     mergeInit(mid2, mid3, mid3, last, bufferMid2);
     mergeInit(buffer, bufferMid2, bufferMid2, bufferLast, first);
 }
+
 // Top-down merge sort, which always assumes it can allocate the temporary buffer either on stack or on heap
 // and switches to insertion sort after cutoff.
 template<typename It>
