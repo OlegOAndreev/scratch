@@ -42,6 +42,10 @@ unsigned processOp(unsigned value, Op op)
 struct OpInterface
 {
     virtual unsigned process(unsigned value) const = 0;
+    // Silence the warning.
+    virtual ~OpInterface()
+    {
+    }
 };
 
 struct OpInterfaceImpl1 : public OpInterface
@@ -224,27 +228,25 @@ unsigned runFunctionPtrFor(unsigned* data, size_t dataSize, std::unique_ptr<Func
 
 int main(int argc, char** argv)
 {
-    srand(0);
-
-    size_t dataSize;
-    int repeatCount;
-    if (argc == 1) {
-        dataSize = 1000000;
-        repeatCount = 50;
-    } else if (argc == 2) {
-        dataSize = atoi(argv[1]);
-        repeatCount = 50;
-    } else if (argc == 3) {
-        dataSize = atoi(argv[1]);
-        repeatCount = atoi(argv[2]);
-    } else {
+    if (argc > 3) {
         printf("Usage: %s [data size [repeat count]]\n", argv[0]);
         return 1;
     }
 
+    // Make dataSize small enough so that it definitely fits in L1 cache by default.
+    size_t dataSize = 1000;
+    int repeatCount = 500000;
+    if (argc > 1) {
+        dataSize = (size_t)atoi(argv[1]);
+    }
+    if (argc > 2) {
+        repeatCount = atoi(argv[2]);
+    }
     printf("Running on %d elements (repeating %d times)\n", (int)dataSize, repeatCount);
+
     std::vector<unsigned> data;
     data.reserve(dataSize);
+    srand(0);
     for (size_t i = 0; i < dataSize; i++) {
         data.push_back(rand() % 100000);
     }
@@ -290,7 +292,16 @@ int main(int argc, char** argv)
     for (size_t i = 0; i < dataSize; i++) {
         sameFunctionImplPtrs.emplace_back(new FunctionImpl(makeFunctionImpl(sameOps[i])));
     }
-    printf("Finished init\n");
+    printf("Finished init, running startup loop, ignore\n");
+
+    // Run initial loop (so that on e.g. Android the CPU reaches the max frequency).
+    unsigned ret = 0;
+    for (int k = 0; k < repeatCount; k++) {
+        for (size_t i = 0; i < dataSize; i++) {
+            ret += functionImpls[i](data[i]);
+        }
+    }
+    printf("Startup finished\n");
 
     unsigned simpleResult = runSimpleFor(data.data(), dataSize, repeatCount);
     unsigned forResult = runFor(data.data(), dataSize, Op::OP_6, repeatCount);
@@ -311,5 +322,5 @@ int main(int argc, char** argv)
         printf("ERROR: Different results\n");
     }
 
-    return simpleResult + switchResult + interfaceResult + functionResult + functionPtrResult;
+    return ret + simpleResult + switchResult + interfaceResult + functionResult + functionPtrResult;
 }
