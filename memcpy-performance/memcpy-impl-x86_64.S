@@ -115,7 +115,7 @@ _naiveMemcpyAligned_x86_64:
 2:  EPILOGUE
     ret
 
-/* The unrolled memcpy: unrolled 8-byte copies (32 per loop), then unrolled copies the rest. */
+/* The unrolled memcpy: unrolled unaligned 8-byte copies (32 per loop), then copies the rest depending on bits in remainder. */
 .p2align 4
 .global _naiveMemcpyUnrolled_x86_64
 _naiveMemcpyUnrolled_x86_64:
@@ -173,7 +173,7 @@ _naiveMemcpyUnrolled_x86_64:
 2:  EPILOGUE
     ret
 
-/* The basic SSE memcpy: aligns the dst with 1-byte copies, does 16-byte copies, then 1-byte copies the rest. */
+/* The basic SSE memcpy: does unaligned 16-byte copies, then 1-byte copies the rest. */
 .p2align 4
 .global _naiveSseMemcpy
 _naiveSseMemcpy:
@@ -255,8 +255,8 @@ _naiveSseMemcpyAligned:
 /* The basic SSE memcpy with unrolled body: aligns the dst with 1-byte copies, does 32-byte copies per loop, then
    1-byte copies the rest. */
 .p2align 4
-.global _naiveSseMemcpyUnrolledBody
-_naiveSseMemcpyUnrolledBody:
+.global _naiveSseMemcpyUnrolledAlignedBody
+_naiveSseMemcpyUnrolledAlignedBody:
     PROLOGUE
     cmp $32, %rdx
     jb 3f
@@ -302,11 +302,11 @@ _naiveSseMemcpyUnrolledBody:
 2:  EPILOGUE
     ret
 
-/* The basic unrolled SSE memcpy: aligns dst with unrolled copies, does 32-byte copies per loop, then unrolled
-   copies the rest. */
+/* The basic unrolled SSE memcpy: aligns dst depending on bits, does 32-byte copies per loop,
+   then copies the rest depending on bits in remainder. */
 .p2align 4
-.global _naiveSseMemcpyUnrolled
-_naiveSseMemcpyUnrolled:
+.global _naiveSseMemcpyUnrolledAligned
+_naiveSseMemcpyUnrolledAligned:
     PROLOGUE
     cmp $32, %rdx
     jb 3f
@@ -391,8 +391,8 @@ _naiveSseMemcpyUnrolled:
    then does unaligned copies of the rest. Dramatically reduces the number of branches compared to
    naiveSseMemcpyUnrolled. */
 .p2align 4
-.global _naiveSseMemcpyUnrolledV2
-_naiveSseMemcpyUnrolledV2:
+.global _naiveSseMemcpyUnrolledAlignedV2
+_naiveSseMemcpyUnrolledAlignedV2:
     PROLOGUE
     cmp $32, %rdx
     ja 3f
@@ -496,8 +496,8 @@ _naiveSseMemcpyUnrolledV2:
 
 /* A version of naiveSseMemcpyUnrolledV2 with non-temporal stores. */
 .p2align 4
-.global _naiveSseMemcpyUnrolledNT
-_naiveSseMemcpyUnrolledNT:
+.global _naiveSseMemcpyUnrolledAlignedV2NT
+_naiveSseMemcpyUnrolledAlignedV2NT:
     PROLOGUE
     cmp $32, %rdx
     ja 3f
@@ -602,8 +602,8 @@ _naiveSseMemcpyUnrolledNT:
 
 /* The basic AVX memcpy: aligns the dst with 1-byte copies, does 32-byte copies, then 1-byte copies the rest. */
 .p2align 4
-.global _naiveAvxMemcpy
-_naiveAvxMemcpy:
+.global _naiveAvxMemcpyAligned
+_naiveAvxMemcpyAligned:
     PROLOGUE
     cmp $32, %rdx
     jb 3f
@@ -648,11 +648,11 @@ _naiveAvxMemcpy:
 2:  EPILOGUE
     ret
 
-/* The basic unrolled AVX memcpy: aligns dst with unrolled copies, does 64-byte copies per loop, then unrolled
-   copies the rest. */
+/* The basic unrolled AVX memcpy: aligns dst depending on bits, does 64-byte copies per loop,
+   then copies the rest depending on bits in remainder. */
 .p2align 4
-.global _naiveAvxMemcpyUnrolled
-_naiveAvxMemcpyUnrolled:
+.global _naiveAvxMemcpyUnrolledAligned
+_naiveAvxMemcpyUnrolledAligned:
     PROLOGUE
     cmp $64, %rdx
     jb 3f
@@ -748,8 +748,8 @@ _naiveAvxMemcpyUnrolled:
    then does unaligned copies of the rest. Dramatically reduces the number of branches compared to
    naiveAvxMemcpyUnrolled */
 .p2align 4
-.global _naiveAvxMemcpyUnrolledV2
-_naiveAvxMemcpyUnrolledV2:
+.global _naiveAvxMemcpyUnrolledAlignedV2
+_naiveAvxMemcpyUnrolledAlignedV2:
     PROLOGUE
     cmp $64, %rdx
     ja 3f
@@ -863,10 +863,10 @@ _naiveAvxMemcpyUnrolledV2:
     EPILOGUE
     ret
 
-/* A version of naiveAvxMemcpyUnrolledV2 with non-temporal stores. */
+/* A version of naiveAvxMemcpyUnrolledAlignedV2 with non-temporal stores. */
 .p2align 4
-.global _naiveAvxMemcpyUnrolledNT
-_naiveAvxMemcpyUnrolledNT:
+.global _naiveAvxMemcpyUnrolledAlignedV2NT
+_naiveAvxMemcpyUnrolledAlignedV2NT:
     PROLOGUE
     cmp $64, %rdx
     ja 3f
