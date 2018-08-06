@@ -68,7 +68,7 @@ _naiveMemcpy_x86_64:
 2:  EPILOGUE
     ret
 
-// The basic unaligned memcpy: aligns the dst with 1-byte copies, does 8-byte copies, then 1-byte copies the rest. */
+/* The basic aligned memcpy: aligns the dst with 1-byte copies, does 8-byte copies, then 1-byte copies the rest. */
 .p2align 4
 .global _naiveMemcpyAligned_x86_64
 _naiveMemcpyAligned_x86_64:
