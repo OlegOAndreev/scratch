@@ -950,7 +950,7 @@ void mergeSortImpl(It first, It last, size_t chunkLen)
         buffer = stackBuffer;
     }
     // Align buffer.
-    buffer = nextAlignedPtr(buffer, alignof(V));
+    buffer = nextAlignedPtr<alignof(V)>(buffer);
 
     mergeSortWithBufImpl(first, last, chunkLen, (V*)buffer);
 
@@ -1034,7 +1034,7 @@ void mergeSortAltImpl(It first, It last, size_t cutoff)
         buffer = stackBuffer;
     }
     // Align buffer.
-    buffer = nextAlignedPtr(buffer, alignof(V));
+    buffer = nextAlignedPtr<alignof(V)>(buffer);
 
     mergeSortAltWithBufImpl(first, last, cutoff, (V*)buffer);
 

@@ -259,8 +259,8 @@ FORCE_INLINE long long byteSwap(long long v)
 }
 
 // Returns the first pointer after ptr, which is aligned according to alignment.
-template<typename T>
-FORCE_INLINE T* nextAlignedPtr(T* ptr, size_t alignment)
+template<size_t alignment, typename T>
+FORCE_INLINE T* nextAlignedPtr(T* ptr)
 {
     size_t remainder = alignment - 1 - ((uintptr_t)ptr + alignment - 1) % alignment;
     return (T*)((uintptr_t)ptr + remainder);
