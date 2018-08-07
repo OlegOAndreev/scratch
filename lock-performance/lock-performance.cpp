@@ -723,6 +723,10 @@ int main(int argc, char** argv)
 #endif
     run<LockingWorkData<TicketLock<EmptyBackoff, CACHE_LINE_WIDTH>>>("ticketlock", method, numThreads, inputSize, workAmount);
     run<LockingWorkData<TicketLock<EmptyBackoff, sizeof(size_t)>>>("ticketlock,unaligned", method, numThreads, inputSize, workAmount);
+    run<LockingWorkData<SemaphoreLock<CACHE_LINE_WIDTH>>>("semaphore", method, numThreads, inputSize, workAmount);
+    run<LockingWorkData<SemaphoreLock<sizeof(Semaphore)>>>("semaphore,unaligned", method, numThreads, inputSize, workAmount);
+    run<LockingWorkData<PaddedBenaphoreLock>>("benaphore", method, numThreads, inputSize, workAmount);
+    run<LockingWorkData<BenaphoreLock>>("benaphore,unaligned", method, numThreads, inputSize, workAmount);
  #if !defined(__APPLE__) // std::mutex and default pthread_mutex is horribly slow on OS X, skip it altogether
     run<LockingWorkData<MutexLock<CACHE_LINE_WIDTH>>>("std::mutex", method, numThreads, inputSize, workAmount);
     run<LockingWorkData<MutexLock<sizeof(pthread_mutex_t)>>>("std::mutex,unaligned", method, numThreads, inputSize, workAmount);
@@ -733,10 +737,6 @@ int main(int argc, char** argv)
     run<LockingWorkData<PThreadMutexUnfairLock<CACHE_LINE_WIDTH>>>("pthread_mutex,unfair", method, numThreads, inputSize, workAmount);
     run<LockingWorkData<PThreadMutexUnfairLock<sizeof(pthread_mutex_t)>>>("pthread_mutex,unfair,unaligned", method, numThreads, inputSize, workAmount);
 #endif
-    run<LockingWorkData<SemaphoreLock<CACHE_LINE_WIDTH>>>("semaphore", method, numThreads, inputSize, workAmount);
-    run<LockingWorkData<SemaphoreLock<sizeof(Semaphore)>>>("semaphore,unaligned", method, numThreads, inputSize, workAmount);
-    run<LockingWorkData<PaddedBenaphoreLock>>("benaphore", method, numThreads, inputSize, workAmount);
-    run<LockingWorkData<BenaphoreLock>>("benaphore,unaligned", method, numThreads, inputSize, workAmount);
 
     return 0;
 }
