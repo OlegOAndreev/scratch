@@ -181,6 +181,127 @@ void naiveMemcpyUnrolledAlignedV2Cpp(char* dst, const char* src, size_t size)
 
 }
 
+// A version of naiveSseMemcpyUnrolledAlignedV3, but with 64-byte iterations.
+void naiveMemcpyUnrolledAlignedV3Cpp(char* dst, const char* src, size_t size)
+{
+    if (size <= 64) {
+        // Copy [33-64], [17-32], [9-16], [5-8] via two load/stores, the 1-4 bytes via single load/stores with branches.
+        if (size > 16) {
+            if (size > 32) {
+                // Copy the first 16 bytes and the last 16 bytes (potentially overlapping).
+                int64_t x0 = load_i64(src);
+                int64_t x1 = load_i64(src + 8);
+                int64_t x2 = load_i64(src + 16);
+                int64_t x3 = load_i64(src + 24);
+                int64_t x4 = load_i64(src + size - 32);
+                int64_t x5 = load_i64(src + size - 24);
+                int64_t x6 = load_i64(src + size - 16);
+                int64_t x7 = load_i64(src + size - 8);
+                store_i64(dst, x0);
+                store_i64(dst + 8, x1);
+                store_i64(dst + 16, x2);
+                store_i64(dst + 24, x3);
+                store_i64(dst + size - 32, x4);
+                store_i64(dst + size - 24, x5);
+                store_i64(dst + size - 16, x6);
+                store_i64(dst + size - 8, x7);
+            } else {
+                // Copy the first 16 bytes and the last 16 bytes (potentially overlapping).
+                int64_t x0 = load_i64(src);
+                int64_t x1 = load_i64(src + 8);
+                int64_t x2 = load_i64(src + size - 16);
+                int64_t x3 = load_i64(src + size - 8);
+                store_i64(dst, x0);
+                store_i64(dst + 8, x1);
+                store_i64(dst + size - 16, x2);
+                store_i64(dst + size - 8, x3);
+            }
+        } else {
+            if (size > 8) {
+                // Copy the first 8 bytes and the last 8 bytes (potentially overlapping).
+                int64_t i0 = load_i64(src);
+                int64_t i1 = load_i64(src + size - 8);
+                store_i64(dst, i0);
+                store_i64(dst + size - 8, i1);
+            } else if (size > 4) {
+                // Copy the first 4 bytes and the last 4 bytes (potentially overlapping).
+                int32_t i0 = load_i32(src);
+                int32_t i1 = load_i32(src + size - 4);
+                store_i32(dst, i0);
+                store_i32(dst + size - 4, i1);
+            } else if (size == 4) {
+                int32_t i0 = load_i32(src);
+                store_i32(dst, i0);
+            } else {
+                if (size & 2) {
+                    int16_t i0 = load_i16(src + size - 2);
+                    store_i16(dst + size - 2, i0);
+                }
+                if (size & 1) {
+                    int8_t i0 = load_i16(src);
+                    store_i8(dst, i0);
+                }
+            }
+        }
+    } else {
+        // Align the dst on 8-byte.
+        size_t toAlignedDst = toAlignPtr<8>(dst);
+        if (toAlignedDst != 0) {
+            // We have at least 32 bytes, copy the first 8 one (including toAlignedDst bytes).
+            int64_t x0 = load_i64(src);
+            src += toAlignedDst;
+            store_i64(dst, x0);
+            dst += toAlignedDst;
+            size -= toAlignedDst;
+        }
+
+        // Load the last 64 bytes. Useful if size % 64 != 0.
+        int64_t xlast0 = load_i64(src + size - 64);
+        int64_t xlast1 = load_i64(src + size - 56);
+        int64_t xlast2 = load_i64(src + size - 48);
+        int64_t xlast3 = load_i64(src + size - 40);
+        int64_t xlast4 = load_i64(src + size - 32);
+        int64_t xlast5 = load_i64(src + size - 24);
+        int64_t xlast6 = load_i64(src + size - 16);
+        int64_t xlast7 = load_i64(src + size - 8);
+        char* lastDst = dst + size - 64;
+
+        // Main loop: do 64-byte iters (one less iter if size % 64 == 0, because we have already loaded the last 64
+        // bytes).
+        for (size_t i = (size - 1) / 64; i != 0; i--) {
+            int64_t x0 = load_i64(src);
+            int64_t x1 = load_i64(src + 8);
+            int64_t x2 = load_i64(src + 16);
+            int64_t x3 = load_i64(src + 24);
+            int64_t x4 = load_i64(src + 32);
+            int64_t x5 = load_i64(src + 40);
+            int64_t x6 = load_i64(src + 48);
+            int64_t x7 = load_i64(src + 56);
+            src += 64;
+            store_i64(dst, x0);
+            store_i64(dst + 8, x1);
+            store_i64(dst + 16, x2);
+            store_i64(dst + 24, x3);
+            store_i64(dst + 32, x4);
+            store_i64(dst + 40, x5);
+            store_i64(dst + 48, x6);
+            store_i64(dst + 56, x7);
+            dst += 64;
+        }
+
+        // Store the last 64 bytes (potentially overlapping with the last iter).
+        store_i64(lastDst, xlast0);
+        store_i64(lastDst + 8, xlast1);
+        store_i64(lastDst + 16, xlast2);
+        store_i64(lastDst + 24, xlast3);
+        store_i64(lastDst + 32, xlast4);
+        store_i64(lastDst + 40, xlast5);
+        store_i64(lastDst + 48, xlast6);
+        store_i64(lastDst + 56, xlast7);
+    }
+
+}
+
 #if defined(CPU_IS_X86_64)
 
 FORCE_INLINE __m128 load_v128(const char* p)

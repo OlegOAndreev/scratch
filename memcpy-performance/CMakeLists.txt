@@ -29,6 +29,8 @@ if(NOT MSVC)
   if(${ARCH} MATCHES "x86_64")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mavx")
     set(ADDITIONAL_SOURCES memcpy-impl-x86_64.S)
+  elseif(${ARCH} MATCHES "aarch64")
+    set(ADDITIONAL_SOURCES memcpy-impl-aarch64.S)
   endif()
 endif()
 

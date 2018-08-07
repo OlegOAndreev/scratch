@@ -73,6 +73,7 @@ bool isAvxSupported()
 
 void naiveMemcpyUnrolledAlignedCpp(char* dst, const char* src, size_t size);
 void naiveMemcpyUnrolledAlignedV2Cpp(char* dst, const char* src, size_t size);
+void naiveMemcpyUnrolledAlignedV3Cpp(char* dst, const char* src, size_t size);
 
 #if defined (CPU_IS_X86_64)
 void naiveSseMemcpyUnrolledAlignedV2Cpp(char* dst, const char* src, size_t size);
@@ -84,7 +85,8 @@ void naiveAvxMemcpyUnrolledAlignedV3Cpp(char* dst, const char* src, size_t size)
 void naiveNeonMemcpyUnrolledAlignedV2Cpp(char* dst, const char* src, size_t size);
 #endif
 
-#if defined(CPU_IS_X86_64) && defined(HAS_ASM_MEMCPY)
+#if defined(HAS_ASM_MEMCPY)
+#if defined(CPU_IS_X86_64)
 void naiveMemcpy_x86_64(char* dst, const char* src, size_t size) asm("_naiveMemcpy_x86_64");
 void naiveMemcpyAligned_x86_64(char* dst, const char* src, size_t size) asm("_naiveMemcpyAligned_x86_64");
 void naiveMemcpyUnrolled_x86_64(char* dst, const char* src, size_t size) asm("_naiveMemcpyUnrolled_x86_64");
@@ -102,6 +104,13 @@ void repMovsbMemcpy(char* dst, const char* src, size_t size) asm("_repMovsbMemcp
 void repMovsqMemcpy(char* dst, const char* src, size_t size) asm("_repMovsqMemcpy");
 void memcpyFromMusl_x86_64(char* dst, const char* src, size_t size) asm("_memcpyFromMusl_x86_64");
 void folly_memcpy(char* dst, const char* src, size_t size) asm("_folly_memcpy");
+#elif defined(CPU_IS_AARCH64)
+void naiveMemcpy_aarch64(char* dst, const char* src, size_t size) asm("_naiveMemcpy_aarch64");
+void naiveMemcpyUnrolledAligned_aarch64(char* dst, const char* src, size_t size) asm("_naiveMemcpyUnrolledAligned_aarch64");
+void naiveMemcpyUnrolledAlignedV2_aarch64(char* dst, const char* src, size_t size) asm("_naiveMemcpyUnrolledAlignedV2_aarch64");
+void naiveMemcpyUnrolledAlignedV2NeonRegs_aarch64(char* dst, const char* src, size_t size) asm("_naiveMemcpyUnrolledAlignedV2NeonRegs_aarch64");
+void naiveMemcpyUnrolledAlignedV3NeonRegs_aarch64(char* dst, const char* src, size_t size) asm("_naiveMemcpyUnrolledAlignedV3NeonRegs_aarch64");
+#endif
 #endif
 
 // Comment and uncomment array entries to enable or disable particular implementation.
@@ -119,6 +128,7 @@ struct {
 
     DECLARE_MEMCPY_FUNC(naiveMemcpyUnrolledAlignedCpp, false),
     DECLARE_MEMCPY_FUNC(naiveMemcpyUnrolledAlignedV2Cpp, false),
+    DECLARE_MEMCPY_FUNC(naiveMemcpyUnrolledAlignedV3Cpp, false),
 
 #if defined(CPU_IS_X86_64)
     DECLARE_MEMCPY_FUNC(naiveSseMemcpyUnrolledAlignedV2Cpp, false),
@@ -130,7 +140,8 @@ struct {
     DECLARE_MEMCPY_FUNC(naiveNeonMemcpyUnrolledAlignedV2Cpp, false),
 #endif
 
-#if defined(CPU_IS_X86_64) && defined(HAS_ASM_MEMCPY)
+#if defined(HAS_ASM_MEMCPY)
+#if defined(CPU_IS_X86_64)
     DECLARE_MEMCPY_FUNC(naiveMemcpy_x86_64, false),
     DECLARE_MEMCPY_FUNC(naiveMemcpyAligned_x86_64, false),
     DECLARE_MEMCPY_FUNC(naiveMemcpyUnrolled_x86_64, false),
@@ -148,6 +159,13 @@ struct {
     DECLARE_MEMCPY_FUNC(repMovsqMemcpy, false),
     DECLARE_MEMCPY_FUNC(memcpyFromMusl_x86_64, false),
     DECLARE_MEMCPY_FUNC(folly_memcpy, true),
+#elif defined(CPU_IS_AARCH64)
+    DECLARE_MEMCPY_FUNC(naiveMemcpy_aarch64, false),
+    DECLARE_MEMCPY_FUNC(naiveMemcpyUnrolledAligned_aarch64, false),
+    DECLARE_MEMCPY_FUNC(naiveMemcpyUnrolledAlignedV2_aarch64, false),
+    DECLARE_MEMCPY_FUNC(naiveMemcpyUnrolledAlignedV2NeonRegs_aarch64, false),
+    DECLARE_MEMCPY_FUNC(naiveMemcpyUnrolledAlignedV3NeonRegs_aarch64, false),
+#endif
 #endif
 };
 
@@ -202,18 +220,18 @@ bool testMemcpyFuncIter(MemcpyFuncType memcpyFunc, char* dst, char* src, size_t 
 
 // Tests memcpy with a few sizes near the given size and different alignments (srcBlock and dstBlock must have
 // some additional space after them).
-bool testMemcpyFuncSize(MemcpyFuncType memcpyFunc, char* dstBlock, char* srcBlock, size_t size,
+bool testMemcpyFuncSize(MemcpyFuncType memcpyFunc, char* dstBlock, char* srcBlock, size_t fromSize, size_t toSize,
                         const char* memcpyName)
 {
-    printf("== Testing size %d\n", (int)size);
+    printf("== Testing sizes [%d, %d)\n", (int)fromSize, (int)toSize);
 
-    if ((size_t)labs(dstBlock - srcBlock) < size + 128) {
+    if ((size_t)labs(dstBlock - srcBlock) < toSize + 128) {
         printf("INTERNAL ERROR: srcBlock and dstBlock not too far apart\n");
         return false;
     }
 
     for (int i = 0; i < 2; i++) {
-        for (size_t testSize = size; testSize < size + 32; testSize++) {
+        for (size_t testSize = fromSize; testSize < toSize; testSize++) {
             for (char* src = srcBlock; src < srcBlock + 16; src++) {
                 for (char* dst = dstBlock; dst < dstBlock + 16; dst++) {
                     if (!testMemcpyFuncIter(memcpyFunc, dst, src, testSize)) {
@@ -242,19 +260,16 @@ bool testMemcpyFunc(MemcpyFuncType memcpyFunc, const char* memcpyName)
     char* bigBlock = new char[bigBlockSize];
 
     // Test with various sizes. Sizes are specifically chosen to be near power-of-two.
-    if (!testMemcpyFuncSize(memcpyFunc, bigBlock, bigBlock + bigBlockSize / 2, 1, memcpyName)) {
+    if (!testMemcpyFuncSize(memcpyFunc, bigBlock, bigBlock + bigBlockSize / 2, 0, 150, memcpyName)) {
         return false;
     }
-    if (!testMemcpyFuncSize(memcpyFunc, bigBlock, bigBlock + bigBlockSize / 2, 100, memcpyName)) {
+    if (!testMemcpyFuncSize(memcpyFunc, bigBlock, bigBlock + bigBlockSize / 2, 900, 1100, memcpyName)) {
         return false;
     }
-    if (!testMemcpyFuncSize(memcpyFunc, bigBlock, bigBlock + bigBlockSize / 2, 1000, memcpyName)) {
+    if (!testMemcpyFuncSize(memcpyFunc, bigBlock, bigBlock + bigBlockSize / 2, (2 << 13) - 10, (2 << 13) + 10, memcpyName)) {
         return false;
     }
-    if (!testMemcpyFuncSize(memcpyFunc, bigBlock, bigBlock + bigBlockSize / 2, 16370, memcpyName)) {
-        return false;
-    }
-    if (!testMemcpyFuncSize(memcpyFunc, bigBlock, bigBlock + bigBlockSize / 2, 131056, memcpyName)) {
+    if (!testMemcpyFuncSize(memcpyFunc, bigBlock, bigBlock + bigBlockSize / 2, (2 << 16) - 10, (2 << 16) + 10, memcpyName)) {
         return false;
     }
 //    if (!testMemcpyFuncSize(memcpyFunc, bigBlock, bigBlock + MAIN_SIZE / 2, 1048560, memcpyName)) {
