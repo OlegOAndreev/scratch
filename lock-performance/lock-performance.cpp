@@ -271,7 +271,11 @@ struct PauseBackoff
 {
     static void backoff()
     {
+#if defined(CPU_IS_X86_64)
         __asm __volatile("pause");
+#elif defined(CPU_IS_AARCH64)
+        __asm __volatile("yield");
+#endif
     }
 };
 
