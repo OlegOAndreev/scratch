@@ -14,8 +14,12 @@
 
 // General notes on various pitch-shifting methods: http://blogs.zynaptiq.com/bernsee/time-pitch-overview/
 
+using std::atan2;
+using std::cos;
+using std::fmod;
 using std::max;
 using std::min;
+using std::sin;
 using std::vector;
 
 enum class SampleFormat {
@@ -441,10 +445,10 @@ struct StftCfg
     vector<kiss_fft_cpx> newFreq;
     kiss_fftr_cfg fftCfg;
     kiss_fftr_cfg fftiCfg;
-    vector<double> newMagnitudes;
-    vector<double> prevPhases;
-    vector<double> prevNewPhases;
-    vector<double> newPhaseDiffs;
+    vector<kiss_fft_scalar> newMagnitudes;
+    vector<kiss_fft_scalar> prevPhases;
+    vector<kiss_fft_scalar> prevNewPhases;
+    vector<kiss_fft_scalar> newPhaseDiffs;
 
     StftCfg(size_t fftSize, size_t offset, int numChannels)
         : fftSize(fftSize)
@@ -480,12 +484,12 @@ struct StftCfg
         return dstBuf.data() + fftSize * ch;
     }
 
-    double* prevPhasesCh(int ch)
+    kiss_fft_scalar* prevPhasesCh(int ch)
     {
         return prevPhases.data() + (fftSize / 2 + 1) * ch;
     }
 
-    double* prevNewPhasesCh(int ch)
+    kiss_fft_scalar* prevNewPhasesCh(int ch)
     {
         return prevNewPhases.data() + (fftSize / 2 + 1) * ch;
     }
@@ -498,14 +502,28 @@ void fillHannWindow(kiss_fft_scalar* window, size_t fftSize)
     }
 }
 
-// Returns the phaseDiff normalized back to [-M_PI, M_PI] range.
-kiss_fft_scalar normalizePhaseDiff(kiss_fft_scalar phaseDiff)
+// Returns the phaseDiff normalized back to [-M_PI, M_PI] range. Assumes that phaseDiff is not that far the range
+// so that we do not use fmod, which can be pretty slow.
+kiss_fft_scalar normalizePhase(kiss_fft_scalar phaseDiff)
 {
+#if 1
+    if (phaseDiff < -M_PI) {
+        do {
+            phaseDiff += M_PI * 2;
+        } while (phaseDiff < -M_PI);
+    } else if (phaseDiff > M_PI) {
+        do {
+            phaseDiff -= M_PI * 2;
+        } while (phaseDiff > M_PI);
+    }
+    return phaseDiff;
+#else
     if (phaseDiff > -M_PI) {
         return fmod(phaseDiff + M_PI, M_PI * 2) - M_PI;
     } else {
         return M_PI + fmod(phaseDiff + M_PI, M_PI * 2);
     }
+#endif
 }
 
 // Multiply all the frequencies for channel ch by pitchShift, correct the phases from lastPhases
@@ -514,11 +532,18 @@ void stretchFreq(StftCfg* cfg, double pitchShift, int ch)
 {
     size_t freqSize = cfg->fftSize / 2 + 1;
     kiss_fft_cpx* freq = cfg->freq.data();
-    double* prevPhases = cfg->prevPhasesCh(ch);
-    double* prevNewPhases = cfg->prevNewPhasesCh(ch);
-    double* newPhaseDiffs = cfg->newPhaseDiffs.data();
-    double* newMagnitudes = cfg->newMagnitudes.data();
-    double origPhaseMult = 2 * M_PI * cfg->offset / cfg->fftSize;
+    kiss_fft_scalar* prevPhases = cfg->prevPhasesCh(ch);
+    kiss_fft_scalar* prevNewPhases = cfg->prevNewPhasesCh(ch);
+    kiss_fft_scalar* newPhaseDiffs = cfg->newPhaseDiffs.data();
+    kiss_fft_scalar* newMagnitudes = cfg->newMagnitudes.data();
+    size_t overlap = cfg->fftSize / cfg->offset;
+    // Overlaps must be powers of two, so use it to increase modulo performance.
+    size_t overlapMask = overlap - 1;
+    if ((overlapMask & overlap) != 0) {
+        printf("Overlap must be pow-of-2\n");
+        exit(1);
+    }
+    double origPhaseMult = 2 * M_PI / overlap;
 
     std::fill(newMagnitudes, newMagnitudes + freqSize, 0.0);
     std::fill(newPhaseDiffs, newPhaseDiffs + freqSize, 0.0);
@@ -529,30 +554,36 @@ void stretchFreq(StftCfg* cfg, double pitchShift, int ch)
             break;
         }
 
-        double magn = sqrt(freq[k].r * freq[k].r + freq[k].i * freq[k].i);
+        kiss_fft_scalar magn = sqrt(freq[k].r * freq[k].r + freq[k].i * freq[k].i);
         bool largeMagn = (magn > newMagnitudes[newk]);
         newMagnitudes[newk] += magn;
-        double phase = atan2(freq[k].i, freq[k].r);
+        kiss_fft_scalar phase = atan2(freq[k].i, freq[k].r);
         // Original phase diff is the difference between the potential phase (phase of the frequency bin k
         // at the end of the previous block) and the actual phase for the frequency bin k at the start
         // of the new block. This phase diff is then applied to the stretched frequencies. The final formula
         // is simplified a bit from the one from smbPitchShift.cpp
-        double phaseDiff = normalizePhaseDiff(phase - prevPhases[k] - origPhaseMult * k);
-        double newPhaseDiff = phaseDiff * pitchShift + (k * pitchShift - newk) * origPhaseMult;
+        kiss_fft_scalar phaseDiff = phase - prevPhases[k];
+        // Modulo is important here, because otherwise the origPhaseMult * k can be very large and normalizePhase
+        // does not expect it.
+        phaseDiff -= origPhaseMult * (k & overlapMask);
+        phaseDiff = normalizePhase(phaseDiff);
+        kiss_fft_scalar newPhaseDiff = phaseDiff * pitchShift + (k * pitchShift - newk) * origPhaseMult;
         // If multiple old phase bins stretch into one new phase bin (if pitchShift < 1.0), we add their
         // magnitudes but want to want to choose only one phase (summing up phases from multiple bins
         // make no sense). Therefore, we separately compute newPhaseDiffs and then add them to prevNewPhases
         // in the end when finally computing newFreq. Ideally we would choose the phase from the bin with
         // the highest magnitude here.
         if (largeMagn) {
-            newPhaseDiffs[newk] = origPhaseMult * newk + newPhaseDiff;
+            newPhaseDiffs[newk] = origPhaseMult * (newk & overlapMask) + newPhaseDiff;
         }
         prevPhases[k] = phase;
     }
 
     kiss_fft_cpx* newFreq = cfg->newFreq.data();
     for (size_t k = 0; k < freqSize; k++) {
-        prevNewPhases[k] += newPhaseDiffs[k];
+        // Do the normalize here so that the prevNewPhases does not become too large so that the floating point
+        // errors stay bounded.
+        prevNewPhases[k] = normalizePhase(prevNewPhases[k] + newPhaseDiffs[k]);
         newFreq[k].r = newMagnitudes[k] * cos(prevNewPhases[k]);
         newFreq[k].i = newMagnitudes[k] * sin(prevNewPhases[k]);
     }
