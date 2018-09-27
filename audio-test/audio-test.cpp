@@ -2,7 +2,6 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
-#include <memory>
 #include <unordered_map>
 #include <vector>
 #include <errno.h>
@@ -11,10 +10,6 @@
 #include <SDL2/SDL.h>
 #include <soundio/soundio.h>
 
-using std::pair;
-using std::unique_ptr;
-using std::unordered_map;
-using std::vector;
 
 enum class AudioBackend {
     SDL,
@@ -40,7 +35,7 @@ SDL_AudioFormat audioFormat = kDefaultAudioFormat;
 bool debug = false;
 
 struct SamplesBuffer {
-    unique_ptr<Uint8[]> samples;
+    std::unique_ptr<Uint8[]> samples;
     size_t size = 0;
     // In bytes.
     size_t outputPos = 0;
@@ -211,8 +206,8 @@ WaveWriter waveWriter;
 // High-frequency timer rate.
 Uint64 timeFreq;
 
-unordered_map<Uint64, size_t> inputTimeHist;
-unordered_map<Uint64, size_t> outputTimeHist;
+std::unordered_map<Uint64, size_t> inputTimeHist;
+std::unordered_map<Uint64, size_t> outputTimeHist;
 
 template<typename ST>
 void prepareSineWaveImpl(size_t num, size_t startSample, int waveHz, ST low, ST high, ST* data)
@@ -495,10 +490,10 @@ void soundioOverflowCallback(struct SoundIoInStream* /*instream*/)
 
 
 template<typename T, typename U>
-void printNumberMap(const unordered_map<T, U>& hist)
+void printNumberMap(const std::unordered_map<T, U>& hist)
 {
-    vector<pair<T, U>> pairs(hist.begin(), hist.end());
-    std::sort(pairs.begin(), pairs.end(), [](const pair<T, U>& p1, const pair<T, U>& p2) {
+    std::vector<std::pair<T, U>> pairs(hist.begin(), hist.end());
+    std::sort(pairs.begin(), pairs.end(), [](const std::pair<T, U>& p1, const std::pair<T, U>& p2) {
         return p1.first < p2.first;
     });
     for (const auto& p : pairs) {

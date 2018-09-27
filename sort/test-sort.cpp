@@ -14,10 +14,6 @@
 // Exclude other testing arrays, use only randomly generated.
 #define ONLY_RANDOM
 
-using std::unique_ptr;
-using std::string;
-using std::vector;
-
 #if defined(COUNT_OPS)
 int numSaferIntCompares = 0;
 int numSaferIntCopies = 0;
@@ -277,7 +273,7 @@ private:
 
     struct CharBuffer
     {
-        unique_ptr<char[]> data;
+        std::unique_ptr<char[]> data;
         size_t used;
         size_t size;
 
@@ -288,7 +284,7 @@ private:
         {
         }
     };
-    vector<CharBuffer> buffers;
+    std::vector<CharBuffer> buffers;
 
     char* allocNewBuffer(size_t length)
     {
@@ -301,7 +297,7 @@ private:
 };
 
 template<typename T>
-size_t findDiffIndex(vector<T> const& array1, vector<T> const& array2)
+size_t findDiffIndex(std::vector<T> const& array1, std::vector<T> const& array2)
 {
     for (size_t i = 0; i < array1.size(); i++) {
         if (!(array1[i] == array2[i])) {
@@ -328,23 +324,23 @@ void printFaster(char const* sortMethod1, char const* sortMethod2, double ratio)
 
 template<typename T, typename ToStdout>
 double compareSortImpl(ToStdout const& toStdout, char const* sortMethod1, char const* sortMethod2,
-                       vector<vector<T>>& arrays1, vector<vector<T>>& arrays2,
+                       std::vector<std::vector<T>>& arrays1, std::vector<std::vector<T>>& arrays2,
                        char const* arrayType)
 {
     uint64_t startTime1 = getTimeCounter();
-    for (vector<T>& array : arrays1) {
+    for (std::vector<T>& array : arrays1) {
         callSortMethod(sortMethod1, array.begin(), array.end());
     }
     int runTime1 = elapsedMsec(startTime1);
     uint64_t startTime2 = getTimeCounter();
-    for (vector<T>& array : arrays2) {
+    for (std::vector<T>& array : arrays2) {
         callSortMethod(sortMethod2, array.begin(), array.end());
     }
     int runTime2 = elapsedMsec(startTime2);
 
     for (size_t i = 0; i < arrays1.size(); i++) {
-        vector<T> const& array1 = arrays1[i];
-        vector<T> const& array2 = arrays2[i];
+        std::vector<T> const& array1 = arrays1[i];
+        std::vector<T> const& array2 = arrays2[i];
         size_t diffIndex = findDiffIndex(array1, array2);
         if (diffIndex != SIZE_MAX) {
             printf("Sorted arrays [%d] differ at index %d:\n", (int)array1.size(), (int)diffIndex);
@@ -371,11 +367,11 @@ double compareSortImpl(ToStdout const& toStdout, char const* sortMethod1, char c
 
 template<typename T, typename ToStdout>
 void compareSort(ToStdout const& toStdout, char const* sortMethod1, char const* sortMethod2,
-                 vector<vector<T>>& arrays, char const* arrayType)
+                 std::vector<std::vector<T>>& arrays, char const* arrayType)
 {
     // Sort two times, compare the ratios.
-    vector<vector<T>> arraysCopy1 = arrays;
-    vector<vector<T>> arraysCopy2 = arrays;
+    std::vector<std::vector<T>> arraysCopy1 = arrays;
+    std::vector<std::vector<T>> arraysCopy2 = arrays;
     double ratio1 = compareSortImpl(toStdout, sortMethod1, sortMethod2, arraysCopy1, arraysCopy2, arrayType);
     arraysCopy1 = arrays;
     arraysCopy2 = arrays;
@@ -397,7 +393,7 @@ void testSortImpl(char const* typeName, Generator const& generator, ToStdout con
     printf("Running %s tests [%d-%d)\n", typeName, (int)minSize, (int)maxSize);
 
     // Arrays is all the test data prepared at once.
-    vector<vector<T>> arrays;
+    std::vector<std::vector<T>> arrays;
     size_t numTests = maxSize - minSize;
     arrays.resize(numTests);
 
@@ -483,7 +479,7 @@ void testSortImpl(char const* typeName, Generator const& generator, ToStdout con
         uint32_t seed = (uint32_t)(minSize + maxSize);
         uint32_t state[4] = { seed, seed, seed, seed };
         for (size_t size = minSize; size < maxSize; size++) {
-            vector<T>& array = arrays[size - minSize];
+            std::vector<T>& array = arrays[size - minSize];
             array.resize(size);
             for (size_t i = 0; i < size; i++) {
                 array[i] = generator(randomRange(state, 0, 10000000));
@@ -567,18 +563,18 @@ void testSortString(char const* sortMethod1, char const* sortMethod2, size_t min
         // Prints integer to the result, padding it to the required number of symbols with '0'.
         char buf[1000];
         int printed = sprintf(buf, "%d", (int)value);
-        string result;
+        std::string result;
         if (printed < maxLen) {
             result.resize(maxLen - printed, '0');
         }
         result.append(buf, printed);
         return result;
     };
-    auto toStdout = [] (string const& str) {
+    auto toStdout = [] (std::string const& str) {
         printf("%s", str.c_str());
     };
 
-    testSortImpl<string>("std::string", generator, toStdout, sortMethod1, sortMethod2, minSize, maxSize);
+    testSortImpl<std::string>("std::string", generator, toStdout, sortMethod1, sortMethod2, minSize, maxSize);
 }
 
 void testSortBigString(char const* sortMethod1, char const* sortMethod2, size_t minSize, size_t maxSize)
@@ -588,18 +584,18 @@ void testSortBigString(char const* sortMethod1, char const* sortMethod2, size_t 
         // Prints integer to the result, padding it to the required number of symbols with '0'.
         char buf[1000];
         int printed = sprintf(buf, "%d", (int)value);
-        string result;
+        std::string result;
         if (printed < maxLen) {
             result.resize(maxLen - printed, '0');
         }
         result.append(buf, printed);
         return result;
     };
-    auto toStdout = [] (string const& str) {
+    auto toStdout = [] (std::string const& str) {
         printf("%s", str.c_str());
     };
 
-    testSortImpl<string>("std::string-big", generator, toStdout, sortMethod1, sortMethod2, minSize, maxSize);
+    testSortImpl<std::string>("std::string-big", generator, toStdout, sortMethod1, sortMethod2, minSize, maxSize);
 }
 
 void testSortStringView(char const* sortMethod1, char const* sortMethod2, size_t minSize, size_t maxSize)

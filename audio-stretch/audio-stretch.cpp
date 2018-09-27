@@ -14,14 +14,6 @@
 
 // General notes on various pitch-shifting methods: http://blogs.zynaptiq.com/bernsee/time-pitch-overview/
 
-using std::atan2;
-using std::cos;
-using std::fmod;
-using std::max;
-using std::min;
-using std::sin;
-using std::vector;
-
 enum class SampleFormat {
     Sint16,
     Float
@@ -55,7 +47,7 @@ struct SoundData {
     int rate = 0;
     int numChannels = 0;
     size_t numSamples = 0;
-    vector<uint8_t> samples;
+    std::vector<uint8_t> samples;
 
     size_t getByteLength() const
     {
@@ -266,7 +258,7 @@ void prepareSineSamples(size_t numSamples, int waveHz, int rate, ST low, ST high
     ST base = low + ampl;
     double sampleRad = 2 * M_PI * waveHz / rate;
     for (size_t i = 0; i < numSamples; i++) {
-        data[i] = base + ST(sin(sampleRad * i) * ampl);
+        data[i] = base + ST(std::sin(sampleRad * i) * ampl);
     }
 }
 
@@ -295,7 +287,7 @@ DT castAndClamp(ST v)
 {
     static ST dstMin = (ST)std::numeric_limits<DT>::min();
     static ST dstMax = (ST)std::numeric_limits<DT>::max();
-    return min(max(v, dstMin), dstMax);
+    return std::min(std::max(v, dstMin), dstMax);
 }
 
 // Struct, holding the necessary values to resample audio chunk by chunk. The main problem this struct solves
@@ -312,7 +304,7 @@ struct LinearResampleState
     size_t nextSrcIntPos = 0;
     double nextSrcFloatPos = 0.0;
     // This value is used if the nextSrcIntPos == SIZE_MAX.
-    vector<ST> lastSample;
+    std::vector<ST> lastSample;
 
     LinearResampleState(int numChannels)
         : numChannels(numChannels)
@@ -438,17 +430,17 @@ struct StftCfg
     size_t fftSize;
     size_t offset;
     int numChannels;
-    vector<kiss_fft_scalar> srcBuf;
-    vector<kiss_fft_scalar> window;
-    vector<kiss_fft_scalar> dstBuf;
-    vector<kiss_fft_cpx> freq;
-    vector<kiss_fft_cpx> newFreq;
+    std::vector<kiss_fft_scalar> srcBuf;
+    std::vector<kiss_fft_scalar> window;
+    std::vector<kiss_fft_scalar> dstBuf;
+    std::vector<kiss_fft_cpx> freq;
+    std::vector<kiss_fft_cpx> newFreq;
     kiss_fftr_cfg fftCfg;
     kiss_fftr_cfg fftiCfg;
-    vector<kiss_fft_scalar> newMagnitudes;
-    vector<kiss_fft_scalar> prevPhases;
-    vector<kiss_fft_scalar> prevNewPhases;
-    vector<kiss_fft_scalar> newPhaseDiffs;
+    std::vector<kiss_fft_scalar> newMagnitudes;
+    std::vector<kiss_fft_scalar> prevPhases;
+    std::vector<kiss_fft_scalar> prevNewPhases;
+    std::vector<kiss_fft_scalar> newPhaseDiffs;
 
     StftCfg(size_t fftSize, size_t offset, int numChannels)
         : fftSize(fftSize)
@@ -498,7 +490,7 @@ struct StftCfg
 void fillHannWindow(kiss_fft_scalar* window, size_t fftSize)
 {
     for (size_t k = 0; k < fftSize; k++) {
-        window[k] = -0.5 * cos(2 * M_PI * k / fftSize) + 0.5;
+        window[k] = -0.5 * std::cos(2 * M_PI * k / fftSize) + 0.5;
     }
 }
 
@@ -519,9 +511,9 @@ kiss_fft_scalar normalizePhase(kiss_fft_scalar phaseDiff)
     return phaseDiff;
 #else
     if (phaseDiff > -M_PI) {
-        return fmod(phaseDiff + M_PI, M_PI * 2) - M_PI;
+        return std::fmod(phaseDiff + M_PI, M_PI * 2) - M_PI;
     } else {
-        return M_PI + fmod(phaseDiff + M_PI, M_PI * 2);
+        return M_PI + std::fmod(phaseDiff + M_PI, M_PI * 2);
     }
 #endif
 }
@@ -557,7 +549,7 @@ void stretchFreq(StftCfg* cfg, double pitchShift, int ch)
         kiss_fft_scalar magn = sqrt(freq[k].r * freq[k].r + freq[k].i * freq[k].i);
         bool largeMagn = (magn > newMagnitudes[newk]);
         newMagnitudes[newk] += magn;
-        kiss_fft_scalar phase = atan2(freq[k].i, freq[k].r);
+        kiss_fft_scalar phase = std::atan2(freq[k].i, freq[k].r);
         // Original phase diff is the difference between the potential phase (phase of the frequency bin k
         // at the end of the previous block) and the actual phase for the frequency bin k at the start
         // of the new block. This phase diff is then applied to the stretched frequencies. The final formula
@@ -584,8 +576,8 @@ void stretchFreq(StftCfg* cfg, double pitchShift, int ch)
         // Do the normalize here so that the prevNewPhases does not become too large so that the floating point
         // errors stay bounded.
         prevNewPhases[k] = normalizePhase(prevNewPhases[k] + newPhaseDiffs[k]);
-        newFreq[k].r = newMagnitudes[k] * cos(prevNewPhases[k]);
-        newFreq[k].i = newMagnitudes[k] * sin(prevNewPhases[k]);
+        newFreq[k].r = newMagnitudes[k] * std::cos(prevNewPhases[k]);
+        newFreq[k].i = newMagnitudes[k] * std::sin(prevNewPhases[k]);
     }
 }
 
@@ -624,7 +616,7 @@ size_t stftStretchSoundSamples(const T* src, size_t numSamples, int numChannels,
     StftCfg cfg(fftSize, offset, numChannels);
     // STFT outputs are accumulated in circular buffer in dstAccumBuf. The part of dstAccumBuf, for which all
     // overlapped blocks have been summed, will be stretched and written to dst.
-    vector<kiss_fft_scalar> dstAccumBuf;
+    std::vector<kiss_fft_scalar> dstAccumBuf;
     dstAccumBuf.resize(fftSize * numChannels);
     Span2d<kiss_fft_scalar> dstAccumBufV(dstAccumBuf.data(), fftSize, numChannels);
 
@@ -649,7 +641,7 @@ size_t stftStretchSoundSamples(const T* src, size_t numSamples, int numChannels,
     for (size_t block = offset; block < fftSize; block += offset) {
         size_t prefix = fftSize - block;
         // read != fftSize-prefix holds only when the numSamples < fftSize-offset.
-        size_t read = min(fftSize - prefix, numSamples);
+        size_t read = std::min(fftSize - prefix, numSamples);
         for (int ch = 0; ch < numChannels; ch++) {
             // Prepare srcBuf. The first part for negative block offsets is prefilled with zeros.
             kiss_fft_scalar *srcBuf = cfg.srcBufCh(ch);
@@ -678,7 +670,7 @@ size_t stftStretchSoundSamples(const T* src, size_t numSamples, int numChannels,
 
     // Process the full blocks.
     for (size_t block = 0; block < numSamples; block += offset) {
-        size_t read = min(fftSize, numSamples - block);
+        size_t read = std::min(fftSize, numSamples - block);
         size_t accumStart = block % fftSize;
         for (int ch = 0; ch < numChannels; ch++) {
             // Prepare srcBuf.
@@ -722,7 +714,7 @@ size_t stftStretchSoundSamples(const T* src, size_t numSamples, int numChannels,
         }
 
         // We can take the dstAccumBuf[accumStart:accumStart + offset], stretch and write it to the dst.
-        size_t numOutput = min(offset, numSamples - block);
+        size_t numOutput = std::min(offset, numSamples - block);
         dstWritten += resampleChunk(&resampleState, dstAccumBufV.row(accumStart), numOutput, params.timeStretch,
                                     dstV.row(dstWritten), dstNumSamples - dstWritten);
     }
@@ -756,16 +748,16 @@ void printFreq(T* data, size_t numSamples, int numChannels, int rate)
     printf("Analyzing %d samples (channel 0)\n", (int)n);
 
     kiss_fftr_cfg cfg = kiss_fftr_alloc(n, 0, nullptr, nullptr);
-    vector<kiss_fft_scalar> dataCopy;
+    std::vector<kiss_fft_scalar> dataCopy;
     dataCopy.resize(n);
-    for (size_t k = 0; k < min(n, numSamples); k++) {
+    for (size_t k = 0; k < std::min(n, numSamples); k++) {
         dataCopy[k] = (kiss_fft_scalar)data[k * numChannels];
     }
-    vector<kiss_fft_cpx> freq;
+    std::vector<kiss_fft_cpx> freq;
     freq.resize(n / 2 + 1);
     kiss_fftr(cfg, dataCopy.data(), freq.data());
 
-    vector<Magnitude> magnitudes;
+    std::vector<Magnitude> magnitudes;
     magnitudes.resize(n / 2 + 1);
     for (size_t k = 0; k < n / 2 + 1; k++) {
         magnitudes[k].magnitude = sqrt(freq[k].r * freq[k].r + freq[k].i * freq[k].i);
@@ -784,7 +776,7 @@ void printFreq(T* data, size_t numSamples, int numChannels, int rate)
         printf("top %d: %d (%d-%dHz) %g (%g %g: %g)\n", (int)k, (int)magnitudes[k].freq,
                (int)(magnitudes[k].freq * rate / n), (int)((magnitudes[k].freq + 1) * rate / n),
                magnitudes[k].magnitude, magnitudes[k].r, magnitudes[k].i,
-               atan2(magnitudes[k].i, magnitudes[k].r));
+               std::atan2(magnitudes[k].i, magnitudes[k].r));
     }
 
     kiss_fftr_free(cfg);

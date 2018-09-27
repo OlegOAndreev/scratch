@@ -12,10 +12,6 @@
 #include "file-utils.h"
 #include "sort.h"
 
-using std::min;
-using std::priority_queue;
-using std::string;
-using std::vector;
 
 #if defined(COUNT_STRING_COMPARES)
 size_t compareStrCount = 0;
@@ -31,7 +27,7 @@ bool preallocate = true;
 
 // List of chunk files with total size of the original file.
 struct ChunkFiles {
-    vector<string> filenames;
+    std::vector<std::string> filenames;
     off_t totalSize;
 
     // Support gcc 4.6 :-(
@@ -44,9 +40,9 @@ struct ChunkFiles {
 // A simple pair: line from chunk and num of the chunk it has been read from.
 struct LineWithNum {
     size_t chunkNum;
-    string line;
+    std::string line;
 
-    LineWithNum(size_t _chunkNum, string const& _line)
+    LineWithNum(size_t _chunkNum, std::string const& _line)
         : chunkNum(_chunkNum)
         , line(_line)
     {
@@ -90,7 +86,7 @@ public:
     // Reads next line from the chunk and returns true if line has been read.
     bool readLineFrom(size_t chunkNum, StringView* line)
     {
-        vector<StringView>& chunkLines = lines[chunkNum];
+        std::vector<StringView>& chunkLines = lines[chunkNum];
         size_t chunkLine = nextLine[chunkNum];
         if (chunkLine < chunkLines.size()) {
             *line = chunkLines[chunkLine];
@@ -109,23 +105,23 @@ public:
     }
 
 private:
-    vector<ChunkFileReader> readers;
-    vector<vector<StringView>> lines;
-    vector<size_t> nextLine;
+    std::vector<ChunkFileReader> readers;
+    std::vector<std::vector<StringView>> lines;
+    std::vector<size_t> nextLine;
 };
 
-string stringFromView(StringView line)
+std::string stringFromView(StringView line)
 {
-    return string(line.begin, line.begin + line.length);
+    return std::string(line.begin, line.begin + line.length);
 }
 
-void stringFromView(StringView line, string* str)
+void stringFromView(StringView line, std::string* str)
 {
     str->clear();
     str->append(line.begin, line.begin + line.length);
 }
 
-string getNextChunkFile(char const* dstFile, size_t numChunks)
+std::string getNextChunkFile(char const* dstFile, size_t numChunks)
 {
     char buf[1000];
     snprintf(buf, sizeof(buf), "%s.chunk.%d", dstFile, (int)numChunks);
@@ -134,7 +130,7 @@ string getNextChunkFile(char const* dstFile, size_t numChunks)
 
 // Sorts chunk, writes into new chunk file (with name based on dstFile) and appends the new name to chunkFiles.
 // Updates totalSortTimeMs and totalWriteTimeMs.
-void sortAndWriteChunk(char const* dstFile, vector<string>* chunk, vector<string>* filenames,
+void sortAndWriteChunk(char const* dstFile, std::vector<std::string>* chunk, std::vector<std::string>* filenames,
                        int* totalSortTimeMs, int* totalWriteTimeMs)
 {
     uint64_t sortStartTime = getTimeCounter();
@@ -145,18 +141,18 @@ void sortAndWriteChunk(char const* dstFile, vector<string>* chunk, vector<string
     // the elapsed time.
     uint64_t writeStartTime = getTimeCounter();
     {
-        string nextChunkFile = getNextChunkFile(dstFile, filenames->size());
+        std::string nextChunkFile = getNextChunkFile(dstFile, filenames->size());
         filenames->push_back(nextChunkFile);
         off_t preallocateSize = 0;
         if (preallocate) {
             // +1 for line separator.
-            for (string const& line : *chunk) {
+            for (std::string const& line : *chunk) {
                 preallocateSize += line.length() + 1;
             }
         }
         printf("Writing chunk %s with preallocated len %lld\n", nextChunkFile.c_str(), (long long)preallocateSize);
         FileLineWriter chunkWriter(nextChunkFile.c_str(), preallocateSize);
-        for (string const& line : *chunk) {
+        for (std::string const& line : *chunk) {
             chunkWriter.writeLine(line);
         }
     }
@@ -173,8 +169,8 @@ ChunkFiles chunkAndSort(char const* srcFile, char const* dstFile)
     ChunkFiles ret;
 
     FileLineReader srcReader(srcFile);
-    string line;
-    vector<string> curChunk;
+    std::string line;
+    std::vector<std::string> curChunk;
     size_t curChunkMemory = 0;
     while (srcReader.readLine(&line)) {
         if (curChunkMemory + line.size() > maxMemory) {
@@ -200,13 +196,13 @@ void mergeChunks(ChunkFiles const& chunkFiles, char const* dstFile)
 {
     uint64_t startTime = getTimeCounter();
     {
-        vector<FileLineReader> chunkReaders;
-        for (string const& chunkFile : chunkFiles.filenames) {
+        std::vector<FileLineReader> chunkReaders;
+        for (std::string const& chunkFile : chunkFiles.filenames) {
             chunkReaders.emplace_back(chunkFile.c_str());
         }
 
-        priority_queue<LineWithNum> topLines;
-        string line;
+        std::priority_queue<LineWithNum> topLines;
+        std::string line;
         for (size_t chunkNum = 0; chunkNum < chunkReaders.size(); chunkNum++) {
             if (chunkReaders[chunkNum].readLine(&line)) {
                 topLines.push(LineWithNum(chunkNum, line));
@@ -255,7 +251,7 @@ ChunkFiles chunkAndSortFaster(char const* srcFile, char const* dstFile)
     ChunkFiles ret;
 
     ChunkFileReader srcReader(srcFile, maxMemory);
-    vector<StringView> chunkLines;
+    std::vector<StringView> chunkLines;
     while (srcReader.readAndSplit(&chunkLines)) {
         off_t chunkLength = 0;
         // +1 for line separator.
@@ -270,7 +266,7 @@ ChunkFiles chunkAndSortFaster(char const* srcFile, char const* dstFile)
 
         uint64_t writeStartTime = getTimeCounter();
         {
-            string nextChunkFile = getNextChunkFile(dstFile, ret.filenames.size());
+            std::string nextChunkFile = getNextChunkFile(dstFile, ret.filenames.size());
             ret.filenames.push_back(nextChunkFile);
             off_t preallocateSize = preallocate ? chunkLength : 0;
             printf("Writing chunk %s with preallocated len %lld\n", nextChunkFile.c_str(), (long long)preallocateSize);
@@ -295,11 +291,11 @@ void mergeChunksFaster(ChunkFiles const& chunkFiles, char const* dstFile)
         MultiChunkReader multiChunkReader;
         size_t numChunks = chunkFiles.filenames.size();
         size_t perChunkBufferSize = maxMemory / numChunks;
-        for (string const& chunkFile : chunkFiles.filenames) {
+        for (std::string const& chunkFile : chunkFiles.filenames) {
             multiChunkReader.addReader(chunkFile.c_str(), perChunkBufferSize);
         }
 
-        priority_queue<StringViewWithNum> topLines;
+        std::priority_queue<StringViewWithNum> topLines;
         for (size_t chunkNum = 0; chunkNum < numChunks; chunkNum++) {
             StringView line;
             if (multiChunkReader.readLineFrom(chunkNum, &line)) {
@@ -336,9 +332,10 @@ void externalSortFaster(char const* srcFile, char const* dstFile)
     printf("Total sorting time is %dms\n", elapsedMsec(startTime));
 }
 
-void printErrorInverseStrings(string const& line1, string const& line2, int lineCount)
+void printErrorInverseStrings(std::string const& line1, std::string const& line2, int lineCount)
 {
-    printf("ERROR: Lines %d and %d are inverse:\n  %s\nvs\n  %s\n", lineCount, lineCount + 1, line1.c_str(), line2.c_str());
+    printf("ERROR: Lines %d and %d are inverse:\n  %s\nvs\n  %s\n", lineCount, lineCount + 1,
+           line1.c_str(), line2.c_str());
     exit(1);
 }
 
@@ -348,7 +345,7 @@ void validateSort(char const* srcFile)
     uint64_t startTime = getTimeCounter();
     {
         FileLineReader reader(srcFile);
-        string lines[2];
+        std::string lines[2];
         size_t prevLine = 0;
         size_t curLine = 1;
         reader.readLine(&lines[prevLine]);
@@ -371,10 +368,10 @@ void validateSortFaster(char const* srcFile)
     uint64_t startTime = getTimeCounter();
     {
         ChunkFileReader reader(srcFile);
-        vector<StringView> lines;
+        std::vector<StringView> lines;
         int lineCount = 1;
         // Store the last chunk line to compare it to the first line of the new chunk. Valid only if lineCount > 1.
-        string lastChunkLine;
+        std::string lastChunkLine;
         while (reader.readAndSplit(&lines)) {
             // Check if first line is less than the previous chunk last line.
             if (lineCount > 1) {
@@ -403,7 +400,7 @@ void generateFile(char const* dstFile, int numLines, int avgLineLen)
     {
         int minLineLen = avgLineLen / 2;
         int maxLineLen = avgLineLen * 3 / 2;
-        string line;
+        std::string line;
         line.reserve(maxLineLen);
         // Make random generate the same for the same parameters.
         uint32_t xorstate[4] = { uint32_t(numLines + avgLineLen), 0, 0, 0 };
@@ -478,7 +475,7 @@ void generateFileFaster(char const* dstFile, int numLines, int avgLineLen)
 void benchmarkSort(char const* srcFile, char const* sortMethod)
 {
     ChunkFileReader fileReader(srcFile, 1024 * 1024 * 1024);
-    vector<StringView> lines;
+    std::vector<StringView> lines;
     while (fileReader.readAndSplit(&lines)) {
         uint64_t startTime = getTimeCounter();
         callSortMethod(sortMethod, lines.begin(), lines.end());
@@ -517,17 +514,17 @@ int main(int argc, char** argv)
     for (int i = 0; i < argc; i++) {
         if (strcmp(argv[i], "--leave-chunks") == 0) {
             leaveChunks = true;
-            optionArgc = min(optionArgc, i);
+            optionArgc = std::min(optionArgc, i);
         } else if (strcmp(argv[i], "--no-preallocate") == 0) {
             preallocate = false;
-            optionArgc = min(optionArgc, i);
+            optionArgc = std::min(optionArgc, i);
         } else if (strcmp(argv[i], "--max-memory") == 0) {
             if (i + 1 >= argc) {
                 printUsage(argv[0]);
                 return 1;
             }
             maxMemory = (size_t)atoll(argv[i + 1]);
-            optionArgc = min(optionArgc, i);
+            optionArgc = std::min(optionArgc, i);
             i++;
         }
     }

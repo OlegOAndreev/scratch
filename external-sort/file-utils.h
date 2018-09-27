@@ -16,10 +16,6 @@
 #include <linux/falloc.h>
 #endif
 
-using std::string;
-using std::unique_ptr;
-using std::vector;
-
 namespace {
 
 size_t const kDefaultBufferSize = 1024 * 1024;
@@ -103,7 +99,7 @@ public:
 
 private:
     FILE* f;
-    unique_ptr<char[]> buf;
+    std::unique_ptr<char[]> buf;
     size_t bufCapacity;
     size_t bufSize;
     size_t bufRead;
@@ -184,7 +180,7 @@ public:
     }
 
     // Reads new chunk and splits it into lines. Returns true if at least one line has been read.
-    size_t readAndSplit(vector<StringView>* lines)
+    size_t readAndSplit(std::vector<StringView>* lines)
     {
         bool eof = fillBuf();
         splitLines(eof, lines);
@@ -193,7 +189,7 @@ public:
 
 private:
     int fd;
-    unique_ptr<char[]> buf;
+    std::unique_ptr<char[]> buf;
     size_t bufCapacity;
     size_t bufFilled;
     // Remaining part of the line, not included in last readAndSplit output (basically location of the last separator + 1).
@@ -218,7 +214,7 @@ private:
         return bufFilled != bufCapacity;
     }
 
-    void splitLines(bool eof, vector<StringView>* lines)
+    void splitLines(bool eof, std::vector<StringView>* lines)
     {
         lines->clear();
         char* bufp = buf.get();
@@ -261,7 +257,7 @@ public:
         if (preallocateSize > 0) {
             preallocateForFd(fd, preallocateSize);
         }
-        buf.reset(new char[bufferSize]);
+        buf = new char[bufferSize];
         bufCapacity = bufferSize;
         bufWritten = 0;
     }
@@ -269,12 +265,13 @@ public:
     ~ChunkFileWriter()
     {
         if (bufWritten > 0) {
-            if (write(fd, buf.get(), bufWritten) < (ssize_t)bufWritten) {
+            if (write(fd, buf, bufWritten) < (ssize_t)bufWritten) {
                 printf("Could not write to file\n");
                 exit(1);
             }
         }
         close(fd);
+        delete[] buf;
     }
 
     // Returns the pointer to the buffer to write into. Length should not include the line separator
@@ -286,13 +283,13 @@ public:
             exit(1);
         }
         if (bufWritten + length > bufCapacity - 1) {
-            if (write(fd, buf.get(), bufWritten) < (ssize_t)bufWritten) {
+            if (write(fd, buf, bufWritten) < (ssize_t)bufWritten) {
                 printf("Could not write to file\n");
                 exit(1);
             }
             bufWritten = 0;
         }
-        char* ret = buf.get() + bufWritten;
+        char* ret = buf + bufWritten;
         bufWritten += length;
         buf[bufWritten] = '\n';
         bufWritten++;
@@ -308,14 +305,14 @@ public:
 
 private:
     int fd;
-    unique_ptr<char[]> buf;
+    char* buf;
     size_t bufCapacity;
     size_t bufWritten;
 };
 
-void deleteFiles(vector<string> const& files)
+void deleteFiles(std::vector<std::string> const& files)
 {
-    for (string const& file : files) {
+    for (auto const& file : files) {
         if (unlink(file.c_str()) < 0) {
             printf("Failed deleting file %s\n", file.c_str());
         }

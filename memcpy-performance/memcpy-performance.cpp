@@ -13,8 +13,6 @@
 #include <arm_neon.h>
 #endif
 
-using std::vector;
-
 #if defined(CPU_IS_X86_64)
 #define RTE_MACHINE_CPUFLAG_AVX2
 #include "rte_memcpy.h"
@@ -422,9 +420,9 @@ double benchMemcpy(MemcpyFuncType memcpyFunc, const char* memcpyName, char* buff
     return speed;
 }
 
-void runBench(MemcpyFuncType memcpyFunc, const char* memcpyName, size_t bufferSize, const vector<size_t>& blockSizes,
-              bool withIntWork, bool withSimdWork, bool nonRandomAddress,
-              const vector<double>* baseSpeeds, vector<double>* speeds)
+void runBench(MemcpyFuncType memcpyFunc, const char* memcpyName, size_t bufferSize,
+              const std::vector<size_t>& blockSizes, bool withIntWork, bool withSimdWork, bool nonRandomAddress,
+              const std::vector<double>* baseSpeeds, std::vector<double>* speeds)
 {
     // Touch each buffer byte before memcpy.
     char* buffer = new char[bufferSize];
@@ -440,9 +438,9 @@ void runBench(MemcpyFuncType memcpyFunc, const char* memcpyName, size_t bufferSi
     }
 }
 
-void runBenchMulti(MemcpyFuncType memcpyFunc, const char* memcpyName, size_t bufferSize, const vector<size_t>& blockSizes,
-                   bool withIntWork, bool withSimdWork, bool nonRandomAddress,
-                   const vector<double>* baseSpeeds, vector<double>* speeds)
+void runBenchMulti(MemcpyFuncType memcpyFunc, const char* memcpyName, size_t bufferSize,
+                   const std::vector<size_t>& blockSizes, bool withIntWork, bool withSimdWork, bool nonRandomAddress,
+                   const std::vector<double>* baseSpeeds, std::vector<double>* speeds)
 {
     // Touch each buffer byte before memcpy.
     char* buffer = new char[bufferSize];
@@ -490,7 +488,7 @@ void printUsage(const char* argv0)
            argv0);
 }
 
-void parseSize(const char* arg, size_t* bufferSize, vector<size_t>* blockSizes, bool* blockMultiSize)
+void parseSize(const char* arg, size_t* bufferSize, std::vector<size_t>* blockSizes, bool* blockMultiSize)
 {
     if (strcmp(arg, "l1") == 0) {
         *bufferSize = L1_SIZE;
@@ -589,7 +587,7 @@ MemcpyFuncType findMemcpyByName(const char* name)
     exit(1);
 }
 
-void listAllMemcpys(vector<MemcpyFuncType>* memcpys, vector<const char*>* memcpyNames)
+void listAllMemcpys(std::vector<MemcpyFuncType>* memcpys, std::vector<const char*>* memcpyNames)
 {
     bool canAvx = isAvxSupported();
     for (size_t i = 0; i < arraySize(memcpyFuncRegistry); i++) {
@@ -602,7 +600,8 @@ void listAllMemcpys(vector<MemcpyFuncType>* memcpys, vector<const char*>* memcpy
 }
 
 // Computes a diff metric between baselineSpeeds and speeds.
-double computeSpeedup(const vector<size_t>& blockSizes, const vector<double>& baselineSpeeds, const vector<double>& speeds)
+double computeSpeedup(const std::vector<size_t>& blockSizes, const std::vector<double>& baselineSpeeds,
+                      const std::vector<double>& speeds)
 {
     if (blockSizes.size() != baselineSpeeds.size() || baselineSpeeds.size() != speeds.size()) {
         printf("Failed preconditions\n");
@@ -626,7 +625,7 @@ double computeSpeedup(const vector<size_t>& blockSizes, const vector<double>& ba
 }
 
 template<typename T>
-void findTwoMaxIndices(const vector<T>& values, size_t* maxIndex, size_t* nextMaxIndex)
+void findTwoMaxIndices(const std::vector<T>& values, size_t* maxIndex, size_t* nextMaxIndex)
 {
     if (values.size() < 1) {
         printf("Trying to find max values in empty array\n");
@@ -669,14 +668,14 @@ void findTwoMaxIndices(const vector<T>& values, size_t* maxIndex, size_t* nextMa
 int main(int argc, char** argv)
 {
     size_t bufferSize = 0;
-    vector<size_t> blockSizes;
+    std::vector<size_t> blockSizes;
     bool blockMultiSize = false;
     bool withIntWork = false;
     bool withSimdWork = false;
     bool nonRandomAddress = false;
     bool runTest = false;
-    vector<MemcpyFuncType> memcpys;
-    vector<const char*> memcpyNames;
+    std::vector<MemcpyFuncType> memcpys;
+    std::vector<const char*> memcpyNames;
 
     if (argc > 1 && strcmp(argv[1], "--help") == 0) {
         printUsage(argv[0]);
@@ -730,26 +729,26 @@ int main(int argc, char** argv)
 
         printf("Running bench on %d memcpys\n", (int)memcpys.size());
         // Each of the arrays is size is blockSizes.size().
-        vector<double> baselineSpeeds;
-        vector<double> speeds;
+        std::vector<double> baselineSpeeds;
+        std::vector<double> speeds;
         // The array size is memcpys.size().
-        vector<double> totalSpeedup;
+        std::vector<double> totalSpeedup;
         if (blockMultiSize) {
-            runBenchMulti(memcpys[0], memcpyNames[0], bufferSize, blockSizes, withIntWork, withSimdWork, nonRandomAddress,
-                          nullptr, &baselineSpeeds);
+            runBenchMulti(memcpys[0], memcpyNames[0], bufferSize, blockSizes, withIntWork, withSimdWork,
+                    nonRandomAddress, nullptr, &baselineSpeeds);
         } else {
-            runBench(memcpys[0], memcpyNames[0], bufferSize, blockSizes, withIntWork, withSimdWork, nonRandomAddress,
-                     nullptr, &baselineSpeeds);
+            runBench(memcpys[0], memcpyNames[0], bufferSize, blockSizes, withIntWork, withSimdWork,
+                    nonRandomAddress, nullptr, &baselineSpeeds);
         }
         totalSpeedup.push_back(0);
         printf("\n");
         for (size_t i = 1; i < memcpys.size(); i++) {
             if (blockMultiSize) {
-                runBenchMulti(memcpys[i], memcpyNames[i], bufferSize, blockSizes, withIntWork, withSimdWork, nonRandomAddress,
-                              &baselineSpeeds, &speeds);
+                runBenchMulti(memcpys[i], memcpyNames[i], bufferSize, blockSizes, withIntWork, withSimdWork,
+                              nonRandomAddress, &baselineSpeeds, &speeds);
             } else {
-                runBench(memcpys[i], memcpyNames[i], bufferSize, blockSizes, withIntWork, withSimdWork, nonRandomAddress,
-                         &baselineSpeeds, &speeds);
+                runBench(memcpys[i], memcpyNames[i], bufferSize, blockSizes, withIntWork, withSimdWork,
+                         nonRandomAddress, &baselineSpeeds, &speeds);
             }
             double speedup = computeSpeedup(blockSizes, baselineSpeeds, speeds);
             totalSpeedup.push_back(speedup);
@@ -758,7 +757,8 @@ int main(int argc, char** argv)
 
         size_t bestMemcpyIdx, nextBestMemcpyIdx;
         findTwoMaxIndices(totalSpeedup, &bestMemcpyIdx, &nextBestMemcpyIdx);
-        printf("Best memcpy: %s (total speedup: %.1f%%)\n", memcpyNames[bestMemcpyIdx], totalSpeedup[bestMemcpyIdx] * 100);
+        printf("Best memcpy: %s (total speedup: %.1f%%)\n", memcpyNames[bestMemcpyIdx],
+               totalSpeedup[bestMemcpyIdx] * 100);
         printf("Next best memcpy: %s (total speedup: %.1f%%)\n", memcpyNames[nextBestMemcpyIdx],
                totalSpeedup[nextBestMemcpyIdx] * 100);
 
