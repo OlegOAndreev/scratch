@@ -31,8 +31,7 @@ const size_t CACHE_LINE_WIDTH = 64;
 #if defined(_WIN32) && defined(__GNUC__)
 // MinGW ships without std::thread and std::mutex support, add a partial implementation of those.
 namespace std {
-    class mutex
-    {
+    class mutex {
     public:
         mutex() { InitializeCriticalSection(&cs); }
         ~mutex() { DeleteCriticalSection(&cs); }
@@ -69,8 +68,7 @@ namespace std {
 #endif
 
 template<size_t alignment>
-struct MutexLock
-{
+struct MutexLock {
     std::mutex mtx;
     char padding[alignment - sizeof(std::mutex)];
 
@@ -88,8 +86,7 @@ struct MutexLock
 
 #if defined(__APPLE__) || defined(__linux__)
 template<size_t alignment>
-struct PThreadMutexLock
-{
+struct PThreadMutexLock {
     pthread_mutex_t mtx;
     char padding[alignment - sizeof(pthread_mutex_t)];
 
@@ -113,8 +110,7 @@ struct PThreadMutexLock
 
 #if defined(__APPLE__)
 template<size_t alignment>
-struct PThreadMutexUnfairLock
-{
+struct PThreadMutexUnfairLock {
     pthread_mutex_t mtx;
     char padding[alignment - sizeof(pthread_mutex_t)];
 
@@ -141,8 +137,7 @@ struct PThreadMutexUnfairLock
 #endif
 
 template<size_t alignment>
-struct SemaphoreLock
-{
+struct SemaphoreLock {
     Semaphore semaphore;
     char padding[alignment - sizeof(Semaphore)];
 
@@ -164,8 +159,7 @@ struct SemaphoreLock
 };
 
 // The idea taken from http://preshing.com/20150316/semaphores-are-surprisingly-versatile/
-struct PaddedBenaphoreLock
-{
+struct PaddedBenaphoreLock {
     std::atomic<size_t> count;
     char padding1[CACHE_LINE_WIDTH - sizeof(size_t)];
     Semaphore semaphore;
@@ -198,8 +192,7 @@ struct PaddedBenaphoreLock
     }
 };
 
-struct BenaphoreLock
-{
+struct BenaphoreLock {
     std::atomic<size_t> count;
     Semaphore semaphore;
 
@@ -231,8 +224,7 @@ struct BenaphoreLock
 };
 
 #if !defined(_MSC_VER)
-struct PauseBackoff
-{
+struct PauseBackoff {
     static void backoff()
     {
 #if defined(CPU_IS_X86_64)
@@ -243,8 +235,7 @@ struct PauseBackoff
     }
 };
 
-struct NopBackoff
-{
+struct NopBackoff {
     static void backoff()
     {
         __asm __volatile("nop");
@@ -252,8 +243,7 @@ struct NopBackoff
 };
 #endif
 
-struct SchedBackoff
-{
+struct SchedBackoff {
     static void backoff()
     {
 #if defined(__APPLE__) || defined(__linux__)
@@ -266,8 +256,7 @@ struct SchedBackoff
     }
 };
 
-struct SleepBackoff
-{
+struct SleepBackoff {
     static void backoff()
     {
 #if defined(__APPLE__) || defined(__linux__)
@@ -280,8 +269,7 @@ struct SleepBackoff
     }
 };
 
-struct EmptyBackoff
-{
+struct EmptyBackoff {
     static void backoff()
     {
     }
@@ -289,21 +277,18 @@ struct EmptyBackoff
 
 // MSVC disallows zero-sized arrays in the middle of structs.
 template <size_t alignment>
-struct PaddedAtomic
-{
+struct PaddedAtomic {
     std::atomic<size_t> v;
     char padding[alignment - sizeof(size_t)];
 };
 
 template <>
-struct PaddedAtomic<sizeof(size_t)>
-{
+struct PaddedAtomic<sizeof(size_t)> {
     std::atomic<size_t> v;
 };
 
 template <typename Backoff, size_t alignment, bool withLoad>
-struct SpinLock
-{
+struct SpinLock {
     PaddedAtomic<alignment> flag;
 
     SpinLock()
@@ -339,8 +324,7 @@ struct SpinLock
 };
 
 template <typename Backoff, size_t alignment>
-struct TicketLock
-{
+struct TicketLock {
     PaddedAtomic<alignment> in;
     PaddedAtomic<alignment> out;
 
@@ -367,8 +351,7 @@ struct TicketLock
     }
 };
 
-struct UnlockedWorkData
-{
+struct UnlockedWorkData {
     std::vector<unsigned> input;
     std::vector<unsigned> output;
 
@@ -396,8 +379,7 @@ struct UnlockedWorkData
 };
 
 template <typename Lock>
-struct LockingWorkData
-{
+struct LockingWorkData {
     Lock inputLock;
     std::vector<unsigned> input;
 
@@ -432,8 +414,7 @@ struct LockingWorkData
     }
 };
 
-struct LockFreeWorkData
-{
+struct LockFreeWorkData {
     PaddedAtomic<CACHE_LINE_WIDTH> inputIndex;
     std::vector<unsigned> input;
     char padding1[CACHE_LINE_WIDTH - sizeof(size_t)];
@@ -500,8 +481,7 @@ unsigned doWork(unsigned param)
     return result;
 }
 
-struct PerThreadStats
-{
+struct PerThreadStats {
     uint64_t retryCount;
     float avgRunLength;
 
@@ -549,8 +529,7 @@ void workerThread(WorkData& data, PerThreadStats& stats)
     stats.retryCount = retryCount;
 }
 
-struct PerRunStats
-{
+struct PerRunStats {
     uint64_t timeMs;
     // The average run lengths of all the threads.
     float avgRunLength;

@@ -166,8 +166,7 @@ const ACCEL_TABLE_ENTRY * ACCEL_TABLE::entry (int index) const {
 }
 
 
-struct Device
-{
+struct Device {
     IOHIDDeviceRef hidDevice;
     std::string name;
 };

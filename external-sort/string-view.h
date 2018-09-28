@@ -10,8 +10,7 @@
 #define USE_SMALL_COMPARE
 
 // Your minimalist string view.
-struct StringView
-{
+struct StringView {
     char const* begin;
     size_t length;
 

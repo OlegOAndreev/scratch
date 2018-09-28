@@ -10,8 +10,7 @@ struct SimpleThreadPoolImpl;
 }
 
 // Simple thread pool with a single mutex-protected queue, uses C++11 async primitives (future/promise).
-class SimpleThreadPool
-{
+class SimpleThreadPool {
 public:
     SimpleThreadPool();
     SimpleThreadPool(int numThreads);

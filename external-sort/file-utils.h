@@ -36,8 +36,7 @@ void preallocateForFd(int fd, off_t preallocateSize)
 }
 
 // A wrapper around FILE*, allowing to read lines in std::string. Ignores last empty line to match the behavior of FileLineWriter.
-class FileLineReader
-{
+class FileLineReader {
 public:
     FileLineReader(char const* filename, size_t bufferCapacity = kDefaultBufferSize)
     {
@@ -107,8 +106,7 @@ private:
 
 
 // A simple wrapper around FILE*, allowing to write lines to file.
-class FileLineWriter
-{
+class FileLineWriter {
 public:
     FileLineWriter(char const* filename, off_t preallocateSize = 0, size_t bufferSize = kDefaultBufferSize)
     {
@@ -145,8 +143,7 @@ private:
 
 // A wrapper around FILE*, reading big chunks of memory, splitting them into strings and providing access directly to the chunk.
 // Ignores last empty line to match the behavior of ChunkFileWriter.
-class ChunkFileReader
-{
+class ChunkFileReader {
 public:
     ChunkFileReader(char const* filename, size_t bufferSize = kDefaultBufferSize)
     {
@@ -244,8 +241,7 @@ private:
 
 
 // A wrapper around FILE*, providing the direct access to the buffer. Supports preallocating files.
-class ChunkFileWriter
-{
+class ChunkFileWriter {
 public:
     ChunkFileWriter(char const* filename, off_t preallocateSize = 0, size_t bufferSize = kDefaultBufferSize)
     {

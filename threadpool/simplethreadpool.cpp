@@ -13,8 +13,7 @@
 
 namespace detail {
 
-struct SimpleTaskQueue
-{
+struct SimpleTaskQueue {
     std::deque<std::packaged_task<void()>> tasks;
     bool stopFlag;
 
@@ -22,8 +21,7 @@ struct SimpleTaskQueue
     std::condition_variable workerWakeup;
 };
 
-struct SimpleThreadPoolImpl
-{
+struct SimpleThreadPoolImpl {
     std::vector<std::thread> workerThreads;
     SimpleTaskQueue queue;
 

@@ -25,8 +25,7 @@ int numStringViewMoves = 0;
 
 
 // An int with a destructive move behavior.
-struct SaferInt
-{
+struct SaferInt {
     SaferInt()
         : value(INT_MIN)
     {
@@ -123,8 +122,7 @@ FORCE_INLINE SmallCompareType load_smallCompareType(void const* p)
 
 
 // Simple string view for tests.
-struct SimpleStringView
-{
+struct SimpleStringView {
     char* ptr;
     size_t length;
 
@@ -249,8 +247,7 @@ struct SimpleStringView
 };
 
 // Simple rope-like structure just for tests.
-class SimpleStringRope
-{
+class SimpleStringRope {
 public:
     SimpleStringView allocString(size_t length)
     {
@@ -271,8 +268,7 @@ public:
 private:
     size_t const kDefaultBufferSize = 10000;
 
-    struct CharBuffer
-    {
+    struct CharBuffer {
         std::unique_ptr<char[]> data;
         size_t used;
         size_t size;

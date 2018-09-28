@@ -59,8 +59,7 @@ uint64_t getThreadId()
 }
 
 // A very primitive open addressing map.
-struct SigCountMap
-{
+struct SigCountMap {
     static const size_t MAX_THREAD_IDS = 99991;
 
     uint64_t threadIds[MAX_THREAD_IDS];

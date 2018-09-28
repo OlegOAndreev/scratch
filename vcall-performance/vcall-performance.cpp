@@ -39,8 +39,7 @@ unsigned processOp(unsigned value, Op op)
     }
 }
 
-struct OpInterface
-{
+struct OpInterface {
     virtual unsigned process(unsigned value) const = 0;
     // Silence the warning.
     virtual ~OpInterface()
@@ -48,48 +47,42 @@ struct OpInterface
     }
 };
 
-struct OpInterfaceImpl1 : public OpInterface
-{
+struct OpInterfaceImpl1 : public OpInterface {
     unsigned process(unsigned value) const override
     {
         return value * 2;
     }
 };
 
-struct OpInterfaceImpl2 : public OpInterface
-{
+struct OpInterfaceImpl2 : public OpInterface {
     unsigned process(unsigned value) const override
     {
         return value * 3;
     }
 };
 
-struct OpInterfaceImpl3 : public OpInterface
-{
+struct OpInterfaceImpl3 : public OpInterface {
     unsigned process(unsigned value) const override
     {
         return value / 4;
     }
 };
 
-struct OpInterfaceImpl4 : public OpInterface
-{
+struct OpInterfaceImpl4 : public OpInterface {
     unsigned process(unsigned value) const override
     {
         return value * 5;
     }
 };
 
-struct OpInterfaceImpl5 : public OpInterface
-{
+struct OpInterfaceImpl5 : public OpInterface {
     unsigned process(unsigned value) const override
     {
         return value * 6;
     }
 };
 
-struct OpInterfaceImpl6 : public OpInterface
-{
+struct OpInterfaceImpl6 : public OpInterface {
     unsigned process(unsigned value) const override
     {
         return value * 7;
