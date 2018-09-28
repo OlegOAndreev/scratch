@@ -370,6 +370,37 @@ size_t arraySize(const T(&)[N])
     return N;
 }
 
+// An alternative to std::remove_cvref from C++20 (does not support volatile, though).
+template<typename T>
+struct RemoveCRef {
+    using Type = T;
+};
+
+template<typename T>
+struct RemoveCRef<const T> {
+    using Type = T;
+};
+
+template<typename T>
+struct RemoveCRef<T&> {
+    using Type = T;
+};
+
+template<typename T>
+struct RemoveCRef<T const&> {
+    using Type = T;
+};
+
+template<typename T>
+struct RemoveCRef<T&&> {
+    using Type = T;
+};
+
+template<typename T>
+struct RemoveCRef<T const&&> {
+    using Type = T;
+};
+
 //
 // Computes a very simple hash, see: http://www.eecs.harvard.edu/margo/papers/usenix91/paper.ps
 //
@@ -379,4 +410,29 @@ inline size_t simpleHash(char const* s, size_t size)
     for (char const* it = s, * end = s + size; it != end; ++it)
         hash = *it + (hash << 6) + (hash << 16) - hash;
     return hash;
+}
+
+//
+// Returns the average of the elements. NOTE: ASSUMES THAT YOU CAN CALCULATE SUM OF ALL VALUES WITHOUT
+// OVERFLOW. Should work almost the same as std::accumulate(begin, end, {}) / (end - begin).
+//
+template<typename It>
+inline auto simpleAverage(It begin, It end) -> typename RemoveCRef<decltype(*begin)>::Type
+{
+    typename RemoveCRef<decltype(*begin)>::Type sum{};
+    if (begin == end) {
+        return sum;
+    } else {
+        for (It it = begin; it!= end; ++it) {
+            sum += *it;
+        }
+        return sum / (end - begin);
+    }
+}
+
+// Returns average of the container elements. See simpleAverage(It begin, It end) for NOTE on the assumptions.
+template<typename C>
+inline auto simpleAverageC(C&& container) -> typename RemoveCRef<decltype(*container.begin())>::Type
+{
+    return simpleAverage(container.begin(), container.end());
 }
