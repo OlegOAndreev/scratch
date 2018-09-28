@@ -10,7 +10,6 @@
 #include <vector>
 
 #include "common.h"
-#include "semaphore.h"
 
 #if defined(__APPLE__)
 #include <pthread.h>
