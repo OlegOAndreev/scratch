@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 2.8)
 
 add_executable(${PROJECT_NAME}
     betterthreadpool.cpp
+    forkjoinpool.cpp
     simplethreadpool.cpp
     test-pool.cpp)
 
@@ -14,7 +15,7 @@ if(NOT MSVC)
 #  target_link_libraries(${PROJECT_NAME} PRIVATE -fsanitize=address,undefined)
 endif()
 
-if(UNIX AND NOT APPLE)
+if(UNIX AND NOT APPLE AND NOT ANDROID)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
   target_link_libraries(${PROJECT_NAME} rt)
 endif()

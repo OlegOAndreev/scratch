@@ -9,7 +9,7 @@ add_executable(${PROJECT_NAME} lock-performance.cpp)
 
 target_include_directories(${PROJECT_NAME} PRIVATE ..)
 
-if(UNIX AND NOT APPLE)
+if(UNIX AND NOT APPLE AND NOT ANDROID)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
   target_link_libraries(${PROJECT_NAME} rt)
 endif()

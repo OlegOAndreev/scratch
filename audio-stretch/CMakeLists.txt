@@ -17,6 +17,7 @@ if(NOT MSVC)
 #  target_link_libraries(${PROJECT_NAME} PRIVATE -fsanitize=address,undefined)
 endif()
 
-if(UNIX AND NOT APPLE)
-  target_link_libraries(${PROJECT_NAME} rt)
+if(UNIX AND NOT APPLE AND NOT ANDROID)
+  target_link_libraries(${PROJECT_NAME}
+      rt)
 endif()

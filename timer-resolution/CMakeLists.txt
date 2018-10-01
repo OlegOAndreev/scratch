@@ -8,5 +8,5 @@ endif()
 add_executable(${PROJECT_NAME} timer-resolution.cpp)
 
 if(UNIX AND NOT APPLE AND NOT ANDROID)
-target_link_libraries(${PROJECT_NAME} rt)
+  target_link_libraries(${PROJECT_NAME} rt)
 endif()
