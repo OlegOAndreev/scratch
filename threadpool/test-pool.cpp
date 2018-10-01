@@ -35,7 +35,7 @@ void basicTests(TP* stp)
         ASSERT_THAT(futures2[i].get() == i * i);
     }
 
-    auto future3 = stp->submit(sqrt, 1.0);
+    auto future3 = stp->submit((double(*)(double))sqrt, 1.0);
     ASSERT_THAT(future3.get() == 1.0);
 
     printf("Basic tests passed\n");
