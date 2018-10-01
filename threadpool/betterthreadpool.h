@@ -5,17 +5,16 @@
 
 namespace detail {
 
-struct SimpleThreadPoolImpl;
+struct BetterThreadPoolImpl;
 
 }
 
-// Simple thread pool with a single mutex-protected queue, uses C++11 async primitives (future/promise).
-class SimpleThreadPool {
+class BetterThreadPool {
 public:
     // The default constructor determines the number of workers from the number of CPUs.
-    SimpleThreadPool();
-    SimpleThreadPool(int numThreads);
-    ~SimpleThreadPool();
+    BetterThreadPool();
+    BetterThreadPool(int numThreads);
+    ~BetterThreadPool();
 
     // Submits f(args) task to the pool, returns corresponding future.
     template<typename F, typename ...Args>
@@ -36,7 +35,7 @@ public:
     int numThreads() const;
 
 private:
-    detail::SimpleThreadPoolImpl* impl;
+    detail::BetterThreadPoolImpl* impl;
 
     // std::packaged_task is more suitable than std::function because the latter is copyable, while the packaged_task
     // is move-only.

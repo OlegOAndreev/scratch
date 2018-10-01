@@ -32,7 +32,7 @@ SimpleThreadPoolImpl::~SimpleThreadPoolImpl()
 {
 }
 
-void workerMain(SimpleTaskQueue* queue)
+void simpleWorkerMain(SimpleTaskQueue* queue)
 {
     std::packaged_task<void()> task;
     while (true) {
@@ -63,7 +63,7 @@ SimpleThreadPool::SimpleThreadPool(int numThreads)
     : impl(new detail::SimpleThreadPoolImpl{})
 {
     for (int i = 0; i < numThreads; i++) {
-        impl->workerThreads.emplace_back(detail::workerMain, &impl->queue);
+        impl->workerThreads.push_back(std::thread(detail::simpleWorkerMain, &impl->queue));
     }
 }
 

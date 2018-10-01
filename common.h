@@ -477,7 +477,14 @@ inline auto simpleAverage(It begin, It end) -> typename RemoveCRef<decltype(*beg
 
 // Returns average of the container elements. See simpleAverage(It begin, It end) for NOTE on the assumptions.
 template<typename C>
-inline auto simpleAverageC(C&& container) -> typename RemoveCRef<decltype(*container.begin())>::Type
+inline auto simpleAverage(C const& container) -> typename RemoveCRef<decltype(*container.begin())>::Type
 {
     return simpleAverage(container.begin(), container.end());
+}
+
+// Returns true if set-like container contains value, false if not.
+template<typename C, typename V>
+inline bool setContains(C const& container, V const& value)
+{
+    return container.find(value) != container.end();
 }
