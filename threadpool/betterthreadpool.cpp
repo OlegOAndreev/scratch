@@ -137,15 +137,15 @@ void BetterThreadPool::submitImpl(std::packaged_task<void()>&& task)
     //  Thread 2:
     //   1. cell.sequence_.load(acquire)
     //   2. cell.sequence_.exchange(acq_rel)
-    //   3. numSleepingWorkers.load(relaxed)
+    //   3. numSleepingWorkers.load(acquire)
     //
     // Now the read of numSleepingWorkers cannot reorder before the queue becomes non-empty and the second check
     // that the queue is non-empty cannot be reordered before increment numSleepingWorkers. Note, that original
     // mpmc_bounded_queue had store instead of exchange for the step 2 in thread 2:
     //   2. cell.sequence_.store(release)
-    //   3. numSleepingWorkers.load(relaxed)
+    //   3. numSleepingWorkers.load(acquire)
     // Steps 2 and 3 could be reordered, so that thread 2 would load numSleepingWorkers before thread 1 incremented it.
-    if (impl->numSleepingWorkers.load(std::memory_order_relaxed) > 0) {
+    if (impl->numSleepingWorkers.load(std::memory_order_acquire) > 0) {
         impl->sleepingSemaphore.post();
     }
 }
