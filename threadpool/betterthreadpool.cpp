@@ -54,18 +54,18 @@ void betterWorkerMain(BetterThreadPoolImpl* impl)
         }
 
         // Sleep until the new task arrives.
-        impl->numSleepingWorkers.fetch_add(1, std::memory_order_acq_rel);
+        impl->numSleepingWorkers.fetch_add(1, std::memory_order_seq_cst);
 
         // Recheck that there are still no tasks in the queue. This is used to prevent the race condition,
         // where the pauses between checking the queue first and incrementing the numSleepingWorkers, while the task
         // is submitted during this pause.
         // NOTE: See NOTE in the submitImpl for the details on correctness of the sleep.
         if (impl->workerQueue.dequeue(task)) {
-            impl->numSleepingWorkers.fetch_add(-1, std::memory_order_acq_rel);
+            impl->numSleepingWorkers.fetch_add(-1, std::memory_order_seq_cst);
             task();
         } else {
             impl->sleepingSemaphore.wait();
-            impl->numSleepingWorkers.fetch_add(-1, std::memory_order_acq_rel);
+            impl->numSleepingWorkers.fetch_add(-1, std::memory_order_seq_cst);
         }
     }
     impl->numStoppedWorkers.fetch_add(1, std::memory_order_relaxed);
@@ -125,27 +125,18 @@ void BetterThreadPool::submitImpl(std::packaged_task<void()>&& task)
     //   1. adds new item to the queue (queue becomes non-empty)
     //   2. reads numSleepingWorkers
     //
-    // If no barriers are present (e.g. all operations are memory_order_relaxed and there are no fences),
-    // all the operations could happen in any order, therefore, thread 2 could read numSleepingWorkers = 0 on step 2,
-    // while thread 1 could check that queue is empty on step 3. However, if the queue is empty, then both
-    // workerQueue.dequeue() and workerQueue.enqueue() access the same cell (enqueue_pos_ is equal to dequeue_pos_)
-    // and the following happens:
-    //  Thread 1:
-    //   1. cell.sequence_.load(acquire)
-    //   2. numSleepingWorkers.increment(acq_rel)
-    //   3. cell.sequence_.load(acquire)
-    //  Thread 2:
-    //   1. cell.sequence_.load(acquire)
-    //   2. cell.sequence_.exchange(acq_rel)
-    //   3. numSleepingWorkers.load(acquire)
-    //
-    // Now the read of numSleepingWorkers cannot reorder before the queue becomes non-empty and the second check
-    // that the queue is non-empty cannot be reordered before increment numSleepingWorkers. Note, that original
-    // mpmc_bounded_queue had store instead of exchange for the step 2 in thread 2:
-    //   2. cell.sequence_.store(release)
-    //   3. numSleepingWorkers.load(acquire)
-    // Steps 2 and 3 could be reordered, so that thread 2 would load numSleepingWorkers before thread 1 incremented it.
-    if (impl->numSleepingWorkers.load(std::memory_order_acquire) > 0) {
+    // Originally I tried solving this problem by using acq_rel/relaxed when writing/reading numSleepingWorkers
+    // and acq_rel (via atomic::exchange RMW) when updating cell.sequence_ in mpmc_bounded_queue::dequeue. This
+    // has been based on the reasoning that acquire and release match the LoadLoad+LoadStore and
+    // LoadStore+StoreStore barrier correspondingly and acq_rel RMW is, therefore, a total barrier. However, that is
+    // not what part 1.10 of the C++ standard says: discussed in
+    // https://stackoverflow.com/questions/52606524/what-exact-rules-in-the-c-memory-model-prevent-reordering-before-acquire-opera/
+    // The easiest fix is simpley changing all the related accesses to seq_cst:
+    //  * all reads and writes on numSleepingWorkers
+    //  * first read in dequeue and last write in enqueue.
+    // The good thing is that the generated code for acq_rel RMW is identical to seq_cst store on the relevant
+    // platforms (x86-64 and aarch64).
+    if (impl->numSleepingWorkers.load(std::memory_order_seq_cst) > 0) {
         impl->sleepingSemaphore.post();
     }
 }

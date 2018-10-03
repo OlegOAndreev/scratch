@@ -71,9 +71,9 @@ public:
     }
     // MODIFIED: Switched to forwarding to support move-only data.
     cell->data_ = std::forward<T>(data);
-    // MODIFIED: Use exchange+acq_rel instead of store+release as a way to prevent reordering of the later memory
-    // access before it (see betterthreadpool.cpp for better explanation).
-    cell->sequence_.exchange(pos + 1, std::memory_order_acq_rel);
+    // MODIFIED: Use seq_cst instead of release as a way to prevent reordering of memory accesses before it
+    // (see betterthreadpool.cpp for better explanation).
+    cell->sequence_.store(pos + 1, std::memory_order_seq_cst);
     return true;
   }
 
@@ -84,8 +84,10 @@ public:
     for (;;)
     {
       cell = &buffer_[pos & buffer_mask_];
+      // MODIFIED: Use seq_cst instead of acquire as a way to prevent reordering of the memory accesses around it
+      // (see betterthreadpool.cpp for better explanation).
       size_t seq =
-        cell->sequence_.load(std::memory_order_acquire);
+        cell->sequence_.load(std::memory_order_seq_cst);
       intptr_t dif = (intptr_t)seq - (intptr_t)(pos + 1);
       if (dif == 0)
       {
