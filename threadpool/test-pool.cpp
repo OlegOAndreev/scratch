@@ -68,13 +68,15 @@ void prepareTinyJobInput(size_t numJobsPerBatch, size_t numItersPerJob, std::vec
 template<typename TP>
 void tinyJobsTest(TP* stp, size_t numItersPerJob)
 {
-    static const size_t NUM_JOBS_PER_BATCH = 1000;
+    static const size_t kNumJobsPerBatch = 1000;
 
     std::vector<TinyJobInput> jobInput;
-    prepareTinyJobInput(NUM_JOBS_PER_BATCH, numItersPerJob, &jobInput);
+    prepareTinyJobInput(kNumJobsPerBatch, numItersPerJob, &jobInput);
 
     std::vector<std::future<double>> futures;
-    futures.resize(NUM_JOBS_PER_BATCH);
+    std::vector<double> results;
+    futures.resize(kNumJobsPerBatch);
+    results.resize(kNumJobsPerBatch);
 
     // Run the test for ~5 seconds.
     int64_t testStartTime = getTimeCounter();
@@ -83,21 +85,35 @@ void tinyJobsTest(TP* stp, size_t numItersPerJob)
     while (getTimeCounter() - testStartTime < timeFreq * 3) {
         int64_t batchStartTime = getTimeCounter();
         // Run a batch of tiny jobs and wait for them to complete.
-        for (size_t i = 0; i < NUM_JOBS_PER_BATCH; i++) {
+        for (size_t i = 0; i < kNumJobsPerBatch; i++) {
             futures[i] = stp->submit(tinyJob, jobInput[i]);
         }
 
-        for (size_t i = 0; i < NUM_JOBS_PER_BATCH; i++) {
-            futures[i].wait();
+        for (size_t i = 0; i < kNumJobsPerBatch; i++) {
+            results[i] = futures[i].get();
         }
-        jobsPerSec.push_back(timeFreq * NUM_JOBS_PER_BATCH / (getTimeCounter() - batchStartTime));
+        jobsPerSec.push_back(timeFreq * kNumJobsPerBatch / (getTimeCounter() - batchStartTime));
     }
     std::sort(jobsPerSec.begin(), jobsPerSec.end());
     int64_t avgJobsPerSec = simpleAverage(jobsPerSec);
     int64_t medianJobsPerSec = jobsPerSec[jobsPerSec.size() / 2];
     int64_t maxJobsPerSec = jobsPerSec.back();
-    printf("Tiny job test with jobs with %d iters for SimpleThreadPool: avg %lld, median %lld, max %lld jobs per sec\n",
-           (int)numItersPerJob, (long long)avgJobsPerSec, (long long)medianJobsPerSec, (long long)maxJobsPerSec);
+
+    // Compute the amount of time to process jobs without multithreading and verify the results.
+    int64_t baseStartTime = getTimeCounter();
+    size_t const kNumRepeats = 10;
+    for (size_t j = 0; j < kNumRepeats; j++) {
+        for (size_t i = 0; i < kNumJobsPerBatch; i++) {
+            ASSERT_THAT(tinyJob(jobInput[i]) == results[i]);
+        }
+    }
+    int64_t baseJobsPerSec = timeFreq * (kNumRepeats * kNumJobsPerBatch) / (getTimeCounter() - baseStartTime);
+    double accel = avgJobsPerSec * 100.0  / baseJobsPerSec;
+
+    printf("Tiny job test with jobs with %d iters for pool: avg %lld, median %lld, max %lld jobs per sec,"
+           " accel vs single core: %.1f%%\n",
+           (int)numItersPerJob, (long long)avgJobsPerSec, (long long)medianJobsPerSec, (long long)maxJobsPerSec,
+           accel);
 }
 
 void printUsage(const char* argv0)
