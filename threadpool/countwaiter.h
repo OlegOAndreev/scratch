@@ -7,7 +7,7 @@
 // A structure for waiting until the count becomes zero (a la CountDownLatch in Java).
 class CountWaiter {
 public:
-    CountWaiter(int targetCount)
+    CountWaiter(size_t targetCount)
         : counter(targetCount)
     {
     }
@@ -28,6 +28,6 @@ public:
     }
 
 private:
-    std::atomic<int> counter;
+    std::atomic<size_t> counter;
     Semaphore semaphore;
 };
