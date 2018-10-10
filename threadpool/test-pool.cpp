@@ -23,7 +23,7 @@
         } \
     } while (0)
 
-void testFixedProcedure()
+void testFixedFunction()
 {
     int src, dst;
     // Should have capture with sizeof == 2 * sizeof(int*).
@@ -51,7 +51,7 @@ void testFixedProcedure()
     ASSERT_THAT(computeFunc2(1.0) == 1.0);
     ASSERT_THAT(computeFunc2(4.0) == 2.0);
 
-    printf("FixedProcedure tests passed\n");
+    printf("FixedFunction tests passed\n");
 }
 
 // The simple task queue, protected by the lock + condvar.
@@ -383,7 +383,7 @@ int main(int argc, char** argv)
     int numThreads = std::thread::hardware_concurrency();
     std::set<std::string> poolNames;
 
-    testFixedProcedure();
+    testFixedFunction();
 
     for (int i = 1; i < argc;) {
         if (strcmp(argv[i], "--num-threads") == 0) {
