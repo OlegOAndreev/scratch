@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <functional>
 #include <future>
 #include <thread>
 #include <vector>
@@ -94,9 +95,8 @@ auto submitFuture(Pool& pool, F&& f, Args&&... args) -> std::future<decltype(f(a
     std::future<decltype(f(args...))> ret = promise.get_future();
     // Passing param pack to lambda is allowed only in C++20, until then use std::bind.
     auto call = std::bind(std::forward<F>(f), std::forward<Args>(args)...);
-    std::packaged_task<void()> task([promise = std::move(promise), call = std::move(call)] () mutable {
+    pool.submit([promise = std::move(promise), call = std::move(call)] () mutable {
         promise.set_value(call());
     });
-    pool.submit(std::move(task));
     return ret;
 }

@@ -11,9 +11,48 @@
 
 #include "common.h"
 #include "countwaiter.h"
+#include "fixedfunction.h"
 #include "simplethreadpool.h"
 #include "mpmc_bounded_queue/mpmc_bounded_queue.h"
 
+
+#define ASSERT_THAT(expr) \
+    do { \
+        if (!(expr)) { \
+            printf("FAILED: %s:%d: %s\n", __FILE__, __LINE__, #expr); \
+        } \
+    } while (0)
+
+void testFixedProcedure()
+{
+    int src, dst;
+    // Should have capture with sizeof == 2 * sizeof(int*).
+    FixedFunction<void()> proc([&src, &dst] { dst = src; });
+    src = 1;
+    proc();
+    ASSERT_THAT(dst == 1);
+    src = 123;
+    proc();
+    ASSERT_THAT(dst == 123);
+
+    FixedFunction<void()> movedProc(std::move(proc));
+    src = 456;
+    movedProc();
+    ASSERT_THAT(dst == 456);
+
+    double coeff = 1.0;
+    FixedFunction<double(double)> computeFunc1([&coeff] (double x) { return sqrt(x) * coeff; });
+    ASSERT_THAT(computeFunc1(1.0) == 1.0);
+    ASSERT_THAT(computeFunc1(4.0) == 2.0);
+    coeff = 3.0;
+    ASSERT_THAT(computeFunc1(1.0) == 3.0);
+
+    FixedFunction<double(double)> computeFunc2(sqrt);
+    ASSERT_THAT(computeFunc2(1.0) == 1.0);
+    ASSERT_THAT(computeFunc2(4.0) == 2.0);
+
+    printf("FixedProcedure tests passed\n");
+}
 
 // The simple task queue, protected by the lock + condvar.
 template<typename Task>
@@ -144,15 +183,8 @@ private:
     std::atomic<bool> stopFlag{false};
 };
 
-using SimpleThreadPool = SimpleThreadPoolImpl<std::packaged_task<void()>, SimpleTaskQueue>;
-using MpMcThreadPool = SimpleThreadPoolImpl<std::packaged_task<void()>, MpMcTaskQueue>;
-
-#define ASSERT_THAT(expr) \
-    do { \
-        if (!(expr)) { \
-            printf("FAILED: %s:%d: %s\n", __FILE__, __LINE__, #expr); \
-        } \
-    } while (0)
+using SimpleThreadPool = SimpleThreadPoolImpl<FixedFunction<void()>, SimpleTaskQueue>;
+using MpMcThreadPool = SimpleThreadPoolImpl<FixedFunction<void()>, MpMcTaskQueue>;
 
 // Simplest sanity checks for SimpleThreadPool.
 template<typename TP>
@@ -172,6 +204,15 @@ void basicTests(TP& tp)
 
     auto future3 = submitFuture(tp, (double(*)(double))sqrt, 1.0);
     ASSERT_THAT(future3.get() == 1.0);
+
+    int result4 = 0;
+    CountWaiter waiter4(1);
+    tp.submit([&waiter4, &result4] {
+        result4 = 123;
+        waiter4.post();
+    });
+    waiter4.wait();
+    ASSERT_THAT(result4 == 123);
 
     printf("Basic tests passed\n");
 }
@@ -341,6 +382,8 @@ int main(int argc, char** argv)
 {
     int numThreads = std::thread::hardware_concurrency();
     std::set<std::string> poolNames;
+
+    testFixedProcedure();
 
     for (int i = 1; i < argc;) {
         if (strcmp(argv[i], "--num-threads") == 0) {
