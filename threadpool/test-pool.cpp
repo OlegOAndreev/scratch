@@ -89,7 +89,7 @@ public:
 
 private:
     std::deque<Task> tasks;
-    bool stopFlag;
+    bool stopFlag = false;
 
     std::mutex lock;
     std::condition_variable workerWakeup;
