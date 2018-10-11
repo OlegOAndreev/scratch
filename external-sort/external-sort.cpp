@@ -133,13 +133,13 @@ std::string getNextChunkFile(char const* dstFile, size_t numChunks)
 void sortAndWriteChunk(char const* dstFile, std::vector<std::string>* chunk, std::vector<std::string>* filenames,
                        int* totalSortTimeMs, int* totalWriteTimeMs)
 {
-    uint64_t sortStartTime = getTimeCounter();
+    uint64_t sortStartTime = getTimeTicks();
     std::sort(chunk->begin(), chunk->end());
     *totalSortTimeMs += elapsedMsec(sortStartTime);
 
     // Write the curChunk into next chunk file. Be sure to call FileLineWriter destructor before computing
     // the elapsed time.
-    uint64_t writeStartTime = getTimeCounter();
+    uint64_t writeStartTime = getTimeTicks();
     {
         std::string nextChunkFile = getNextChunkFile(dstFile, filenames->size());
         filenames->push_back(nextChunkFile);
@@ -163,7 +163,7 @@ void sortAndWriteChunk(char const* dstFile, std::vector<std::string>* chunk, std
 // sorts each chunk and writes it into a temporary file. Returns the list of chunk filenames and total length of the file.
 ChunkFiles chunkAndSort(char const* srcFile, char const* dstFile)
 {
-    uint64_t startTime = getTimeCounter();
+    uint64_t startTime = getTimeTicks();
     int totalSortTimeMs = 0;
     int totalWriteTimeMs = 0;
     ChunkFiles ret;
@@ -194,7 +194,7 @@ ChunkFiles chunkAndSort(char const* srcFile, char const* dstFile)
 // Merges sorted chunk files into dstFile.
 void mergeChunks(ChunkFiles const& chunkFiles, char const* dstFile)
 {
-    uint64_t startTime = getTimeCounter();
+    uint64_t startTime = getTimeTicks();
     {
         std::vector<FileLineReader> chunkReaders;
         for (std::string const& chunkFile : chunkFiles.filenames) {
@@ -231,11 +231,11 @@ void mergeChunks(ChunkFiles const& chunkFiles, char const* dstFile)
 // does not remove temporary chunk files.
 void externalSort(char const* srcFile, char const* dstFile)
 {
-    uint64_t startTime = getTimeCounter();
+    uint64_t startTime = getTimeTicks();
     ChunkFiles chunkFiles = chunkAndSort(srcFile, dstFile);
     mergeChunks(chunkFiles, dstFile);
     if (!leaveChunks) {
-        uint64_t deleteStartTime = getTimeCounter();
+        uint64_t deleteStartTime = getTimeTicks();
         deleteFiles(chunkFiles.filenames);
         printf("Deleted %d chunks in %dms\n", (int)chunkFiles.filenames.size(), elapsedMsec(deleteStartTime));
     }
@@ -245,7 +245,7 @@ void externalSort(char const* srcFile, char const* dstFile)
 // A version of chunkAndSort, which uses ChunkFileReader/ChunkFileWriter.
 ChunkFiles chunkAndSortFaster(char const* srcFile, char const* dstFile)
 {
-    uint64_t startTime = getTimeCounter();
+    uint64_t startTime = getTimeTicks();
     int totalSortTimeMs = 0;
     int totalWriteTimeMs = 0;
     ChunkFiles ret;
@@ -260,11 +260,11 @@ ChunkFiles chunkAndSortFaster(char const* srcFile, char const* dstFile)
         }
         ret.totalSize += chunkLength;
 
-        uint64_t sortStartTime = getTimeCounter();
+        uint64_t sortStartTime = getTimeTicks();
         std::sort(chunkLines.begin(), chunkLines.end());
         totalSortTimeMs += elapsedMsec(sortStartTime);
 
-        uint64_t writeStartTime = getTimeCounter();
+        uint64_t writeStartTime = getTimeTicks();
         {
             std::string nextChunkFile = getNextChunkFile(dstFile, ret.filenames.size());
             ret.filenames.push_back(nextChunkFile);
@@ -286,7 +286,7 @@ ChunkFiles chunkAndSortFaster(char const* srcFile, char const* dstFile)
 // A version of mergeChunks, which uses ChunkFileReader/ChunkFileWriter.
 void mergeChunksFaster(ChunkFiles const& chunkFiles, char const* dstFile)
 {
-    uint64_t startTime = getTimeCounter();
+    uint64_t startTime = getTimeTicks();
     {
         MultiChunkReader multiChunkReader;
         size_t numChunks = chunkFiles.filenames.size();
@@ -321,11 +321,11 @@ void mergeChunksFaster(ChunkFiles const& chunkFiles, char const* dstFile)
 // A version of externalSort which uses ChunkFileReader/ChunkFileWriter.
 void externalSortFaster(char const* srcFile, char const* dstFile)
 {
-    uint64_t startTime = getTimeCounter();
+    uint64_t startTime = getTimeTicks();
     ChunkFiles chunkFiles = chunkAndSortFaster(srcFile, dstFile);
     mergeChunksFaster(chunkFiles, dstFile);
     if (!leaveChunks) {
-        uint64_t deleteStartTime = getTimeCounter();
+        uint64_t deleteStartTime = getTimeTicks();
         deleteFiles(chunkFiles.filenames);
         printf("Deleted %d chunks in %dms\n", (int)chunkFiles.filenames.size(), elapsedMsec(deleteStartTime));
     }
@@ -342,7 +342,7 @@ void printErrorInverseStrings(std::string const& line1, std::string const& line2
 // Validates that srcFile is sorted.
 void validateSort(char const* srcFile)
 {
-    uint64_t startTime = getTimeCounter();
+    uint64_t startTime = getTimeTicks();
     {
         FileLineReader reader(srcFile);
         std::string lines[2];
@@ -365,7 +365,7 @@ void validateSort(char const* srcFile)
 // A version of validateSort, which uses ChunkFileReader (and generally does almost zero allocations).
 void validateSortFaster(char const* srcFile)
 {
-    uint64_t startTime = getTimeCounter();
+    uint64_t startTime = getTimeTicks();
     {
         ChunkFileReader reader(srcFile);
         std::vector<StringView> lines;
@@ -396,7 +396,7 @@ void validateSortFaster(char const* srcFile)
 // as a randomization seed.
 void generateFile(char const* dstFile, int numLines, int avgLineLen)
 {
-    uint64_t startTime = getTimeCounter();
+    uint64_t startTime = getTimeTicks();
     {
         int minLineLen = avgLineLen / 2;
         int maxLineLen = avgLineLen * 3 / 2;
@@ -450,7 +450,7 @@ void generateUnrolled(T* p, size_t n, Gen gen)
 // A version of generateFile, which uses ChunkFileWriter for writing and generateUnrolled for filling the buffer.
 void generateFileFaster(char const* dstFile, int numLines, int avgLineLen)
 {
-    uint64_t startTime = getTimeCounter();
+    uint64_t startTime = getTimeTicks();
     {
         int minLineLen = avgLineLen / 2;
         int maxLineLen = avgLineLen * 3 / 2;
@@ -477,7 +477,7 @@ void benchmarkSort(char const* srcFile, char const* sortMethod)
     ChunkFileReader fileReader(srcFile, 1024 * 1024 * 1024);
     std::vector<StringView> lines;
     while (fileReader.readAndSplit(&lines)) {
-        uint64_t startTime = getTimeCounter();
+        uint64_t startTime = getTimeTicks();
         callSortMethod(sortMethod, lines.begin(), lines.end());
         printf("Sorted %d lines by %s sort in %dms\n", (int)lines.size(), sortMethod, elapsedMsec(startTime));
     }

@@ -377,12 +377,12 @@ double benchMemcpy(MemcpyFuncType memcpyFunc, const char* memcpyName, char* buff
     double gbPerSec[3] = { 0.0 };
     for (int i = 0; i < 3; i++) {
         int64_t totalBytes = 0;
-        int64_t start = getTimeCounter();
+        int64_t start = getTimeTicks();
         int64_t deltaUsec;
         while (true) {
             totalBytes += memcpyBuffer(memcpyFunc, buffer, bufferSize, minBlockSize, maxBlockSize,
                                        withIntWork, withSimdWork, nonRandomAddress);
-            deltaUsec = getTimeCounter() - start;
+            deltaUsec = getTimeTicks() - start;
             // Copy for at least half a second.
             if (deltaUsec > timeFreq / 2) {
                 break;

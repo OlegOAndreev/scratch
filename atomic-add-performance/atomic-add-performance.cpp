@@ -40,9 +40,9 @@ int64_t doMain(int64_t times, size_t numThreads, const char* name, Value* values
     // Wait until all thes threads start.
     while (flag.load() != numThreads - 1);
 
-    int64_t timeStart = getTimeCounter();
+    int64_t timeStart = getTimeTicks();
     doSum(times, &values[0], adder);
-    int64_t deltaTime = getTimeCounter() - timeStart;
+    int64_t deltaTime = getTimeTicks() - timeStart;
     if (baseDeltaTime != 0) {
         printf("%lld %s adds per second (%.1f%% from base)\n",
                (long long)(times * getTimeFreq() / deltaTime), name, (double)baseDeltaTime * 100 / deltaTime);

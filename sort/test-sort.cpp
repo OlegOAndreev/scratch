@@ -323,12 +323,12 @@ double compareSortImpl(ToStdout const& toStdout, char const* sortMethod1, char c
                        std::vector<std::vector<T>>& arrays1, std::vector<std::vector<T>>& arrays2,
                        char const* arrayType)
 {
-    uint64_t startTime1 = getTimeCounter();
+    uint64_t startTime1 = getTimeTicks();
     for (std::vector<T>& array : arrays1) {
         callSortMethod(sortMethod1, array.begin(), array.end());
     }
     int runTime1 = elapsedMsec(startTime1);
-    uint64_t startTime2 = getTimeCounter();
+    uint64_t startTime2 = getTimeTicks();
     for (std::vector<T>& array : arrays2) {
         callSortMethod(sortMethod2, array.begin(), array.end());
     }
@@ -385,7 +385,7 @@ template<typename T, typename Generator, typename ToStdout>
 void testSortImpl(char const* typeName, Generator const& generator, ToStdout const& toStdout,
                   char const* sortMethod1, char const* sortMethod2, size_t minSize, size_t maxSize)
 {
-    uint64_t totalStartTime = getTimeCounter();
+    uint64_t totalStartTime = getTimeTicks();
     printf("Running %s tests [%d-%d)\n", typeName, (int)minSize, (int)maxSize);
 
     // Arrays is all the test data prepared at once.

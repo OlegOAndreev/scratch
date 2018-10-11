@@ -327,13 +327,13 @@ void runTest(const char* name, int n, const Func& func)
 {
     printf("Running %s\n", name);
     int64_t timeFreq = getTimeFreq();
-    int64_t startTime = getTimeCounter();
+    int64_t startTime = getTimeTicks();
     int result = func(n);
-    int64_t deltaTime = getTimeCounter() - startTime;
+    int64_t deltaTime = getTimeTicks() - startTime;
     int iters = 1;
     while (deltaTime < timeFreq) {
         result = func(n);
-        deltaTime = getTimeCounter() - startTime;
+        deltaTime = getTimeTicks() - startTime;
         iters++;
     }
     printf("Got %d in %g msec\n", result, (deltaTime * 1000.0 / (timeFreq * iters)));

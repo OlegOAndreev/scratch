@@ -271,14 +271,14 @@ void tinyJobsTest(TP& tp, int numItersPerJob)
     std::vector<double> baseResults;
     baseResults.resize(kNumJobsPerBatch);
     // Compute the amount of time to process jobs without multithreading and verify the results.
-    int64_t baseStartTime = getTimeCounter();
+    int64_t baseStartTime = getTimeTicks();
     size_t const kNumRepeats = 10;
     for (size_t j = 0; j < kNumRepeats; j++) {
         for (size_t i = 0; i < kNumJobsPerBatch; i++) {
             baseResults[i] = tinyJob(jobInput[i]);
         }
     }
-    int64_t baseJobsPerSec = timeFreq * (kNumRepeats * kNumJobsPerBatch) / (getTimeCounter() - baseStartTime);
+    int64_t baseJobsPerSec = timeFreq * (kNumRepeats * kNumJobsPerBatch) / (getTimeTicks() - baseStartTime);
 
     // Actually do three tests:
     //  1. for submitFuture and std::based future,
@@ -291,10 +291,10 @@ void tinyJobsTest(TP& tp, int numItersPerJob)
         std::vector<double> results;
         futures.resize(kNumJobsPerBatch);
         results.resize(kNumJobsPerBatch);
-        int64_t testStartTime = getTimeCounter();
+        int64_t testStartTime = getTimeTicks();
         std::vector<int64_t> jobsPerSec;
-        while (getTimeCounter() - testStartTime < timeFreq * 3) {
-            int64_t batchStartTime = getTimeCounter();
+        while (getTimeTicks() - testStartTime < timeFreq * 3) {
+            int64_t batchStartTime = getTimeTicks();
             // Run a batch of tiny jobs and wait for them to complete.
             for (size_t i = 0; i < kNumJobsPerBatch; i++) {
                 futures[i] = submitFuture(tp, tinyJob, jobInput[i]);
@@ -303,7 +303,7 @@ void tinyJobsTest(TP& tp, int numItersPerJob)
             for (size_t i = 0; i < kNumJobsPerBatch; i++) {
                 results[i] = futures[i].get();
             }
-            jobsPerSec.push_back(timeFreq * kNumJobsPerBatch / (getTimeCounter() - batchStartTime));
+            jobsPerSec.push_back(timeFreq * kNumJobsPerBatch / (getTimeTicks() - batchStartTime));
         }
         printTinyJobsStats(jobsPerSec, baseJobsPerSec, results, baseResults, kNumJobsPerBatch, numItersPerJob,
                            "with std::future");
@@ -311,12 +311,12 @@ void tinyJobsTest(TP& tp, int numItersPerJob)
 
     // Run the second test for ~3 seconds.
     {
-        int64_t testStartTime = getTimeCounter();
+        int64_t testStartTime = getTimeTicks();
         std::vector<double> results;
         results.resize(kNumJobsPerBatch);
         std::vector<int64_t> jobsPerSec;
-        while (getTimeCounter() - testStartTime < timeFreq * 3) {
-            int64_t batchStartTime = getTimeCounter();
+        while (getTimeTicks() - testStartTime < timeFreq * 3) {
+            int64_t batchStartTime = getTimeTicks();
             CountWaiter countWaiter(kNumJobsPerBatch);
             // Run a batch of tiny jobs and wait for them to complete.
             for (size_t i = 0; i < kNumJobsPerBatch; i++) {
@@ -327,7 +327,7 @@ void tinyJobsTest(TP& tp, int numItersPerJob)
             }
 
             countWaiter.wait();
-            jobsPerSec.push_back(timeFreq * kNumJobsPerBatch / (getTimeCounter() - batchStartTime));
+            jobsPerSec.push_back(timeFreq * kNumJobsPerBatch / (getTimeTicks() - batchStartTime));
         }
         printTinyJobsStats(jobsPerSec, baseJobsPerSec, results, baseResults, kNumJobsPerBatch, numItersPerJob,
                            "with CountWaiter");
@@ -337,12 +337,12 @@ void tinyJobsTest(TP& tp, int numItersPerJob)
     {
         // Assuming 64-bit double and 64-byte cacheline.
         size_t const kResultsStride = 8;
-        int64_t testStartTime = getTimeCounter();
+        int64_t testStartTime = getTimeTicks();
         std::vector<double> results;
         results.resize(kNumJobsPerBatch * kResultsStride);
         std::vector<int64_t> jobsPerSec;
-        while (getTimeCounter() - testStartTime < timeFreq * 3) {
-            int64_t batchStartTime = getTimeCounter();
+        while (getTimeTicks() - testStartTime < timeFreq * 3) {
+            int64_t batchStartTime = getTimeTicks();
             CountWaiter countWaiter(kNumJobsPerBatch);
             // Run a batch of tiny jobs and wait for them to complete.
             for (size_t i = 0; i < kNumJobsPerBatch; i++) {
@@ -353,7 +353,7 @@ void tinyJobsTest(TP& tp, int numItersPerJob)
             }
 
             countWaiter.wait();
-            jobsPerSec.push_back(timeFreq * kNumJobsPerBatch / (getTimeCounter() - batchStartTime));
+            jobsPerSec.push_back(timeFreq * kNumJobsPerBatch / (getTimeTicks() - batchStartTime));
         }
 
         // Convert from strided back to the simple array.

@@ -560,7 +560,7 @@ void runIteration(int numThreads, const std::vector<unsigned>& input, unsigned t
         });
     }
 
-    int64_t startTime = getTimeCounter();
+    int64_t startTime = getTimeTicks();
     for (int i = 0; i < numThreads; i++) {
         startSemaphore.post();
     }
@@ -568,7 +568,7 @@ void runIteration(int numThreads, const std::vector<unsigned>& input, unsigned t
         thread.join();
     }
 
-    stats.timeMs = (getTimeCounter() - startTime) * 1000 / getTimeFreq();
+    stats.timeMs = (getTimeTicks() - startTime) * 1000 / getTimeFreq();
 
     for (int i = 0; i < numThreads; i++) {
         stats.avgRunLength += threadStats[i].avgRunLength;

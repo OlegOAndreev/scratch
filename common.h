@@ -273,7 +273,7 @@ FORCE_INLINE T* nextAlignedPtr(T* ptr)
 //
 // Returns current time counter in ticks, frequency specified by getTimeFreq.
 //
-inline int64_t getTimeCounter()
+inline int64_t getTimeTicks()
 {
 #if defined(__APPLE__)
     timeval tp;
@@ -315,7 +315,7 @@ inline int64_t getTimeFreq()
 //
 inline int elapsedMsec(uint64_t startTime)
 {
-    return (getTimeCounter() - startTime) * 1000LL / getTimeFreq();
+    return (getTimeTicks() - startTime) * 1000LL / getTimeFreq();
 }
 
 
@@ -422,7 +422,7 @@ struct RemoveCRef {
 };
 
 template<typename T>
-struct RemoveCRef<const T> {
+struct RemoveCRef<T const> {
     using Type = T;
 };
 
