@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <limits>
+#include <queue>
 #include <vector>
 
 #define kiss_fft_scalar float
@@ -13,6 +14,11 @@
 
 
 // General notes on various pitch-shifting methods: http://blogs.zynaptiq.com/bernsee/time-pitch-overview/
+//
+// Basic phase vocoder implementation: http://downloads.dspdimension.com/smbPitchShift.cpp
+//
+// Desription of phase gradient approach to improve the phase vocoder: Phase Vocoder Done Right,
+// Zdeneˇk Pru ̊ša and Nicki Holighaus, Acoustics Research Institute, Austrian Academy of Sciences Vienna, Austria
 
 enum class SampleFormat {
     Sint16,
@@ -30,6 +36,7 @@ struct StretchParams {
     int rate = 0;
     size_t fftSize = 2048;
     int overlap = 4;
+    bool phaseGradient = false;
 };
 
 size_t getSampleSize(SampleFormat format)
@@ -249,7 +256,8 @@ void writeWav(const char* path, const SoundData& data)
         exit(1);
     }
 }
-}
+
+} // namespace Wave
 
 template<typename ST>
 void prepareSineSamples(size_t numSamples, int waveHz, int rate, ST low, ST high, ST* data)
@@ -294,8 +302,7 @@ DT castAndClamp(ST v)
 // is passing the last position (and, potentially, last value) from resample for the previous chunk to resample
 // for the next chunk.
 template<typename ST>
-struct LinearResampleState
-{
+struct LinearResampleState {
     int numChannels;
 
     // Iterator position, stored for continuing resampling the next block. Positions and deltas are encoded
@@ -424,43 +431,44 @@ size_t simpleStretchSoundSamples(const T* src, size_t numSamples, int numChannel
     return resampleChunk(&state, src, numSamples, stretch, dst, dstNumSamples);
 }
 
-// Helper struct for transforming blocks of data with STFT.
-struct StftCfg
+void fillHannWindow(kiss_fft_scalar* window, size_t fftSize)
 {
+    for (size_t k = 0; k < fftSize; k++) {
+        window[k] = -0.5 * std::cos(2 * M_PI * k / fftSize) + 0.5;
+    }
+}
+
+// Helper struct for transforming blocks of data with STFT.
+struct StftState {
     size_t fftSize;
     size_t offset;
     int numChannels;
-    std::vector<kiss_fft_scalar> srcBuf;
     std::vector<kiss_fft_scalar> window;
-    std::vector<kiss_fft_scalar> dstBuf;
-    std::vector<kiss_fft_cpx> freq;
-    std::vector<kiss_fft_cpx> newFreq;
     kiss_fftr_cfg fftCfg;
     kiss_fftr_cfg fftiCfg;
-    std::vector<kiss_fft_scalar> newMagnitudes;
-    std::vector<kiss_fft_scalar> prevPhases;
-    std::vector<kiss_fft_scalar> prevNewPhases;
-    std::vector<kiss_fft_scalar> newPhaseDiffs;
 
-    StftCfg(size_t fftSize, size_t offset, int numChannels)
+    // Buffers modified at each STFT step.
+    std::vector<kiss_fft_scalar> srcBuf;
+    std::vector<kiss_fft_cpx> freqBuf;
+    std::vector<kiss_fft_cpx> dstFreqBuf;
+    std::vector<kiss_fft_scalar> dstBuf;
+
+    StftState(size_t fftSize, size_t offset, int numChannels)
         : fftSize(fftSize)
         , offset(offset)
         , numChannels(numChannels)
     {
-        srcBuf.resize(fftSize * numChannels);
         window.resize(fftSize);
-        dstBuf.resize(fftSize * numChannels);
-        freq.resize(fftSize / 2 + 1);
-        newFreq.resize(fftSize / 2 + 1);
         fftCfg = kiss_fftr_alloc(fftSize, 0, nullptr, nullptr);
         fftiCfg = kiss_fftr_alloc(fftSize, 1, nullptr, nullptr);
-        prevPhases.resize((fftSize / 2 + 1) * numChannels);
-        prevNewPhases.resize((fftSize / 2 + 1) * numChannels);
-        newMagnitudes.resize(fftSize / 2 + 1);
-        newPhaseDiffs.resize(fftSize / 2 + 1);
+
+        srcBuf.resize(fftSize * numChannels);
+        dstBuf.resize(fftSize * numChannels);
+        freqBuf.resize(fftSize / 2 + 1);
+        dstFreqBuf.resize(fftSize / 2 + 1);
     }
 
-    ~StftCfg()
+    ~StftState()
     {
         kiss_fftr_free(fftCfg);
         kiss_fftr_free(fftiCfg);
@@ -475,29 +483,44 @@ struct StftCfg
     {
         return dstBuf.data() + fftSize * ch;
     }
+};
 
-    kiss_fft_scalar* prevPhasesCh(int ch)
+// Helper struct, containing data for simple phase vocoder.
+struct SimpleVocoderState {
+    size_t freqSize;
+    // Phases from analysis from previous frame.
+    std::vector<kiss_fft_scalar> prevAnaPhases;
+    // Phases from synthesis from previous frame.
+    std::vector<kiss_fft_scalar> prevSynPhases;
+
+    // Scratch buffers.
+    std::vector<kiss_fft_scalar> synMagnitudes;
+    std::vector<kiss_fft_scalar> synPhaseDiffs;
+
+    SimpleVocoderState(size_t fftSize, int numChannels)
     {
-        return prevPhases.data() + (fftSize / 2 + 1) * ch;
+        freqSize = fftSize / 2 + 1;
+        prevAnaPhases.resize(freqSize * numChannels);
+        prevSynPhases.resize(freqSize * numChannels);
+        synMagnitudes.resize(freqSize);
+        synPhaseDiffs.resize(freqSize);
     }
 
-    kiss_fft_scalar* prevNewPhasesCh(int ch)
+    kiss_fft_scalar* prevAnaPhasesCh(int channel)
     {
-        return prevNewPhases.data() + (fftSize / 2 + 1) * ch;
+        return prevAnaPhases.data() + freqSize * channel;
+    }
+
+    kiss_fft_scalar* prevSynPhasesCh(int channel)
+    {
+        return prevSynPhases.data() + freqSize * channel;
     }
 };
 
-void fillHannWindow(kiss_fft_scalar* window, size_t fftSize)
-{
-    for (size_t k = 0; k < fftSize; k++) {
-        window[k] = -0.5 * std::cos(2 * M_PI * k / fftSize) + 0.5;
-    }
-}
-
-// Returns the phaseDiff normalized back to [-M_PI, M_PI] range. Assumes that phaseDiff is not that far the range
-// so that we do not use fmod, which can be pretty slow.
+// Returns the phaseDiff normalized back to [-M_PI, M_PI] range.
 kiss_fft_scalar normalizePhase(kiss_fft_scalar phaseDiff)
 {
+    // Assumes that phaseDiff is not that far the range so that we do not use fmod, which can be pretty slow.
 #if 1
     if (phaseDiff < -M_PI) {
         do {
@@ -518,27 +541,34 @@ kiss_fft_scalar normalizePhase(kiss_fft_scalar phaseDiff)
 #endif
 }
 
-// Multiply all the frequencies for channel ch by pitchShift, correct the phases from lastPhases
-// and update the prevNewPhases.
-void stretchFreq(StftCfg* cfg, double pitchShift, int ch)
+// Standard simple phase vocoder impl: take stft->freq and compute stft->dstFreq for given channel
+// with given pitchShift.
+void stretchFreqSimple(StftState* stft, SimpleVocoderState* vocoder, double pitchShift, int channel)
 {
-    size_t freqSize = cfg->fftSize / 2 + 1;
-    kiss_fft_cpx* freq = cfg->freq.data();
-    kiss_fft_scalar* prevPhases = cfg->prevPhasesCh(ch);
-    kiss_fft_scalar* prevNewPhases = cfg->prevNewPhasesCh(ch);
-    kiss_fft_scalar* newPhaseDiffs = cfg->newPhaseDiffs.data();
-    kiss_fft_scalar* newMagnitudes = cfg->newMagnitudes.data();
-    size_t overlap = cfg->fftSize / cfg->offset;
-    // Overlaps must be powers of two, so use it to increase modulo performance.
+    size_t freqSize = stft->fftSize / 2 + 1;
+    kiss_fft_cpx* freq = stft->freqBuf.data();
+    kiss_fft_scalar* prevAnaPhases = vocoder->prevAnaPhasesCh(channel);
+    kiss_fft_scalar* prevSynPhases = vocoder->prevSynPhasesCh(channel);
+    kiss_fft_scalar* synPhaseDiffs = vocoder->synPhaseDiffs.data();
+    kiss_fft_scalar* synMagnitudes = vocoder->synMagnitudes.data();
+
+    size_t overlap = stft->fftSize / stft->offset;
+    // Overlaps must be powers of two, so use it to optimize performance: replacing the k % overlap
+    // with k & overlapMask. You can always replace k * origPhaseMult with (k % overlap) * origPhaseMult.
     size_t overlapMask = overlap - 1;
     if ((overlapMask & overlap) != 0) {
         printf("Overlap must be pow-of-2\n");
         exit(1);
     }
+    // origPhaseMult is used to calculate the expected phase difference for a basis for frequency bin k:
+    // e^(2 * pi * k * t / freqSize) = e^(2 * pi * k / overlap) when t = stft->offset, therefore the expected phase at
+    // t = stft->offset equals to origPhaseMult * k. In order to constrain the phase difference to [0, 2 * pi),
+    // simply replace the k with (k % overlap): origPhaseMult * (k % overlap). As noted above, this is equivalent
+    // to origPhaseMulti * (k & overlapMask).
     double origPhaseMult = 2 * M_PI / overlap;
 
-    std::fill(newMagnitudes, newMagnitudes + freqSize, 0.0);
-    std::fill(newPhaseDiffs, newPhaseDiffs + freqSize, 0.0);
+    std::fill(synMagnitudes, synMagnitudes + freqSize, 0.0);
+    std::fill(synPhaseDiffs, synPhaseDiffs + freqSize, 0.0);
 
     for (size_t k = 0; k < freqSize; k++) {
         size_t newk = k * pitchShift;
@@ -547,47 +577,257 @@ void stretchFreq(StftCfg* cfg, double pitchShift, int ch)
         }
 
         kiss_fft_scalar magn = sqrt(freq[k].r * freq[k].r + freq[k].i * freq[k].i);
-        bool largeMagn = (magn > newMagnitudes[newk]);
-        newMagnitudes[newk] += magn;
+        bool largeMagn = (magn > synMagnitudes[newk]);
+        synMagnitudes[newk] += magn;
         kiss_fft_scalar phase = std::atan2(freq[k].i, freq[k].r);
-        // Original phase diff is the difference between the potential phase (phase of the frequency bin k
-        // at the end of the previous block) and the actual phase for the frequency bin k at the start
-        // of the new block. This phase diff is then applied to the stretched frequencies. The final formula
-        // is simplified a bit from the one from smbPitchShift.cpp
-        kiss_fft_scalar phaseDiff = phase - prevPhases[k];
-        // Modulo is important here, because otherwise the origPhaseMult * k can be very large and normalizePhase
-        // does not expect it.
-        phaseDiff -= origPhaseMult * (k & overlapMask);
-        phaseDiff = normalizePhase(phaseDiff);
-        kiss_fft_scalar newPhaseDiff = phaseDiff * pitchShift + (k * pitchShift - newk) * origPhaseMult;
         // If multiple old phase bins stretch into one new phase bin (if pitchShift < 1.0), we add their
         // magnitudes but want to want to choose only one phase (summing up phases from multiple bins
         // make no sense). Therefore, we separately compute newPhaseDiffs and then add them to prevNewPhases
-        // in the end when finally computing newFreq. Ideally we would choose the phase from the bin with
+        // in the end when finally computing dstFreq. Ideally we would choose the phase from the bin with
         // the highest magnitude here.
         if (largeMagn) {
-            newPhaseDiffs[newk] = origPhaseMult * (newk & overlapMask) + newPhaseDiff;
+            // Original phase diff is the difference between the potential phase (phase of the frequency bin k
+            // at the end of the previous block) and the actual phase for the frequency bin k at the start
+            // of the new block. This phase diff is then applied to the stretched frequencies. The final formula
+            // is simplified a bit from the one from smbPitchShift.cpp
+            // Modulo overlapMask is important here, because otherwise the origPhaseMult * k can be very large
+            // and normalizePhase does not expect it.
+            kiss_fft_scalar anaPhaseDiff = normalizePhase(phase - prevAnaPhases[k]
+                                                          - origPhaseMult * (k & overlapMask));
+            // The following two lines are basically equivalent to
+            //   synPhaseDiffs[newk] = pitchShift * (anaPhaseDiff + origPhaseMult * k).
+            // The main difference is that the synPhaseDiffs is much closer to zero, so that
+            // normalizePhase would take less time later.
+            kiss_fft_scalar synPhaseDiff = anaPhaseDiff * pitchShift + (k * pitchShift - newk) * origPhaseMult;
+            synPhaseDiffs[newk] = origPhaseMult * (newk & overlapMask) + synPhaseDiff;
         }
-        prevPhases[k] = phase;
+        prevAnaPhases[k] = phase;
     }
 
-    kiss_fft_cpx* newFreq = cfg->newFreq.data();
+    kiss_fft_cpx* dstFreq = stft->dstFreqBuf.data();
     for (size_t k = 0; k < freqSize; k++) {
-        // Do the normalize here so that the prevNewPhases does not become too large so that the floating point
+        // Do the normalize here so that the newPhases does not become too large so that the floating point
         // errors stay bounded.
-        prevNewPhases[k] = normalizePhase(prevNewPhases[k] + newPhaseDiffs[k]);
-        newFreq[k].r = newMagnitudes[k] * std::cos(prevNewPhases[k]);
-        newFreq[k].i = newMagnitudes[k] * std::sin(prevNewPhases[k]);
+        prevSynPhases[k] = normalizePhase(prevSynPhases[k] + synPhaseDiffs[k]);
+        dstFreq[k].r = synMagnitudes[k] * std::cos(prevSynPhases[k]);
+        dstFreq[k].i = synMagnitudes[k] * std::sin(prevSynPhases[k]);
     }
 }
 
-// Takes cfg->srcBuf, does STFT, changes pitch by pitchShift via frequencies and does inverse STFT to cfg->dstBuf.
-void doStftPitchChange(StftCfg* cfg, double pitchShift)
+
+// Helper struct, containing data for phase vocoder with phase gradient method.
+struct PhaseGradientVocoderState {
+    struct HeapElem {
+        // Frequency bin.
+        size_t freqIdx;
+        // Magnitude for the frequency.
+        kiss_fft_scalar magn;
+        // True if the element is from the previous STFT frame, false if from the current.
+        bool prevFrame;
+
+        bool operator<(HeapElem const& other) const {
+            return magn < other.magn;
+        }
+    };
+
+    size_t freqSize;
+    std::vector<kiss_fft_scalar> prevAnaMagnitudes;
+    std::vector<kiss_fft_scalar> prevAnaPhases;
+    std::vector<kiss_fft_scalar> prevSynPhases;
+
+    // Scratch buffers.
+    std::vector<kiss_fft_scalar> anaMagnitudes;
+    std::vector<kiss_fft_scalar> anaPhases;
+    std::vector<kiss_fft_scalar> synMagnitudes;
+    std::vector<kiss_fft_scalar> synPhases;
+    std::priority_queue<HeapElem> maxHeap;
+    // If true, synPhases is assigned.
+    std::vector<uint8_t> phaseAssigned;
+
+    PhaseGradientVocoderState(size_t fftSize, int numChannels)
+    {
+        freqSize = fftSize / 2 + 1;
+        prevAnaMagnitudes.resize(freqSize * numChannels);
+        prevAnaPhases.resize(freqSize * numChannels);
+        prevSynPhases.resize(freqSize * numChannels);
+
+        anaMagnitudes.resize(freqSize);
+        anaPhases.resize(freqSize);
+        synMagnitudes.resize(freqSize);
+        synPhases.resize(freqSize);
+        phaseAssigned.resize(freqSize);
+    }
+
+    kiss_fft_scalar* prevAnaMagnitudesCh(int channel)
+    {
+        return prevAnaMagnitudes.data() + freqSize * channel;
+    }
+
+    kiss_fft_scalar* prevAnaPhasesCh(int channel)
+    {
+        return prevAnaPhases.data() + freqSize * channel;
+    }
+
+    kiss_fft_scalar* prevSynPhasesCh(int channel)
+    {
+        return prevSynPhases.data() + freqSize * channel;
+    }
+};
+
+// Phase vocoder with phase gradient impl: take stft->freq and compute stft->dstFreq for given channel
+// with given pitchShift.
+void stretchFreqPhaseGradient(StftState* stft, PhaseGradientVocoderState* vocoder, double pitchShift, int channel)
 {
-    for (int ch = 0; ch < cfg->numChannels; ch++) {
-        kiss_fftr(cfg->fftCfg, cfg->srcBuf.data() + cfg->fftSize * ch, cfg->freq.data());
-        stretchFreq(cfg, pitchShift, ch);
-        kiss_fftri(cfg->fftiCfg, cfg->newFreq.data(), cfg->dstBuf.data() + cfg->fftSize * ch);
+    // Ignore frequencies with magnitude < (max magnitude * kMaxMagnitudeTolerance).
+    static const float kMinMagnitudeTolerance = 1e-3;
+
+    size_t freqSize = stft->fftSize / 2 + 1;
+    kiss_fft_cpx* freq = stft->freqBuf.data();
+    kiss_fft_scalar* prevAnaMagnitudes = vocoder->prevAnaMagnitudesCh(channel);
+    kiss_fft_scalar* prevAnaPhases = vocoder->prevAnaPhasesCh(channel);
+    kiss_fft_scalar* prevSynPhases = vocoder->prevSynPhasesCh(channel);
+    kiss_fft_scalar* anaMagnitudes = vocoder->anaMagnitudes.data();
+    kiss_fft_scalar* anaPhases = vocoder->anaPhases.data();
+    kiss_fft_scalar* synMagnitudes = vocoder->synMagnitudes.data();
+    kiss_fft_scalar* synPhases = vocoder->synPhases.data();
+    std::priority_queue<PhaseGradientVocoderState::HeapElem>& maxHeap = vocoder->maxHeap;
+    uint8_t* phaseAssigned = vocoder->phaseAssigned.data();
+
+    size_t overlap = stft->fftSize / stft->offset;
+    // Overlaps must be powers of two, so use it to optimize performance: replacing the k % overlap
+    // with k & overlapMask. You can always replace k * origPhaseMult with (k % overlap) * origPhaseMult.
+    size_t overlapMask = overlap - 1;
+    if ((overlapMask & overlap) != 0) {
+        printf("Overlap must be pow-of-2\n");
+        exit(1);
+    }
+    double origPhaseMult = 2 * M_PI / overlap;
+
+    kiss_fft_scalar maxMagn = 0.0;
+    for (size_t k = 0; k < freqSize; k++) {
+        kiss_fft_scalar magn = sqrt(freq[k].r * freq[k].r + freq[k].i * freq[k].i);
+        anaMagnitudes[k] = magn;
+        maxMagn = std::max(std::max(maxMagn, anaMagnitudes[k]), prevAnaMagnitudes[k]);
+    }
+    kiss_fft_scalar minMagn = maxMagn * kMinMagnitudeTolerance;
+
+    // std::priroity_queue has no clear()...
+    while (!maxHeap.empty()) {
+        maxHeap.pop();
+    }
+
+    std::fill(synMagnitudes, synMagnitudes + freqSize, 0.0);
+    std::fill(synPhases, synPhases + freqSize, 0.0);
+    // Number of zeroes in phaseAssigned array.
+    int numUnassigned = 0;
+    for (size_t k = 0; k < freqSize; k++) {
+        size_t newk = k * pitchShift;
+        if (newk >= freqSize) {
+            break;
+        }
+
+        kiss_fft_scalar magn = anaMagnitudes[k];
+        // If pitchShift < 1.0, several analysis frequency bins may correspond to one synthesis bin, therefore,
+        // add, not replace.
+        synMagnitudes[newk] += magn;
+
+        // Optimization: do not compute phase for frequencies below the minMagn threshold.
+        if (magn > minMagn) {
+            anaPhases[k] = std::atan2(freq[k].i, freq[k].r);
+            phaseAssigned[k] = false;
+            numUnassigned++;
+            maxHeap.push({k, prevAnaMagnitudes[k], true});
+        } else {
+            // The original paper assigns random values to frequencies below the min magnitude, but we simply leave
+            // the phase to be 0.0 (see std::fill above for synPhases).
+            anaPhases[k] = 0.0;
+            phaseAssigned[k] = true;
+        }
+    }
+
+    while (numUnassigned > 0) {
+        if (maxHeap.empty()) {
+            printf("INTERNAL ERROR: no more elements remaining in the heap, %d still unassigned\n", numUnassigned);
+            break;
+        }
+        PhaseGradientVocoderState::HeapElem topElem = maxHeap.top();
+        maxHeap.pop();
+        size_t k = topElem.freqIdx;
+        if (topElem.prevFrame) {
+            if (!phaseAssigned[k]) {
+                phaseAssigned[k] = true;
+                numUnassigned--;
+                maxHeap.push({k, anaMagnitudes[k], false});
+
+                size_t newk = k * pitchShift;
+                if (newk < freqSize) {
+                    // Original phase diff is the difference between the potential phase (phase of the frequency bin k
+                    // at the end of the previous block) and the actual phase for the frequency bin k at the start
+                    // of the new block. This phase diff is then applied to the stretched frequencies. The final formula
+                    // is simplified a bit from the one from smbPitchShift.cpp
+                    // Modulo overlapMask is important here, because otherwise the origPhaseMult * k can be very large
+                    // and normalizePhase does not expect it.
+                    kiss_fft_scalar anaPhaseDiff = normalizePhase(anaPhases[k] - prevAnaPhases[k]
+                                                                  - origPhaseMult * (k & overlapMask));
+                    // The following two lines are basically equivalent to
+                    //   synPhaseDiffs[newk] = pitchShift * (anaPhaseDiff + origPhaseMult * k).
+                    // The main difference is that the synPhaseDiffs is much closer to zero, so that
+                    // normalizePhase would take less time later.
+                    kiss_fft_scalar synPhaseDiff = anaPhaseDiff * pitchShift + (k * pitchShift - newk) * origPhaseMult;
+                    synPhases[newk] = prevSynPhases[newk] + synPhaseDiff + origPhaseMult * (newk & overlapMask);
+                }
+            }
+        } else {
+            if (k > 0 && !phaseAssigned[k - 1]) {
+                phaseAssigned[k - 1] = true;
+                numUnassigned--;
+                maxHeap.push({k - 1, anaMagnitudes[k - 1], false});
+
+                size_t newk1 = (k - 1) * pitchShift;
+                size_t newk = k * pitchShift;
+                if (newk < freqSize && newk1 != newk) {
+                    synPhases[newk1] = synPhases[newk] - anaPhases[k] + anaPhases[k - 1];
+                }
+            }
+            if (k < freqSize - 1 && !phaseAssigned[k + 1]) {
+                phaseAssigned[k + 1] = true;
+                numUnassigned--;
+                maxHeap.push({k + 1, anaMagnitudes[k + 1], false});
+
+                size_t newk1 = (k + 1) * pitchShift;
+                size_t newk = k * pitchShift;
+                if (newk1 < freqSize && newk1 != newk) {
+                    synPhases[newk1] = synPhases[newk] - anaPhases[k] + anaPhases[k + 1];
+                }
+            }
+        }
+    }
+
+    kiss_fft_cpx* dstFreq = stft->dstFreqBuf.data();
+    for (size_t k = 0; k < freqSize; k++) {
+        // Do the normalize here so that the prevNewPhases does not become too large so that the floating point
+        // errors stay bounded.
+        prevSynPhases[k] = normalizePhase(synPhases[k]);
+        dstFreq[k].r = synMagnitudes[k] * std::cos(prevSynPhases[k]);
+        dstFreq[k].i = synMagnitudes[k] * std::sin(prevSynPhases[k]);
+    }
+
+    std::copy(anaMagnitudes, anaMagnitudes + freqSize, prevAnaMagnitudes);
+    std::copy(anaPhases, anaPhases + freqSize, prevAnaPhases);
+}
+
+// Takes stft->srcBuf, does STFT, changes pitch by pitchShift via frequencies and does inverse STFT to stft->dstBuf.
+void doStftPitchChange(StftState* stft, SimpleVocoderState* simpleVocoder, PhaseGradientVocoderState* gradientVocoder,
+                       double pitchShift, bool phaseGradient)
+{
+    for (int channel = 0; channel < stft->numChannels; channel++) {
+        kiss_fftr(stft->fftCfg, stft->srcBuf.data() + stft->fftSize * channel, stft->freqBuf.data());
+        if (phaseGradient) {
+            stretchFreqPhaseGradient(stft, gradientVocoder, pitchShift, channel);
+        } else {
+            stretchFreqSimple(stft, simpleVocoder, pitchShift, channel);
+        }
+        kiss_fftri(stft->fftiCfg, stft->dstFreqBuf.data(), stft->dstBuf.data() + stft->fftSize * channel);
     }
 }
 
@@ -613,7 +853,9 @@ size_t stftStretchSoundSamples(const T* src, size_t numSamples, int numChannels,
 
     Span2d<const T> srcV(src, numSamples, numChannels);
     Span2d<T> dstV(dst, numSamples, numChannels);
-    StftCfg cfg(fftSize, offset, numChannels);
+    StftState stft(fftSize, offset, numChannels);
+    SimpleVocoderState simpleVocoder(fftSize, numChannels);
+    PhaseGradientVocoderState phaseGradientVocoder(fftSize, numChannels);
     // STFT outputs are accumulated in circular buffer in dstAccumBuf. The part of dstAccumBuf, for which all
     // overlapped blocks have been summed, will be stretched and written to dst.
     std::vector<kiss_fft_scalar> dstAccumBuf;
@@ -632,7 +874,7 @@ size_t stftStretchSoundSamples(const T* src, size_t numSamples, int numChannels,
     // > gives the Griffin-Lim [http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.306.7858&rep=rep1&type=pdf]
     // > optimal estimate (optimal in a least-squares sense) for a time-domain signal from a modified STFT.
     // > SciPy implements a = 1 for the signal reconstruction in the istft routine.
-    kiss_fft_scalar* window = cfg.window.data();
+    kiss_fft_scalar* window = stft.window.data();
     fillHannWindow(window, fftSize);
 
     LinearResampleState<kiss_fft_scalar> resampleState(numChannels);
@@ -642,28 +884,28 @@ size_t stftStretchSoundSamples(const T* src, size_t numSamples, int numChannels,
         size_t prefix = fftSize - block;
         // read != fftSize-prefix holds only when the numSamples < fftSize-offset.
         size_t read = std::min(fftSize - prefix, numSamples);
-        for (int ch = 0; ch < numChannels; ch++) {
+        for (int channel = 0; channel < numChannels; channel++) {
             // Prepare srcBuf. The first part for negative block offsets is prefilled with zeros.
-            kiss_fft_scalar *srcBuf = cfg.srcBufCh(ch);
+            kiss_fft_scalar *srcBuf = stft.srcBufCh(channel);
             for (size_t k = 0; k < prefix; k++) {
                 srcBuf[k] = 0.0;
             }
             for (size_t k = prefix; k < prefix + read; k++) {
-                srcBuf[k] = (kiss_fft_scalar)srcV(k - prefix, ch) * window[k];
+                srcBuf[k] = (kiss_fft_scalar)srcV(k - prefix, channel) * window[k];
             }
             for (size_t k = prefix + read; k < fftSize; k++) {
                 srcBuf[k] = 0.0;
             }
         }
 
-        doStftPitchChange(&cfg, finalPitchShift);
+        doStftPitchChange(&stft, &simpleVocoder, &phaseGradientVocoder, finalPitchShift, params.phaseGradient);
 
         // Write dstBuf to dstAccumBuf. For blocks with negative offset we never wrap around the dstAccumBuf,
         // always start writing at index 0.
-        for (int ch = 0; ch < numChannels; ch++) {
-            kiss_fft_scalar *dstBuf = cfg.dstBuf.data();
+        for (int channel = 0; channel < numChannels; channel++) {
+            kiss_fft_scalar *dstBuf = stft.dstBuf.data();
             for (size_t k = 0; k < read; k++) {
-                dstAccumBufV(k, ch) += dstBuf[k + prefix] / fftSize;
+                dstAccumBufV(k, channel) += dstBuf[k + prefix] / fftSize;
             }
         }
     }
@@ -672,21 +914,21 @@ size_t stftStretchSoundSamples(const T* src, size_t numSamples, int numChannels,
     for (size_t block = 0; block < numSamples; block += offset) {
         size_t read = std::min(fftSize, numSamples - block);
         size_t accumStart = block % fftSize;
-        for (int ch = 0; ch < numChannels; ch++) {
+        for (int channel = 0; channel < numChannels; channel++) {
             // Prepare srcBuf.
-            kiss_fft_scalar* srcBuf = cfg.srcBufCh(ch);
+            kiss_fft_scalar* srcBuf = stft.srcBufCh(channel);
             for (size_t k = 0; k < read; k++) {
-                srcBuf[k] = (kiss_fft_scalar)srcV(block + k, ch) * window[k];
+                srcBuf[k] = (kiss_fft_scalar)srcV(block + k, channel) * window[k];
             }
             for (size_t k = read; k < fftSize; k++) {
                 srcBuf[k] = 0.0;
             }
         }
 
-        doStftPitchChange(&cfg, finalPitchShift);
+        doStftPitchChange(&stft, &simpleVocoder, &phaseGradientVocoder, finalPitchShift, params.phaseGradient);
 
-        for (int ch = 0; ch < numChannels; ch++) {
-            kiss_fft_scalar* dstBuf = cfg.dstBufCh(ch);
+        for (int channel = 0; channel < numChannels; channel++) {
+            kiss_fft_scalar* dstBuf = stft.dstBufCh(channel);
             // Write dstBuf to dstAccumBuf. We want to write dstBuf[k] to dstAccumBufS((block + k) % fftSize).
             // The last part dstBuf[fftSize - offset, fftSize) must overwrite, not add to the dstAccumBuf. Thus,
             // we have to do two or three separate loops, the last one overwriting, not adding the data.
@@ -694,20 +936,20 @@ size_t stftStretchSoundSamples(const T* src, size_t numSamples, int numChannels,
             if (accumStart != 0) {
                 // We wrap around the dstAccumBuf, do two loops when writing.
                 for (size_t k = accumStart; k < fftSize; k++) {
-                    dstAccumBufV(k, ch) += DST_BUF(k - accumStart);
+                    dstAccumBufV(k, channel) += DST_BUF(k - accumStart);
                 }
                 for (size_t k = 0; k < accumStart - offset; k++) {
-                    dstAccumBufV(k, ch) += DST_BUF(k + fftSize - accumStart);
+                    dstAccumBufV(k, channel) += DST_BUF(k + fftSize - accumStart);
                 }
                 for (size_t k = accumStart - offset; k < accumStart; k++) {
-                    dstAccumBufV(k, ch) = DST_BUF(k + fftSize - accumStart);
+                    dstAccumBufV(k, channel) = DST_BUF(k + fftSize - accumStart);
                 }
             } else {
                 for (size_t k = 0; k < fftSize - offset; k++) {
-                    dstAccumBufV(k, ch) += DST_BUF(k);
+                    dstAccumBufV(k, channel) += DST_BUF(k);
                 }
                 for (size_t k = fftSize - offset; k < fftSize; k++) {
-                    dstAccumBufV(k, ch) = DST_BUF(k);
+                    dstAccumBufV(k, channel) = DST_BUF(k);
                 }
             }
 #undef DST_BUF
@@ -842,11 +1084,13 @@ void printUsage(const char* argv0)
            "\t--time-stretch VALUE\t\tStretch time by this value, 1.0 by default (no stretching)\n"
            "\t--pitch-shift VALUE\t\tShift pitch by this value, 1.0 by default (no change)\n"
            "\t--method METHOD\t\t\tWhich method to use for stretching: simple (do not preserve time),"
-           " stft (default), smb\n"
+           " stft (default)\n"
            "\t--fft-size SIZE\t\t\tSize of the FFT to be used (not applicable if simple method is used,"
            " %d by default.\n"
            "\t--overlap N\t\t\tNumber of FFT frames overlapping each sample (not applicable if simple method is used,"
-           " %d by default.\n",
+           " %d by default.\n"
+           "\t--phase-gradient\t\tUse phase gradient method as described in Phase Vocoder Done Right"
+           " by Zdenek Prusa and Nicki Holighaus\n",
            argv0,
            (int)params.fftSize,
            params.overlap);
@@ -987,6 +1231,9 @@ int main(int argc, char** argv)
             }
             params.overlap = atoi(argv[i + 1]);
             i += 2;
+        } else if (strcmp(argv[i], "--phase-gradient") == 0) {
+            params.phaseGradient = true;
+            i++;
         } else if (strcmp(argv[i], "--help") == 0) {
             printUsage(argv[0]);
             return 0;
