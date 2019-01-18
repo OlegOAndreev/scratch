@@ -446,6 +446,13 @@ struct RemoveCRef<T const&&> {
     using Type = T;
 };
 
+// We do not want to depend on <utility> just for std::move.
+template<typename T>
+typename RemoveCRef<T>::Type&& stdMove(T&& t) noexcept
+{
+    return static_cast<typename RemoveCRef<T>::Type&&>(t);
+}
+
 //
 // Computes a very simple hash, see: http://www.eecs.harvard.edu/margo/papers/usenix91/paper.ps
 //
@@ -487,4 +494,31 @@ template<typename C, typename V>
 inline bool setContains(C const& container, V const& value)
 {
     return container.find(value) != container.end();
+}
+
+// Removes the elements satisfying the predicate from the vector-like container (container must have methods begin(),
+// end() and erase(fromIt, toIt)). Preserves the order of the elements in the original container.
+template<typename C, typename P>
+inline void removeIf(C& container, P const& predicate)
+{
+    auto it = container.begin();
+    auto endIt = container.end();
+    // Optimization: do not call std::move until we actually encounter an element to remove.
+    while (!predicate(*it) && it != endIt) {
+        ++it;
+    }
+    if (it == endIt) {
+        return;
+    }
+    // We know that predicate(*it) == true.
+    auto insertIt = it;
+    ++it;
+    for (; it != endIt; ++it) {
+        if (predicate(*it)) {
+            continue;
+        }
+        *insertIt = stdMove(*it);
+        ++insertIt;
+    }
+    container.erase(insertIt, endIt);
 }
