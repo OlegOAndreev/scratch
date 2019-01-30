@@ -36,11 +36,11 @@ public:
     template<typename F>
     void submit(F&& f);
 
-    // Submits a number of ranged tasks for range [base, base+num) for execution in the pool,
-    // i.e. splits the range [base, base+num) into subranges [base, base+num1), [base+num1, base+num2)
-    // and calls f for each: f(base, num1), f(base+num1, num2), ... (f must be a callable of type void(I, size_t)).
-    template<typename F, typename I>
-    void submitRange(F&& f, I base, size_t num);
+    // Submits a number of ranged tasks for range [0, num) for execution in the pool,
+    // i.e. splits the range [0, num) into subranges [0, num1), [num1, num2)
+    // and calls f for each: f(0, num1), f(num1, num2), ... (f must be a callable of type void(size_t, size_t)).
+    template<typename F>
+    void submitRange(F&& f, size_t num);
 
     // Returns the number of worker threads in the pool.
     int numThreads() const;
@@ -157,21 +157,21 @@ void WorkStealingPoolImpl<Task>::submit(F&& f)
 }
 
 template<typename Task>
-template<typename F, typename I>
-void WorkStealingPoolImpl<Task>::submitRange(F&& f, I base, size_t num)
+template<typename F>
+void WorkStealingPoolImpl<Task>::submitRange(F&& f, size_t num)
 {
     // We do not care about synchronization too much here: lastPushedThread is generally used to approximately
     // load-balance the worker threads.
     int threadToPush = (lastPushedThread.load(std::memory_order_relaxed) + 1) % workerThreadsSize;
     size_t pushed = 0;
     for (pushed = 0; pushed < num; pushed++) {
-        if (!tryToPushTask([f, v = base + pushed] { f(v, 1); }, threadToPush)) {
+        if (!tryToPushTask([f, pushed] { f(pushed, pushed + 1); }, threadToPush)) {
             break;
         }
     }
     if (pushed < num) {
         // Extremely unlikely: the queue is full, just run the task in the caller.
-        f(base + pushed, num - pushed);
+        f(pushed, num);
     }
     lastPushedThread.store(threadToPush, std::memory_order_relaxed);
 

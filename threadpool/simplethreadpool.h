@@ -24,11 +24,11 @@ public:
     template<typename F>
     void submit(F&& f);
 
-    // Submits a number of ranged tasks for range [base, base+num) for execution in the pool,
-    // i.e. splits the range [base, base+num) into subranges [base, base+num1), [base+num1, base+num2)
-    // and calls f for each: f(base, num1), f(base+num1, num2), ... (f must be a callable of type void(I, size_t)).
-    template<typename F, typename I>
-    void submitRange(F&& f, I base, size_t num);
+    // Submits a number of ranged tasks for range [0, num) for execution in the pool,
+    // i.e. splits the range [0, num) into subranges [0, num1), [num1, num2)
+    // and calls f for each: f(0, num1), f(num1, num2), ... (f must be a callable of type void(size_t, size_t)).
+    template<typename F>
+    void submitRange(F&& f, size_t num);
 
     // Returns the number of worker threads in the pool.
     int numThreads() const;
@@ -85,12 +85,12 @@ void SimpleThreadPoolImpl<Task, Queue>::submit(F&& f)
 }
 
 template<typename Task, template<typename> class Queue>
-template<typename F, typename I>
-void SimpleThreadPoolImpl<Task, Queue>::submitRange(F&& f, I base, size_t num)
+template<typename F>
+void SimpleThreadPoolImpl<Task, Queue>::submitRange(F&& f, size_t num)
 {
     // TODO: Implement proper submitRange.
     for (size_t i = 0; i < num; i++) {
-        submit([f, v = base + i]() { f(v, 1); });
+        submit([f, i]() { f(i, i + 1); });
     }
 }
 

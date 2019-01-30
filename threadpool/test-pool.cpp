@@ -232,12 +232,12 @@ void tinyJobsTest(TP& tp, int numItersPerJob)
             // Run a batch of tiny jobs and wait for them to complete.
             for (size_t i = 0; i < kNumJobsPerBatch; i += kNumJobsPerSubBatch) {
                 size_t num = std::min(kNumJobsPerSubBatch, kNumJobsPerBatch - i);
-                tp.submitRange([&jobInput, &results, &countWaiter] (size_t base, size_t n) {
-                    for (size_t j = base; j < base + n; j++) {
+                tp.submitRange([&jobInput, &results, &countWaiter] (size_t from, size_t to) {
+                    for (size_t j = from; j < to; j++) {
                         results[j] = tinyJob(jobInput[j]);
                     }
-                    countWaiter.post(n);
-                }, i, num);
+                    countWaiter.post(to - from);
+                }, num);
             }
 
             countWaiter.wait();
@@ -292,12 +292,12 @@ void tinyJobsTest(TP& tp, int numItersPerJob)
             // Run a batch of tiny jobs and wait for them to complete.
             for (size_t i = 0; i < kNumJobsPerBatch; i += kNumJobsPerSubBatch) {
                 size_t num = std::min(kNumJobsPerSubBatch, kNumJobsPerBatch - i);
-                tp.submitRange([&jobInput, &results, &countWaiter] (size_t base, size_t n) {
-                    for (size_t j = base; j < base + n; j++) {
+                tp.submitRange([&jobInput, &results, &countWaiter] (size_t from, size_t to) {
+                    for (size_t j = from; j < to; j++) {
                         results[j * kResultsStride] = tinyJob(jobInput[j]);
                     }
-                    countWaiter.post(n);
-                }, i, num);
+                    countWaiter.post(to - from);
+                }, num);
             }
 
             countWaiter.wait();
