@@ -7,12 +7,12 @@
 #include <vector>
 
 // Simple thread pool with a central queue and no task dependencies.
-// Queue should have methods:
-//   void push(Task&& task)
-//   bool pop(Task&)
+// BlockingQueue should have methods:
+//   bool push(Task&& task)
+//   bool pop(Task&),
 //   void stop()
 // Task should have a void operator()().
-template<typename Task, template<typename> class Queue>
+template<typename Task, template<typename> class BlockingQueue>
 class SimpleThreadPoolImpl {
 public:
     // The default constructor determines the number of workers from the number of CPUs.
@@ -20,16 +20,22 @@ public:
     SimpleThreadPoolImpl(int numThreads);
     ~SimpleThreadPoolImpl();
 
-    // Submits the task for execution in the pool (f must a be callable of type void())..
+    // Submits the task for execution in the pool (f must a be callable of type void()).
     template<typename F>
     void submit(F&& f);
+
+    // Submits a number of ranged tasks for range [base, base+num) for execution in the pool,
+    // i.e. splits the range [base, base+num) into subranges [base, base+num1), [base+num1, base+num2)
+    // and calls f for each: f(base, num1), f(base+num1, num2), ... (f must be a callable of type void(I, size_t)).
+    template<typename F, typename I>
+    void submitRange(F&& f, I base, size_t num);
 
     // Returns the number of worker threads in the pool.
     int numThreads() const;
 
 private:
     std::vector<std::thread> workerThreads;
-    Queue<Task> queue;
+    BlockingQueue<Task> queue;
     std::atomic<int> numStoppedThreads{0};
 
     void workerMain();
@@ -72,7 +78,20 @@ template<typename Task, template<typename> class Queue>
 template<typename F>
 void SimpleThreadPoolImpl<Task, Queue>::submit(F&& f)
 {
-    queue.push(Task(std::forward<F>(f)));
+    if (!queue.push(Task(std::forward<F>(f)))) {
+        // Queue is full, run the task in the caller thread.
+        f();
+    }
+}
+
+template<typename Task, template<typename> class Queue>
+template<typename F, typename I>
+void SimpleThreadPoolImpl<Task, Queue>::submitRange(F&& f, I base, size_t num)
+{
+    // TODO: Implement proper submitRange.
+    for (size_t i = 0; i < num; i++) {
+        submit([f, v = base + i]() { f(v, 1); });
+    }
 }
 
 template<typename Task, template<typename> class Queue>

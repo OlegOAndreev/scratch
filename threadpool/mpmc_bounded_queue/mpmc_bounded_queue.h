@@ -72,7 +72,7 @@ public:
     // MODIFIED: Switched to forwarding to support move-only data.
     cell->data_ = std::forward<T>(data);
     // MODIFIED: Use seq_cst instead of release as a way to prevent reordering of memory accesses before it
-    // (see betterthreadpool.cpp for better explanation).
+    // (see workstealingpool.h for better explanation).
     cell->sequence_.store(pos + 1, std::memory_order_seq_cst);
     return true;
   }
