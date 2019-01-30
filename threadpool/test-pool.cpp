@@ -129,7 +129,7 @@ void printTinyJobsStats(std::vector<int64_t>& jobsPerSec, int64_t baseJobsPerSec
         ASSERT_THAT(baseResults[i] == results[i]);
     }
     printf("Tiny job test with %d-iter-job for pool (%s): avg %lld, median %lld,"
-           " max %lld jobs per sec, accel vs single core: %.1f%%\n", numItersPerJob, description,
+           " max %lld jobs per sec, perf vs single core: %.1f%%\n", numItersPerJob, description,
            (long long)avgJobsPerSec, (long long)medianJobsPerSec, (long long)maxJobsPerSec, accel);
 
 }
@@ -237,7 +237,7 @@ void tinyJobsTest(TP& tp, int numItersPerJob)
                         results[j] = tinyJob(jobInput[j]);
                     }
                     countWaiter.post(to - from);
-                }, num);
+                }, i, i + num);
             }
 
             countWaiter.wait();
@@ -297,7 +297,7 @@ void tinyJobsTest(TP& tp, int numItersPerJob)
                         results[j * kResultsStride] = tinyJob(jobInput[j]);
                     }
                     countWaiter.post(to - from);
-                }, num);
+                }, i, i + num);
             }
 
             countWaiter.wait();

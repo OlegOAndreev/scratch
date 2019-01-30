@@ -36,11 +36,11 @@ public:
     template<typename F>
     void submit(F&& f);
 
-    // Submits a number of ranged tasks for range [0, num) for execution in the pool,
-    // i.e. splits the range [0, num) into subranges [0, num1), [num1, num2)
-    // and calls f for each: f(0, num1), f(num1, num2), ... (f must be a callable of type void(size_t, size_t)).
+    // Submits a number of ranged tasks for range [from, to) for execution in the pool,
+    // i.e. splits the range [from, to) into subranges [from, r1), [r1, r2)
+    // and calls f for each: f(from, r1), f(r1, r2), ... (f must be a callable of type void(size_t, size_t)).
     template<typename F>
-    void submitRange(F&& f, size_t num);
+    void submitRange(F&& f, size_t from, size_t to);
 
     // Returns the number of worker threads in the pool.
     int numThreads() const;
@@ -158,20 +158,24 @@ void WorkStealingPoolImpl<Task>::submit(F&& f)
 
 template<typename Task>
 template<typename F>
-void WorkStealingPoolImpl<Task>::submitRange(F&& f, size_t num)
+void WorkStealingPoolImpl<Task>::submitRange(F&& f, size_t from, size_t to)
 {
     // We do not care about synchronization too much here: lastPushedThread is generally used to approximately
     // load-balance the worker threads.
-    int threadToPush = (lastPushedThread.load(std::memory_order_relaxed) + 1) % workerThreadsSize;
+    int threadToPush = lastPushedThread.load(std::memory_order_relaxed);
     size_t pushed = 0;
-    for (pushed = 0; pushed < num; pushed++) {
+    for (pushed = from; pushed < to; pushed++) {
+        threadToPush++;
+        if (threadToPush >= workerThreadsSize) {
+            threadToPush = 0;
+        }
         if (!tryToPushTask([f, pushed] { f(pushed, pushed + 1); }, threadToPush)) {
             break;
         }
     }
-    if (pushed < num) {
+    if (pushed < to) {
         // Extremely unlikely: the queue is full, just run the task in the caller.
-        f(pushed, num);
+        f(pushed, to);
     }
     lastPushedThread.store(threadToPush, std::memory_order_relaxed);
 
