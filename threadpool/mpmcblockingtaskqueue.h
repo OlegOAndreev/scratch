@@ -30,7 +30,7 @@ public:
         // LoadStore+StoreStore barrier correspondingly and acq_rel RMW is, therefore, a total barrier. However, that is
         // not what part 1.10 of the C++ standard says: discussed in
         // https://stackoverflow.com/questions/52606524/what-exact-rules-in-the-c-memory-model-prevent-reordering-before-acquire-opera/
-        // The easiest fix is simpley changing all the related accesses to seq_cst:
+        // The easiest fix is simply changing all the related accesses to seq_cst:
         //  * all reads and writes on numSleepingWorkers
         //  * first read in dequeue and last write in enqueue.
         // The good thing is that the generated code for acq_rel RMW is identical to seq_cst store on the relevant
