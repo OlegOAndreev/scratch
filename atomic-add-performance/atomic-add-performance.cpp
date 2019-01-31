@@ -6,7 +6,7 @@
 
 #include "common.h"
 
-std::atomic<size_t> totalSum(0);
+std::atomic<size_t> totalSum{0};
 
 template<typename Value, typename Adder>
 NO_INLINE void doSum(int64_t times, Value* value, Adder adder)
@@ -21,19 +21,25 @@ NO_INLINE void doSum(int64_t times, Value* value, Adder adder)
             adder(value, -1);
         }
     }
-    totalSum += v;
+    totalSum.fetch_add(v);
 }
 
 template<typename Value, typename Adder>
-int64_t doMain(int64_t times, size_t numThreads, const char* name, Value* values, size_t valuesStride,
+int64_t doMain(int64_t times, int numThreads, const char* name, Value* values, size_t valuesStride,
                int64_t baseDeltaTime, Adder adder)
 {
-    std::atomic<size_t> flag(0);
+    for (int i = 0; i < numThreads; i++) {
+        values[i * valuesStride] = 0;
+    }
+
+    std::atomic<int> flag{0};
     std::vector<std::thread> threads;
-    for (size_t i = 0; i < numThreads - 1; i++) {
-        threads.emplace_back([=, &flag] {
-            flag++;
+    std::atomic<int> stopFlag{0};
+    for (int i = 0; i < numThreads - 1; i++) {
+        threads.emplace_back([=, &flag, &stopFlag] {
+            flag.fetch_add(1);
             doSum(times, &values[(i + 1) * valuesStride], adder);
+            stopFlag.fetch_add(1);
         });
     }
 
@@ -42,13 +48,22 @@ int64_t doMain(int64_t times, size_t numThreads, const char* name, Value* values
 
     int64_t timeStart = getTimeTicks();
     doSum(times, &values[0], adder);
+
+    // Wait until all thes threads stop.
+    while (stopFlag.load() != numThreads - 1);
+
     int64_t deltaTime = getTimeTicks() - timeStart;
     if (baseDeltaTime != 0) {
-        printf("%lld %s adds per second (%.1f%% from base)\n",
+        printf("%lld %s adds per second (%.1f%% from base), ",
                (long long)(times * getTimeFreq() / deltaTime), name, (double)baseDeltaTime * 100 / deltaTime);
     } else {
-        printf("%lld %s adds per second\n", (long long)(times * getTimeFreq() / deltaTime), name);
+        printf("%lld %s adds per second, ", (long long)(times * getTimeFreq() / deltaTime), name);
     }
+    printf("\tfinal values: ");
+    for (int i = 0; i < numThreads; i++) {
+        printf("%lld ", (long long)values[i * valuesStride]);
+    }
+    printf("\n");
 
     for (std::thread& thread : threads) {
         thread.join();
