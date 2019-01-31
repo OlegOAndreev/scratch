@@ -9,13 +9,13 @@
 std::atomic<size_t> totalSum{0};
 
 template<typename Value, typename Adder>
-NO_INLINE void doSum(int64_t times, Value* value, Adder adder)
+NO_INLINE void doSum(int64_t times, Value* value, Adder adder, size_t baseV)
 {
-    size_t v = 1;
+    size_t v = baseV;
     for (int64_t i = 0; i < times; i++) {
-        v *= 123;
+        v <<= 1;
         // Very simple pseudo-random code to throw off the optimizer.
-        if (v % 10 == 1) {
+        if ((v & 1) == 1) {
             adder(value, 1);
         } else {
             adder(value, -1);
@@ -28,6 +28,8 @@ template<typename Value, typename Adder>
 int64_t doMain(int64_t times, int numThreads, const char* name, Value* values, size_t valuesStride,
                int64_t baseDeltaTime, Adder adder)
 {
+    const size_t baseV = 123;
+
     for (int i = 0; i < numThreads; i++) {
         values[i * valuesStride] = 0;
     }
@@ -38,7 +40,7 @@ int64_t doMain(int64_t times, int numThreads, const char* name, Value* values, s
     for (int i = 0; i < numThreads - 1; i++) {
         threads.emplace_back([=, &flag, &stopFlag] {
             flag.fetch_add(1);
-            doSum(times, &values[(i + 1) * valuesStride], adder);
+            doSum(times, &values[(i + 1) * valuesStride], adder, baseV);
             stopFlag.fetch_add(1);
         });
     }
@@ -47,7 +49,7 @@ int64_t doMain(int64_t times, int numThreads, const char* name, Value* values, s
     while (flag.load() != numThreads - 1);
 
     int64_t timeStart = getTimeTicks();
-    doSum(times, &values[0], adder);
+    doSum(times, &values[0], adder, baseV);
 
     // Wait until all thes threads stop.
     while (stopFlag.load() != numThreads - 1);
