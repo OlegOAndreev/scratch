@@ -9,11 +9,11 @@
 std::atomic<size_t> totalSum{0};
 
 template<typename Value, typename Adder>
-NO_INLINE void doSum(int64_t times, Value* value, Adder adder, size_t baseV)
+NO_INLINE void doSum(int64_t times, Value* value, Adder adder, uint32_t baseV)
 {
-    size_t v = baseV;
+    uint32_t v = baseV;
     for (int64_t i = 0; i < times; i++) {
-        v <<= 1;
+        v = (v << 1) | (v >> 31);
         // Very simple pseudo-random code to throw off the optimizer.
         if ((v & 1) == 1) {
             adder(value, 1);
@@ -28,7 +28,7 @@ template<typename Value, typename Adder>
 int64_t doMain(int64_t times, int numThreads, const char* name, Value* values, size_t valuesStride,
                int64_t baseDeltaTime, Adder adder)
 {
-    const size_t baseV = 123;
+    const uint32_t baseV = 123;
 
     for (int i = 0; i < numThreads; i++) {
         values[i * valuesStride] = 0;
