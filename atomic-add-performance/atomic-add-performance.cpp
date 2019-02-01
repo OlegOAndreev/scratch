@@ -186,12 +186,12 @@ int main(int argc, char** argv)
     printf("Testing with %d threads (one value)\n----\n", numThreads);
     doMain(times, numThreads, "simple", simpleValuesPtr, 0, false, baseDelta, simpleAdder);
     doMain(times, numThreads, "relaxed atomic", atomicValuesPtr, 0, false, baseDelta, relaxedAtomicAdder);
-    doMain(times, numThreads, "acqrel atomic", atomicValuesPtr, 0, false, baseDelta, relaxedAtomicAdder);
+    doMain(times, numThreads, "acqrel atomic", atomicValuesPtr, 0, false, baseDelta, acqRelAtomicAdder);
     doMain(times, numThreads, "seqcst atomic", atomicValuesPtr, 0, false, baseDelta, seqCstAtomicAdder);
     printf("----\n");
     doMain(times, numThreads, "simple", simpleValuesPtr, 0, true, baseDelta, simpleAdder);
     doMain(times, numThreads, "relaxed atomic", atomicValuesPtr, 0, true, baseDelta, relaxedAtomicAdder);
-    doMain(times, numThreads, "acqrel atomic", atomicValuesPtr, 0, true, baseDelta, relaxedAtomicAdder);
+    doMain(times, numThreads, "acqrel atomic", atomicValuesPtr, 0, true, baseDelta, acqRelAtomicAdder);
     doMain(times, numThreads, "seqcst atomic", atomicValuesPtr, 0, true, baseDelta, seqCstAtomicAdder);
     printf("====\n");
 
