@@ -8,7 +8,8 @@
 
 using BaseT = int;
 
-const size_t kCacheLineSize = 64;
+// This is larger than cache line,
+const size_t kCacheLineSize = 256;
 
 std::atomic<uint32_t> totalSum{0};
 
@@ -38,8 +39,6 @@ int64_t doMain(int64_t times, int numThreads, const char* name, Value* values, s
         values[i * valuesStride] = 0;
     }
 
-    Value* dummyValue = &values[numThreads];
-    *dummyValue = 1;
 
     std::atomic<int> flag{0};
     std::vector<std::thread> threads;
@@ -50,7 +49,8 @@ int64_t doMain(int64_t times, int numThreads, const char* name, Value* values, s
             if (fromNext) {
                 doSum(times, &values[(i + 1) * valuesStride], &values[((i + 2) % numThreads) * valuesStride], adder, r);
             } else {
-                doSum(times, &values[(i + 1) * valuesStride], dummyValue, adder, r);
+                Value dummyValue{1};
+                doSum(times, &values[(i + 1) * valuesStride], &dummyValue, adder, r);
             }
 
             stopFlag.fetch_add(1);
@@ -64,7 +64,8 @@ int64_t doMain(int64_t times, int numThreads, const char* name, Value* values, s
     if (fromNext) {
         doSum(times, &values[0], &values[1], adder, r);
     } else {
-        doSum(times, &values[0], dummyValue, adder, r);
+        Value dummyValue{1};
+        doSum(times, &values[0], &dummyValue, adder, r);
     }
 
     // Wait until all thes threads stop.
@@ -117,13 +118,10 @@ int main(int argc, char** argv)
     // Enough stride (multiplied by sizeof(BaseT)) to put values in different cache lines.
     size_t const kStride = kCacheLineSize;
     std::unique_ptr<BaseT[]> simpleValues;
-    // We add 2 to the number of threads for two reasons:
-    //  1) we need to have one dummy cache line to me be shared (and read from)
-    //  2) we need to align the first value on cache-line boundary.
-    simpleValues.reset(new BaseT[(numThreads + 2) * kStride]);
+    simpleValues.reset(new BaseT[(numThreads + 1) * kStride]);
     BaseT* simpleValuesPtr = nextAlignedPtr<kCacheLineSize>(simpleValues.get());
     std::unique_ptr<std::atomic<BaseT>[]> atomicValues;
-    atomicValues.reset(new std::atomic<BaseT>[(numThreads + 2) * kStride]);
+    atomicValues.reset(new std::atomic<BaseT>[(numThreads + 1) * kStride]);
     std::atomic<BaseT>* atomicValuesPtr = nextAlignedPtr<kCacheLineSize>(atomicValues.get());
 
     auto simpleAdder = [](BaseT* value, BaseT const* nextValue, bool add) {
