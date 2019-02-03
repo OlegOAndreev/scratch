@@ -141,7 +141,7 @@ void WorkStealingPoolImpl<Task>::submit(F&& f)
     // LoadStore+StoreStore barrier correspondingly and acq_rel RMW is, therefore, a total barrier. However, that is
     // not what part 1.10 of the C++ standard says: discussed in
     // https://stackoverflow.com/questions/52606524/what-exact-rules-in-the-c-memory-model-prevent-reordering-before-acquire-opera/
-    // The easiest fix is simpley changing all the related accesses to seq_cst:
+    // The easiest fix is simply changing all the related accesses to seq_cst:
     //  * all reads and writes on numSleepingWorkers
     //  * first read in dequeue and last write in enqueue.
     // The good thing is that the generated code for acq_rel RMW is identical to seq_cst store on the relevant
@@ -160,16 +160,22 @@ template<typename Task>
 template<typename F>
 void WorkStealingPoolImpl<Task>::submitRange(F&& f, size_t from, size_t to)
 {
+    const size_t kMinGranularity = 16;
+
     // We do not care about synchronization too much here: lastPushedThread is generally used to approximately
     // load-balance the worker threads.
     int threadToPush = lastPushedThread.load(std::memory_order_relaxed);
+
+    // Try to split all work so that there are least worker threads * 4 pieces for proper load balancing.
+    size_t pushGranularity = std::max((to - from) / (workerThreadsSize * 4), kMinGranularity);
     size_t pushed = 0;
-    for (pushed = from; pushed < to; pushed++) {
+    for (pushed = from; pushed < to; pushed += pushGranularity) {
         threadToPush++;
         if (threadToPush >= workerThreadsSize) {
             threadToPush = 0;
         }
-        if (!tryToPushTask([f, pushed] { f(pushed, pushed + 1); }, threadToPush)) {
+        size_t n = std::min(to - pushed, pushGranularity);
+        if (!tryToPushTask([f, pushed, n] { f(pushed, pushed + n); }, threadToPush)) {
             break;
         }
     }
@@ -204,7 +210,7 @@ void WorkStealingPoolImpl<Task>::forkJoinWorkerMain(int threadNum)
 
     Task task;
     while (!thisThread.stopFlag.load(std::memory_order_relaxed)) {
-        // Prefer dequeuing tasks for this thread first.
+        // Prefer dequeueing tasks for this thread first.
         if (thisThread.queue.dequeue(task)) {
             task();
             continue;
@@ -293,7 +299,7 @@ bool WorkStealingPoolImpl<Task>::tryToPushTask(F&& f, int& threadToPush)
 }
 
 // Try to steal a task from any thread, starting with threadToSteal. Updates both task and threadToSteal.
-// Retursn true if a task has been successfully stolen, false otherwise.
+// Returns true if a task has been successfully stolen, false otherwise.
 template<typename Task>
 bool WorkStealingPoolImpl<Task>::tryToStealTask(Task& task, int& threadToSteal)
 {
