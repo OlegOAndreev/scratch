@@ -101,7 +101,7 @@ double tinyJob(TinyJobInput const& input)
 {
     double ret = 0.0;
     for (int i = 0; i < input.iters; i++) {
-        ret += sqrt(i * input.start);
+        ret += sqrt((i + 1) * input.start);
     }
     return ret;
 }
@@ -111,7 +111,12 @@ void prepareTinyJobInput(size_t numJobsPerBatch, int numItersPerJob, std::vector
     jobInput->resize(numJobsPerBatch);
     for (size_t i = 0; i < numJobsPerBatch; i++) {
         TinyJobInput& in = (*jobInput)[i];
-        in.iters = numItersPerJob;
+        // Make the start and the end of the input array have much higher iters count to simulate unbalanced workload.
+        if (i < numJobsPerBatch / 10 || i > numJobsPerBatch * 9 / 10) {
+            in.iters = numItersPerJob * 20;
+        } else {
+            in.iters = numItersPerJob;
+        }
         in.start = M_PI / (i + 1);
     }
 }
@@ -160,7 +165,7 @@ void tinyJobsTest(TP& tp, int numItersPerJob)
     baseResults.resize(kNumJobsPerBatch);
     // Compute the amount of time to process jobs without multithreading and verify the results.
     int64_t baseStartTime = getTimeTicks();
-    const size_t kNumRepeats = 10;
+    const size_t kNumRepeats = 50;
     for (size_t j = 0; j < kNumRepeats; j++) {
         for (size_t i = 0; i < kNumJobsPerBatch; i++) {
             baseResults[i] = tinyJob(jobInput[i]);
@@ -367,8 +372,8 @@ int main(int argc, char** argv)
 
         tinyJobsTest(tp, 1);
         tinyJobsTest(tp, 20);
-        tinyJobsTest(tp, 200);
-        tinyJobsTest(tp, 2000);
+//        tinyJobsTest(tp, 200);
+//        tinyJobsTest(tp, 2000);
     }
 
     if (poolNames.empty() || setContains(poolNames, "simple-mpmc")) {
