@@ -88,9 +88,20 @@ template<typename Task, template<typename> class Queue>
 template<typename F>
 void SimpleThreadPoolImpl<Task, Queue>::submitRange(F&& f, size_t from, size_t to)
 {
-    // TODO: Implement proper submitRange.
-    for (size_t i = from; i < to; i++) {
-        submit([f, i]() { f(i, i + 1); });
+    const size_t kMinGranularity = 16;
+
+    // Try to split all work so that there are least worker threads * 4 pieces for proper load balancing.
+    size_t pushGranularity = std::max((to - from) / (workerThreads.size() * 4), kMinGranularity);
+    size_t pushed = 0;
+    for (pushed = from; pushed < to; pushed += pushGranularity) {
+        size_t n = std::min(to - pushed, pushGranularity);
+        if (!queue.push([f, pushed, n] { f(pushed, pushed + n); })) {
+            break;
+        }
+    }
+    if (pushed < to) {
+        // Extremely unlikely: the queue is full, just run the task in the caller.
+        f(pushed, to);
     }
 }
 
