@@ -1,14 +1,15 @@
 #pragma once
 
+#include <atomic>
+#include <memory>
 #include <thread>
-#include <vector>
 
 #include "common.h"
 #include "mpmc_bounded_queue/mpmc_bounded_queue.h"
 
 #define WORK_STEALING_STATS
 
-// A work-stealing threadpool implementation.
+// A simple work-stealing threadpool implementation with no task dependencies and no futures.
 // Task should have a void operator()().
 template<typename Task>
 class SimpleWorkStealingPoolImpl {
@@ -168,6 +169,7 @@ void SimpleWorkStealingPoolImpl<Task>::submitRange(F&& f, size_t from, size_t to
     // Try to split all work so that there are least worker threads * 4 pieces for proper load balancing.
     size_t pushGranularity = std::max((to - from) / (workerThreadsSize * 4), kMinGranularity);
     size_t pushed = 0;
+    int pushedTasks = 0;
     for (pushed = from; pushed < to; pushed += pushGranularity) {
         threadToPush++;
         if (threadToPush >= workerThreadsSize) {
@@ -177,6 +179,7 @@ void SimpleWorkStealingPoolImpl<Task>::submitRange(F&& f, size_t from, size_t to
         if (!tryToPushTask([f, pushed, n] { f(pushed, pushed + n); }, threadToPush)) {
             break;
         }
+        pushedTasks++;
     }
     if (pushed < to) {
         // Extremely unlikely: the queue is full, just run the task in the caller.
@@ -190,7 +193,8 @@ void SimpleWorkStealingPoolImpl<Task>::submitRange(F&& f, size_t from, size_t to
 #if defined(WORK_STEALING_STATS)
         totalSemaphorePosts.fetch_add(1, std::memory_order_relaxed);
 #endif
-        for (int i = 0; i < sleeping; i++) {
+        int toWake = std::min(sleeping, pushedTasks);
+        for (int i = 0; i < toWake; i++) {
             sleepingSemaphore.post();
         }
     }
