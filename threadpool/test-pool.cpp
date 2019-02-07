@@ -15,7 +15,7 @@
 #include "mpmcblockingtaskqueue.h"
 #include "simpleblockingtaskqueue.h"
 #include "simplethreadpool.h"
-#include "workstealingpool.h"
+#include "simpleworkstealingpool.h"
 
 
 #define ASSERT_THAT(expr) \
@@ -59,7 +59,7 @@ void testFixedFunction()
 
 using SimpleThreadPool = SimpleThreadPoolImpl<FixedFunction<void()>, SimpleBlockingTaskQueue>;
 using MpMcThreadPool = SimpleThreadPoolImpl<FixedFunction<void()>, MpMcBlockingTaskQueue>;
-using WorkStealingPool = WorkStealingPoolImpl<FixedFunction<void()>>;
+using SimpleWorkStealingPool = SimpleWorkStealingPoolImpl<FixedFunction<void()>>;
 
 // Simplest sanity checks for SimpleThreadPool.
 template<typename TP>
@@ -390,7 +390,7 @@ int main(int argc, char** argv)
     }
 
     if (poolNames.empty() || setContains(poolNames, "work-stealing")) {
-        WorkStealingPool tp(numThreads);
+        SimpleWorkStealingPool tp(numThreads);
 
         printf("Running work stealing pool with %d threads\n", tp.numThreads());
 
