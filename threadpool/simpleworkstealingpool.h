@@ -282,7 +282,9 @@ void SimpleWorkStealingPoolImpl<Task>::forkJoinWorkerMain(int threadNum)
 #endif
             if (tryToStealTask(task, threadToSteal)) {
 #if defined(WORK_STEALING_STATS)
-                thisThread.steals.fetch_add(1, std::memory_order_seq_cst);
+                if (threadToSteal != threadNum) {
+                    thisThread.steals.fetch_add(1, std::memory_order_seq_cst);
+                }
 #endif
                 task();
                 foundTask = true;
@@ -307,7 +309,9 @@ void SimpleWorkStealingPoolImpl<Task>::forkJoinWorkerMain(int threadNum)
 #endif
         if (tryToStealTask(task, threadToSteal)) {
 #if defined(WORK_STEALING_STATS)
-            thisThread.steals.fetch_add(1, std::memory_order_relaxed);
+            if (threadToSteal != threadNum) {
+                thisThread.steals.fetch_add(1, std::memory_order_relaxed);
+            }
 #endif
             numSleepingWorkers.fetch_sub(1, std::memory_order_seq_cst);
             task();
