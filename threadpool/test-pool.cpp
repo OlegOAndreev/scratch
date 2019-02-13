@@ -149,6 +149,20 @@ void repeatForSeconds(int seconds, F&& func)
     }
 }
 
+template<typename T>
+void printWorkStealingStats(T&)
+{
+    // Do nothing for all pools but SimpleWorkStealingPool.
+}
+
+void printWorkStealingStats(SimpleWorkStealingPool& tp)
+{
+    printf("Work-stealing stats: %lld semaphore posts, %lld semaphore waits, %lld try steals, %lld steals\n",
+           (long long)tp.getTotalSemaphorePosts(), (long long)tp.getTotalSemaphoreWaits(),
+           (long long)tp.getTotalTrySteals(), (long long)tp.getTotalSteals());
+    tp.clearStats();
+}
+
 template<typename TP>
 void tinyJobsTest(TP& tp, int numItersPerJob)
 {
@@ -201,6 +215,9 @@ void tinyJobsTest(TP& tp, int numItersPerJob)
 //        });
 //        printTinyJobsStats(jobsPerSec, baseJobsPerSec, results, baseResults, kNumJobsPerBatch, numItersPerJob,
 //                           "submit std::future");
+//#if defined(WORK_STEALING_STATS)
+//        printWorkStealingStats(tp);
+//#endif
 //    }
 
     // Run the test for ~3 seconds.
@@ -224,6 +241,9 @@ void tinyJobsTest(TP& tp, int numItersPerJob)
         });
         printTinyJobsStats(jobsPerSec, baseJobsPerSec, results, baseResults, kNumJobsPerBatch, numItersPerJob,
                            "submit CountWaiter");
+#if defined(WORK_STEALING_STATS)
+        printWorkStealingStats(tp);
+#endif
     }
 
     // Run the test for ~3 seconds.
@@ -250,6 +270,9 @@ void tinyJobsTest(TP& tp, int numItersPerJob)
         });
         printTinyJobsStats(jobsPerSec, baseJobsPerSec, results, baseResults, kNumJobsPerBatch, numItersPerJob,
                            "submitRange CountWaiter");
+#if defined(WORK_STEALING_STATS)
+        printWorkStealingStats(tp);
+#endif
     }
 
     // Run the test for ~3 seconds.
@@ -282,6 +305,9 @@ void tinyJobsTest(TP& tp, int numItersPerJob)
         }
         printTinyJobsStats(jobsPerSec, baseJobsPerSec, finalResults, baseResults, kNumJobsPerBatch, numItersPerJob,
                            "submit CountWaiter with results padding");
+#if defined(WORK_STEALING_STATS)
+        printWorkStealingStats(tp);
+#endif
     }
 
     // Run the test for ~3 seconds.
@@ -317,6 +343,9 @@ void tinyJobsTest(TP& tp, int numItersPerJob)
         }
         printTinyJobsStats(jobsPerSec, baseJobsPerSec, finalResults, baseResults, kNumJobsPerBatch, numItersPerJob,
                            "submitRange CountWaiter with results padding");
+#if defined(WORK_STEALING_STATS)
+        printWorkStealingStats(tp);
+#endif
     }
 }
 
@@ -395,19 +424,12 @@ int main(int argc, char** argv)
         printf("Running work stealing pool with %d threads\n", tp.numThreads());
 
         basicTests(tp);
+#if defined(WORK_STEALING_STATS)
+        tp.clearStats();
+#endif
 
         tinyJobsTest(tp, 1);
-#if defined(WORK_STEALING_STATS)
-        printf("Work-stealing stats: %lld semaphore posts, %lld semaphore waits, %lld try steals, %lld steals\n",
-               (long long)tp.totalSemaphorePosts.load(), (long long)tp.totalSemaphoreWaits.load(),
-               (long long)tp.totalTrySteals.load(), (long long)tp.totalSteals.load());
-#endif
         tinyJobsTest(tp, 20);
-#if defined(WORK_STEALING_STATS)
-        printf("Work-stealing stats: %lld semaphore posts, %lld semaphore waits, %lld try steals, %lld steals\n",
-               (long long)tp.totalSemaphorePosts.load(), (long long)tp.totalSemaphoreWaits.load(),
-               (long long)tp.totalTrySteals.load(), (long long)tp.totalSteals.load());
-#endif
 //        tinyJobsTest(tp, 200);
 //        tinyJobsTest(tp, 2000);
     }

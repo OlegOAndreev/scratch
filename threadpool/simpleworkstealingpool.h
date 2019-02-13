@@ -32,14 +32,12 @@ public:
     int numThreads() const;
 
 #if defined(WORK_STEALING_STATS)
-    std::atomic<uint64_t> totalSemaphorePosts{0};
-    char padding1[64];
-    std::atomic<uint64_t> totalSemaphoreWaits{0};
-    char padding2[64];
-    std::atomic<uint64_t> totalTrySteals{0};
-    char padding3[64];
-    std::atomic<uint64_t> totalSteals{0};
-    char padding4[64];
+    uint64_t getTotalSemaphorePosts();
+    uint64_t getTotalSemaphoreWaits();
+    uint64_t getTotalTrySteals();
+    uint64_t getTotalSteals();
+
+    void clearStats();
 #endif
 
 private:
@@ -51,6 +49,13 @@ private:
         // mpmc_bounded_queue is already padded.
         std::atomic<bool> stopFlag{false};
         std::atomic<bool> stopped{false};
+
+#if defined(WORK_STEALING_STATS)
+        std::atomic<uint64_t> semaphoreWaits{0};
+        std::atomic<uint64_t> trySteals{0};
+        std::atomic<uint64_t> steals{0};
+        char padding[64];
+#endif
     };
 
     // Using std::vector is too painful with mpmc_queue or std::atomic.
@@ -61,6 +66,10 @@ private:
     Semaphore sleepingSemaphore;
 
     std::atomic<int> lastPushedThread{0};
+
+#if defined(WORK_STEALING_STATS)
+    std::atomic<uint64_t> totalSemaphorePosts{0};
+#endif
 
     void forkJoinWorkerMain(int threadNum);
 
@@ -110,6 +119,55 @@ int SimpleWorkStealingPoolImpl<Task>::numThreads() const
 {
     return workerThreadsSize;
 }
+
+#if defined(WORK_STEALING_STATS)
+
+template<typename Task>
+uint64_t SimpleWorkStealingPoolImpl<Task>::getTotalSemaphorePosts()
+{
+    return totalSemaphorePosts.load(std::memory_order_relaxed);
+}
+
+template<typename Task>
+uint64_t SimpleWorkStealingPoolImpl<Task>::getTotalSemaphoreWaits()
+{
+    uint64_t ret = 0;
+    for (int i = 0; i < workerThreadsSize; i++) {
+        ret += workerThreads[i].semaphoreWaits.load(std::memory_order_relaxed);
+    }
+    return ret;
+}
+
+template<typename Task>
+uint64_t SimpleWorkStealingPoolImpl<Task>::getTotalTrySteals()
+{
+    uint64_t ret = 0;
+    for (int i = 0; i < workerThreadsSize; i++) {
+        ret += workerThreads[i].trySteals.load(std::memory_order_relaxed);
+    }
+    return ret;
+}
+
+template<typename Task>
+uint64_t SimpleWorkStealingPoolImpl<Task>::getTotalSteals()
+{
+    uint64_t ret = 0;
+    for (int i = 0; i < workerThreadsSize; i++) {
+        ret += workerThreads[i].steals.load(std::memory_order_relaxed);
+    }
+    return ret;
+}
+
+template<typename Task>
+void SimpleWorkStealingPoolImpl<Task>::clearStats()
+{
+    totalSemaphorePosts.store(0, std::memory_order_relaxed);
+    for (int i = 0; i < workerThreadsSize; i++) {
+        workerThreads[i].semaphoreWaits.store(0, std::memory_order_relaxed);
+    }
+}
+
+#endif
 
 template<typename Task>
 template<typename F>
@@ -205,11 +263,6 @@ void SimpleWorkStealingPoolImpl<Task>::forkJoinWorkerMain(int threadNum)
 {
     PerThread& thisThread = workerThreads[threadNum];
     int threadToSteal = (threadNum + 1) % workerThreadsSize;
-#if defined(WORK_STEALING_STATS)
-    uint64_t localSemaphoreWaits = 0;
-    uint64_t localTrySteals = 0;
-    uint64_t localSteals = 0;
-#endif
 
     Task task;
     while (!thisThread.stopFlag.load(std::memory_order_relaxed)) {
@@ -221,15 +274,15 @@ void SimpleWorkStealingPoolImpl<Task>::forkJoinWorkerMain(int threadNum)
 
         int const kSpinCount = 1000;
 
-        // Spin for a few iterations
+        // Spin for a few iterations.
         bool foundTask = false;
         for (int i = 0; i < kSpinCount; i++) {
 #if defined(WORK_STEALING_STATS)
-            localTrySteals++;
+            thisThread.trySteals.fetch_add(1, std::memory_order_seq_cst);
 #endif
             if (tryToStealTask(task, threadToSteal)) {
 #if defined(WORK_STEALING_STATS)
-                localSteals++;
+                thisThread.steals.fetch_add(1, std::memory_order_seq_cst);
 #endif
                 task();
                 foundTask = true;
@@ -250,28 +303,22 @@ void SimpleWorkStealingPoolImpl<Task>::forkJoinWorkerMain(int threadNum)
         //
         // Copied from mpmcblockingtaskqueue.h
 #if defined(WORK_STEALING_STATS)
-            localTrySteals++;
+        thisThread.trySteals.fetch_add(1, std::memory_order_relaxed);
 #endif
         if (tryToStealTask(task, threadToSteal)) {
 #if defined(WORK_STEALING_STATS)
-                localSteals++;
+            thisThread.steals.fetch_add(1, std::memory_order_relaxed);
 #endif
             numSleepingWorkers.fetch_sub(1, std::memory_order_seq_cst);
             task();
         } else {
 #if defined(WORK_STEALING_STATS)
-                localSemaphoreWaits++;
+            thisThread.semaphoreWaits.fetch_add(1, std::memory_order_relaxed);
 #endif
             sleepingSemaphore.wait();
             numSleepingWorkers.fetch_sub(1, std::memory_order_seq_cst);
         }
     }
-
-#if defined(WORK_STEALING_STATS)
-    totalSemaphoreWaits.fetch_add(localSemaphoreWaits, std::memory_order_relaxed);
-    totalTrySteals.fetch_add(localTrySteals, std::memory_order_relaxed);
-    totalSteals.fetch_add(localSteals, std::memory_order_relaxed);
-#endif
 
     thisThread.stopped.store(true, std::memory_order_relaxed);
 }
