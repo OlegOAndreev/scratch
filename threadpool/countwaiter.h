@@ -15,14 +15,14 @@ public:
     void post(int count = 1)
     {
         // We can do a relaxed here, because a semaphore post-wait pair SHOULD be a rel-acq pair.
-        if (counter.fetch_sub(count, std::memory_order_relaxed) <= count) {
+        if (counter.fetch_sub(count, std::memory_order_acq_rel) <= count) {
             semaphore.post();
         }
     }
 
     void wait()
     {
-        if (counter.load(std::memory_order_relaxed) > 0) {
+        if (counter.load(std::memory_order_acquire) > 0) {
             semaphore.wait();
         }
     }
