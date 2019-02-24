@@ -5,7 +5,7 @@
 #include <utility>
 
 // A noncopyable fixed-size alternative to std::function.
-template<typename SIGNATURE, size_t MaxSize = 64>
+template<typename SIGNATURE, size_t MaxSize = 48>
 class FixedFunction;
 
 template<typename R, size_t MaxSize, typename ...Args>
@@ -34,12 +34,13 @@ private:
     static size_t const kAlignment = 16;
 
     // The main function pointer, which will be called in operator(), first argument is always the storage.
-    using FuncPtr = R (*)(char*, Args... args);
+    using FuncPtr = R(*)(char*, Args... args);
     // Either calls a move-constructor or a destructor. depending on the first parameter. Must always be non-null,
-    // which removes a couple of branches `if (movePtr)`. Making one pointer instead of two
-    using MovePtr = void (*)(char*, char*);
+    // which removes a couple of branches `if (movePtr)`. Making one pointer instead of two reduces the class size
+    // while not affecting the perf on modern CPUs with good branch predictors.
+    using MovePtr = void(*)(char*, char*);
 
-    alignas(kAlignment) char storage[MaxSize - sizeof(FuncPtr) - sizeof(MovePtr)];
+    alignas(kAlignment) char storage[MaxSize];
     FuncPtr funcPtr = nullptr;
     MovePtr movePtr = defaultMovePtr;
 
@@ -48,6 +49,8 @@ private:
     static R funcPtrFromPtr(char* storage, Args... args);
     template<typename Functor>
     static void movePtrFromFunctor(char* dstStorage, char* srcStorage);
+    static void movePtrFromPtr(char* dstStorage, char* srcStorage);
+
     static void defaultMovePtr(char* dstStorage, char* srcStorage);
 };
 
@@ -72,6 +75,7 @@ FixedFunction<R(Args...), MaxSize>::FixedFunction(R (*func)(Args... args))
 {
     using FuncType = R(*)(Args...);
     funcPtr = funcPtrFromPtr;
+    movePtr = movePtrFromPtr;
     new(storage) FuncType(func);
 }
 
@@ -87,6 +91,7 @@ FixedFunction<R(Args...), MaxSize>::FixedFunction(FixedFunction&& other)
 template<typename R, size_t MaxSize, typename ...Args>
 FixedFunction<R(Args...), MaxSize>& FixedFunction<R(Args...), MaxSize>::operator=(FixedFunction&& other)
 {
+    movePtr(nullptr, storage);
     funcPtr = other.funcPtr;
     movePtr = other.movePtr;
     movePtr(storage, other.storage);
@@ -139,6 +144,15 @@ void FixedFunction<R(Args...), MaxSize>::movePtrFromFunctor(char* dstStorage, ch
 }
 
 template<typename R, size_t MaxSize, typename ...Args>
-void FixedFunction<R(Args...), MaxSize>::defaultMovePtr(char* /*dst*/, char* /*src*/)
+void FixedFunction<R(Args...), MaxSize>::movePtrFromPtr(char* dstStorage, char* srcStorage)
+{
+    using FuncType = R(*)(Args...);
+    if (dstStorage) {
+        new(dstStorage) FuncType(*((FuncType*)srcStorage));
+    }
+}
+
+template<typename R, size_t MaxSize, typename ...Args>
+void FixedFunction<R(Args...), MaxSize>::defaultMovePtr(char*, char*)
 {
 }
