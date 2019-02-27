@@ -14,7 +14,7 @@
 class CountWaiter {
 public:
     CountWaiter(int32_t targetCount)
-        : state((int64_t)targetCount << 32)
+        : state((int64_t)targetCount << kStateCounterShift)
     {
     }
 
@@ -27,14 +27,14 @@ public:
     // by this post.
     bool post(int32_t count = 1)
     {
-        int64_t diff = (int64_t)count << 32;
+        int64_t diff = (int64_t)count << kStateCounterShift;
         int64_t oldState = state.fetch_sub(diff, std::memory_order_seq_cst);
-        int32_t oldCounter = (oldState >> 32);
+        int32_t oldCounter = (oldState & kStateCounterMask) >> kStateCounterShift;
         if (oldCounter > count) {
             return false;
         }
 
-        int32_t numWakeup = (oldState & 0xFFFFFFFF);
+        int32_t numWakeup = (oldState & kStateNumWaitersMask) >> kStateNumWaitersShift;
         if (numWakeup > 0) {
             Semaphore* semaphore = getOrAllocSemaphore();
             for (int i = 0; i < numWakeup; i++) {
@@ -48,14 +48,14 @@ public:
     void wait()
     {
         // Try to see if the target value has already been reached before trying to do any CASes.
-        int32_t counter = (state.load(std::memory_order_seq_cst) >> 32);
+        int32_t counter = (state.load(std::memory_order_seq_cst) & kStateCounterMask) >> kStateCounterShift;
         if (counter <= 0) {
             return;
         }
 
         // Add 1 to the number of waiters.
         int64_t oldState = state.fetch_add(1, std::memory_order_seq_cst);
-        counter = (oldState >> 32);
+        counter = (oldState & kStateCounterMask) >> kStateCounterShift;
         // post() has been called before we increased the number of waiters.
         if (counter <= 0) {
             state.fetch_sub(1, std::memory_order_seq_cst);
@@ -68,7 +68,7 @@ public:
         semaphore->wait();
 
         // The Semaphores should not have spurious wakeups, but still do a sanity check.
-        counter = (state.load(std::memory_order_seq_cst) >> 32);
+        counter = (state.load(std::memory_order_seq_cst) & kStateCounterMask) >> kStateCounterShift;
         assert(counter > 0);
 
         // This is not needed currently (with infinite waits), but let's leave it for timed wait in future.
@@ -79,7 +79,7 @@ public:
     // Returns current count value.
     int32_t count() const
     {
-        return state.load(std::memory_order_seq_cst) >> 32;
+        return (state.load(std::memory_order_seq_cst) & kStateCounterMask) >> kStateCounterShift;
     }
 
 private:
@@ -121,6 +121,11 @@ private:
     //
     // NOTE: In general this implementation looks a lot more complicated than it should be, maybe we should replace
     // this all with shared_ptr and passing by value?
+    const int64_t kStateNumWaitersMask = 0xFFFFFFFF;
+    const size_t kStateNumWaitersShift = 0;
+    const int64_t kStateCounterMask = 0xFFFFFFFF00000000LL;
+    const size_t kStateCounterShift = 32;
+
     std::atomic<int64_t> state;
     // semaphore gets allocated by the first thread trying to access it.
     std::atomic<Semaphore*> semaphorePtr{nullptr};

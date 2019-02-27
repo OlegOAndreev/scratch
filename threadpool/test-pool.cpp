@@ -12,6 +12,7 @@
 #include "common.h"
 #include "countwaiter.h"
 #include "fixedfunction.h"
+#include "poolhelpers.h"
 #include "mpmcblockingtaskqueue.h"
 #include "simpleblockingtaskqueue.h"
 #include "simplethreadpool.h"
