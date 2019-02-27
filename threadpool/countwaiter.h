@@ -113,6 +113,10 @@ private:
     //   submitTask([&] { producerThread(&sem); });
     //   sem.wait();
     //  }
+    // I.e. the moment the Semaphore::post() calls the underlying OS primitive, it no longer requires Semaphore object
+    // to be alive. This is definitely true for Linux (semaphores are just memory locations), but is not guaranteed
+    // for MacOS/Windows AFAIK, so we simply hope for the best. This particular issue could easily be solved by
+    // allocating Semaphores from a Semaphore pool (see getOrAllocSemaphore).
     //
     // NOTE: In general this implementation looks a lot more complicated than it should be, maybe we should replace
     // this all with shared_ptr and passing by value?
