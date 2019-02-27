@@ -58,6 +58,7 @@ public:
         counter = (oldState >> 32);
         // post() has been called before we increased the number of waiters.
         if (counter <= 0) {
+            state.fetch_sub(1, std::memory_order_seq_cst);
             return;
         }
 
