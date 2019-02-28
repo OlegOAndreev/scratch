@@ -3,6 +3,7 @@
 #include <climits>
 #include <cstddef>
 #include <cstdint>
+#include <utility>
 
 #if defined(__APPLE__)
 #include <sys/time.h>
@@ -446,13 +447,6 @@ struct RemoveCRef<T const&&> {
     using Type = T;
 };
 
-// We do not want to depend on <utility> just for std::move.
-template<typename T>
-typename RemoveCRef<T>::Type&& stdMove(T&& t) noexcept
-{
-    return static_cast<typename RemoveCRef<T>::Type&&>(t);
-}
-
 //
 // Computes a very simple hash, see: http://www.eecs.harvard.edu/margo/papers/usenix91/paper.ps
 //
@@ -517,7 +511,7 @@ inline void removeIf(C& container, P const& predicate)
         if (predicate(*it)) {
             continue;
         }
-        *insertIt = stdMove(*it);
+        *insertIt = std::move(*it);
         ++insertIt;
     }
     container.erase(insertIt, endIt);
