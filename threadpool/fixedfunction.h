@@ -1,15 +1,15 @@
 #pragma once
 
-#include <cstddef>
 #include <type_traits>
 #include <utility>
 
-// A noncopyable fixed-size alternative to std::function.
-template<typename SIGNATURE, size_t MaxSize = 48>
+// A move-only alternative to std::function. Allows specifying the size of the object and whether to allocate
+// on heap if the passed lambda is larger than MaxSize.
+template<typename SIGNATURE, size_t MaxSize = 48, bool AllocOnOverflow = true>
 class FixedFunction;
 
-template<typename R, size_t MaxSize, typename ...Args>
-class FixedFunction<R(Args...), MaxSize> {
+template<typename R, size_t MaxSize, bool AllocOnOverflow, typename ...Args>
+class FixedFunction<R(Args...), MaxSize, AllocOnOverflow> {
 public:
     // Initializes an unitialized function.
     FixedFunction();
@@ -41,100 +41,132 @@ private:
     using MovePtr = void(*)(char*, char*);
 
     alignas(kAlignment) char storage[MaxSize];
-    FuncPtr funcPtr = nullptr;
-    MovePtr movePtr = defaultMovePtr;
-
-    template<typename Functor>
-    static R funcPtrFromFunctor(char* storage, Args... args);
-    static R funcPtrFromPtr(char* storage, Args... args);
-    template<typename Functor>
-    static void movePtrFromFunctor(char* dstStorage, char* srcStorage);
-    static void movePtrFromPtr(char* dstStorage, char* srcStorage);
-
-    static void defaultMovePtr(char* dstStorage, char* srcStorage);
+    FuncPtr funcPtr;
+    MovePtr movePtr;
 };
 
-template<typename R, size_t MaxSize, typename ...Args>
-FixedFunction<R(Args...), MaxSize>::FixedFunction()
+namespace detail {
+    template<typename Functor, typename R, typename ...Args>
+    R funcPtrFromFunctor(char* storage, Args... args);
+    // A version of funcPtrFromFunctor which stores the pointer in first storage bytes.
+    template<typename Functor, typename R, typename ...Args>
+    R funcPtrFromFunctorOverflow(char* storage, Args... args);
+    template<typename R, typename ...Args>
+    R funcPtrFromPtr(char* storage, Args... args);
+    template<typename Functor>
+    void movePtrFromFunctor(char* dstStorage, char* srcStorage);
+    // A version of movePtrFromFunctor which stores the pointer in first storage bytes.
+    template<typename Functor>
+    void movePtrFromFunctorOverflow(char* dstStorage, char* srcStorage);
+    template<typename R, typename ...Args>
+    void movePtrFromPtr(char* dstStorage, char* srcStorage);
+
+    void defaultMovePtr(char* dstStorage, char* srcStorage);
+} // namespace detail
+
+template<typename R, size_t MaxSize, bool AllocOnOverflow, typename ...Args>
+FixedFunction<R(Args...), MaxSize, AllocOnOverflow>::FixedFunction()
+    : funcPtr(nullptr)
+    , movePtr(detail::defaultMovePtr)
 {
 }
 
-template<typename R, size_t MaxSize, typename ...Args>
+template<typename R, size_t MaxSize, bool AllocOnOverflow, typename ...Args>
 template<typename Functor>
-FixedFunction<R(Args...), MaxSize>::FixedFunction(Functor&& functor)
+FixedFunction<R(Args...), MaxSize, AllocOnOverflow>::FixedFunction(Functor&& functor)
 {
     using RealFunctor = typename std::remove_reference<Functor>::type;
-    static_assert(sizeof(RealFunctor) <= sizeof(storage), "Passed functor is too big");
-    funcPtr = funcPtrFromFunctor<RealFunctor>;
-    movePtr = movePtrFromFunctor<RealFunctor>;
-    new(storage) RealFunctor(std::forward<RealFunctor>(functor));
+    if (sizeof(RealFunctor) <= sizeof(storage)) {
+        funcPtr = detail::funcPtrFromFunctor<RealFunctor, R, Args...>;
+        movePtr = detail::movePtrFromFunctor<RealFunctor>;
+        new(storage) RealFunctor(std::forward<RealFunctor>(functor));
+    } else {
+        static_assert(AllocOnOverflow, "Passed functor is too big");
+        funcPtr = detail::funcPtrFromFunctorOverflow<RealFunctor, R, Args...>;
+        movePtr = detail::movePtrFromFunctorOverflow<RealFunctor>;
+        // Really-really hope that realStorage is aligned correctly here.
+        char* realStorage = new char[sizeof(RealFunctor)];
+        new(realStorage) RealFunctor(std::forward<RealFunctor>(functor));
+        new(storage) char*(realStorage);
+    }
 }
 
-template<typename R, size_t MaxSize, typename ...Args>
-FixedFunction<R(Args...), MaxSize>::FixedFunction(R (*func)(Args... args))
+template<typename R, size_t MaxSize, bool AllocOnOverflow, typename ...Args>
+FixedFunction<R(Args...), MaxSize, AllocOnOverflow>::FixedFunction(R (*func)(Args... args))
 {
     using FuncType = R(*)(Args...);
-    funcPtr = funcPtrFromPtr;
-    movePtr = movePtrFromPtr;
+    static_assert(sizeof(FuncType) <= sizeof(storage), "MaxSize should be at least the size of function pointer");
+    funcPtr = detail::funcPtrFromPtr<R, Args...>;
+    movePtr = detail::movePtrFromPtr<R, Args...>;
     new(storage) FuncType(func);
 }
 
-template<typename R, size_t MaxSize, typename ...Args>
-FixedFunction<R(Args...), MaxSize>::FixedFunction(FixedFunction&& other)
+template<typename R, size_t MaxSize, bool AllocOnOverflow, typename ...Args>
+FixedFunction<R(Args...), MaxSize, AllocOnOverflow>::FixedFunction(FixedFunction&& other)
     : funcPtr(other.funcPtr)
     , movePtr(other.movePtr)
 {
     movePtr(storage, other.storage);
     other.funcPtr = nullptr;
+    other.movePtr = detail::defaultMovePtr;
 }
 
-template<typename R, size_t MaxSize, typename ...Args>
-FixedFunction<R(Args...), MaxSize>& FixedFunction<R(Args...), MaxSize>::operator=(FixedFunction&& other)
+template<typename R, size_t MaxSize, bool AllocOnOverflow, typename ...Args>
+FixedFunction<R(Args...), MaxSize, AllocOnOverflow>& FixedFunction<R(Args...), MaxSize, AllocOnOverflow>::operator=(
+            FixedFunction&& other)
 {
     movePtr(nullptr, storage);
     funcPtr = other.funcPtr;
     movePtr = other.movePtr;
     movePtr(storage, other.storage);
     other.funcPtr = nullptr;
+    other.movePtr = detail::defaultMovePtr;
     return *this;
 }
 
-template<typename R, size_t MaxSize, typename ...Args>
-FixedFunction<R(Args...), MaxSize>::~FixedFunction()
+template<typename R, size_t MaxSize, bool AllocOnOverflow, typename ...Args>
+FixedFunction<R(Args...), MaxSize, AllocOnOverflow>::~FixedFunction()
 {
     movePtr(nullptr, storage);
 }
 
-template<typename R, size_t MaxSize, typename ...Args>
-R FixedFunction<R(Args...), MaxSize>::operator()(Args... args)
+template<typename R, size_t MaxSize, bool AllocOnOverflow, typename ...Args>
+R FixedFunction<R(Args...), MaxSize, AllocOnOverflow>::operator()(Args... args)
 {
     return funcPtr(storage, args...);
 }
 
-template<typename R, size_t MaxSize, typename ...Args>
-FixedFunction<R(Args...), MaxSize>::operator bool() const
+template<typename R, size_t MaxSize, bool AllocOnOverflow, typename ...Args>
+FixedFunction<R(Args...), MaxSize, AllocOnOverflow>::operator bool() const
 {
     return funcPtr != nullptr;
 }
 
-template<typename R, size_t MaxSize, typename ...Args>
-template<typename Functor>
-R FixedFunction<R(Args...), MaxSize>::funcPtrFromFunctor(char* storage, Args... args)
+namespace detail {
+
+template<typename Functor, typename R, typename ...Args>
+R funcPtrFromFunctor(char* storage, Args... args)
 {
     return (*((Functor*)storage))(args...);
 }
 
-template<typename R, size_t MaxSize, typename ...Args>
-R FixedFunction<R(Args...), MaxSize>::funcPtrFromPtr(char* storage, Args... args)
+template<typename Functor, typename R, typename ...Args>
+R funcPtrFromFunctorOverflow(char* storage, Args... args)
+{
+    char* realStorage = *(char**)storage;
+    return (*((Functor*)realStorage))(args...);
+}
+
+template<typename R, typename ...Args>
+R funcPtrFromPtr(char* storage, Args... args)
 {
     using FuncType = R(*)(Args...);
     FuncType func = *(FuncType*)storage;
     return func(args...);
 }
 
-template<typename R, size_t MaxSize, typename ...Args>
 template<typename Functor>
-void FixedFunction<R(Args...), MaxSize>::movePtrFromFunctor(char* dstStorage, char* srcStorage)
+void movePtrFromFunctor(char* dstStorage, char* srcStorage)
 {
     if (dstStorage) {
         new(dstStorage) Functor(std::move(*((Functor*)srcStorage)));
@@ -143,16 +175,30 @@ void FixedFunction<R(Args...), MaxSize>::movePtrFromFunctor(char* dstStorage, ch
     }
 }
 
-template<typename R, size_t MaxSize, typename ...Args>
-void FixedFunction<R(Args...), MaxSize>::movePtrFromPtr(char* dstStorage, char* srcStorage)
+template<typename Functor>
+void movePtrFromFunctorOverflow(char* dstStorage, char* srcStorage)
 {
-    using FuncType = R(*)(Args...);
     if (dstStorage) {
-        new(dstStorage) FuncType(*((FuncType*)srcStorage));
+        *(char**)dstStorage = *(char**)srcStorage;
+        *(char**)srcStorage = nullptr;
+    } else {
+        char* realSrcStorage = *(char**)srcStorage;
+        ((Functor*)realSrcStorage)->~Functor();
+        delete[] realSrcStorage;
     }
 }
 
-template<typename R, size_t MaxSize, typename ...Args>
-void FixedFunction<R(Args...), MaxSize>::defaultMovePtr(char*, char*)
+template<typename R, typename ...Args>
+void movePtrFromPtr(char* dstStorage, char* srcStorage)
+{
+    using FuncType = R(*)(Args...);
+    if (dstStorage) {
+        *(FuncType*)dstStorage = *(FuncType*)srcStorage;
+    }
+}
+
+void defaultMovePtr(char*, char*)
 {
 }
+
+} // namespace detail

@@ -67,6 +67,31 @@ void testFixedFunction()
     ASSERT_THAT(computeFunc2(1.0) == 1.0);
     ASSERT_THAT(computeFunc2(4.0) == 2.0);
 
+    struct RatherBigStruct {
+        double d1 = 1.0;
+        double d2 = 2.0;
+        double d3 = 3.0;
+        double d4 = 4.0;
+        double d5 = 5.0;
+        double d6 = 6.0;
+        double d7 = 7.0;
+    };
+
+    FixedFunction<double(double)> smallAndBigFunc1([](double param) { return param + 1.0; });
+    ASSERT_THAT(smallAndBigFunc1(0.0) == 1.0);
+    ASSERT_THAT(smallAndBigFunc1(1.0) == 2.0);
+
+    RatherBigStruct rbs;
+    FixedFunction<double(double)> smallAndBigFunc2([=](double param) {
+        return rbs.d1 + rbs.d2 + rbs.d3 + rbs.d4 + rbs.d5 + rbs.d6 + rbs.d7 + param;
+    });
+    ASSERT_THAT(smallAndBigFunc2(0.0) == 28.0);
+
+    FixedFunction<double(double)> smallAndBigFunc3 = std::move(smallAndBigFunc2);
+    smallAndBigFunc2 = std::move(smallAndBigFunc1);
+    ASSERT_THAT(smallAndBigFunc2(0.0) == 1.0);
+    ASSERT_THAT(smallAndBigFunc3(0.0) == 28.0);
+
     printf("FixedFunction tests passed\n");
 }
 
