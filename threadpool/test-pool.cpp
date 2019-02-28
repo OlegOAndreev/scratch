@@ -32,6 +32,7 @@ void testFixedFunction()
     int src, dst;
     // Should have capture with sizeof == 2 * sizeof(int*).
     FixedFunction<void()> proc([&src, &dst] { dst = src; });
+    ASSERT_THAT(proc);
     src = 1;
     proc();
     ASSERT_THAT(dst == 1);
@@ -40,9 +41,20 @@ void testFixedFunction()
     ASSERT_THAT(dst == 123);
 
     FixedFunction<void()> movedProc(std::move(proc));
+    ASSERT_THAT(movedProc);
+    ASSERT_THAT(!proc);
     src = 456;
     movedProc();
     ASSERT_THAT(dst == 456);
+
+    FixedFunction<void()> moveAssignedProc;
+    ASSERT_THAT(!moveAssignedProc);
+    moveAssignedProc = std::move(movedProc);
+    ASSERT_THAT(moveAssignedProc);
+    ASSERT_THAT(!movedProc);
+    src = 789;
+    moveAssignedProc();
+    ASSERT_THAT(dst == 789);
 
     double coeff = 1.0;
     FixedFunction<double(double)> computeFunc1([&coeff] (double x) { return sqrt(x) * coeff; });
