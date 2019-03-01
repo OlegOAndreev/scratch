@@ -22,8 +22,10 @@ public:
     // FixedFunction is move-only. The other function becomes uninitialized.
     FixedFunction(FixedFunction&& other);
     FixedFunction& operator=(FixedFunction&& other);
+
     ~FixedFunction();
 
+    // Calls the stored function pointer/functor object.
     R operator()(Args... args);
 
     // Returns true if function is initialized.
@@ -37,13 +39,18 @@ private:
     using FuncPtr = R(*)(char*, Args... args);
     // Either calls a move-constructor or a destructor. depending on the first parameter. Must always be non-null,
     // which removes a couple of branches `if (movePtr)`. Making one pointer instead of two reduces the class size
-    // while not affecting the perf on modern CPUs with good branch predictors.
+    // while not affecting the perf too much on modern CPUs with good branch predictors.
     using MovePtr = void(*)(char*, char*);
 
+    // Storage can contain one of:
+    //  1) function pointer (if initialized from function pointer)
+    //  2) moved functor object/lambda (if initialized from functor object/lambda and size <= MaxSize)
+    //  3) pointer to the moved functor object/lambda.
     alignas(kAlignment) char storage[MaxSize];
     FuncPtr funcPtr;
     MovePtr movePtr;
 };
+
 
 namespace detail {
     template<typename Functor, typename R, typename ...Args>
@@ -64,6 +71,7 @@ namespace detail {
     void defaultMovePtr(char* dstStorage, char* srcStorage);
 } // namespace detail
 
+
 template<typename R, size_t MaxSize, bool AllocOnOverflow, typename ...Args>
 FixedFunction<R(Args...), MaxSize, AllocOnOverflow>::FixedFunction()
     : funcPtr(nullptr)
@@ -82,6 +90,7 @@ FixedFunction<R(Args...), MaxSize, AllocOnOverflow>::FixedFunction(Functor&& fun
         new(storage) RealFunctor(std::forward<RealFunctor>(functor));
     } else {
         static_assert(AllocOnOverflow, "Passed functor is too big");
+        static_assert(sizeof(char*) <= sizeof(storage), "MaxSize should be at least the size of function pointer");
         funcPtr = detail::funcPtrFromFunctorOverflow<RealFunctor, R, Args...>;
         movePtr = detail::movePtrFromFunctorOverflow<RealFunctor>;
         // Really-really hope that realStorage is aligned correctly here.
