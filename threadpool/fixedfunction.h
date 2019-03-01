@@ -94,6 +94,10 @@ FixedFunction<R(Args...), MaxSize, AllocOnOverflow>::FixedFunction(Functor&& fun
         funcPtr = detail::funcPtrFromFunctorOverflow<RealFunctor, R, Args...>;
         movePtr = detail::movePtrFromFunctorOverflow<RealFunctor>;
         // Really-really hope that realStorage is aligned correctly here.
+        // NOTE: We could rewrite this by over-allocating new char[sizeof(RealFunctor) + 15],
+        // and either storing both the pointer to allocated memory block and the aligned pointer or aligning
+        // the pointer on each access. On the other hand all the sane allocators (including tcmalloc and jemalloc)
+        // will provide the 16-byte alignment for types larger than 16 bytes anyway.
         char* realStorage = new char[sizeof(RealFunctor)];
         new(realStorage) RealFunctor(std::forward<RealFunctor>(functor));
         new(storage) char*(realStorage);
