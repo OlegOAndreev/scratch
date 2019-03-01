@@ -13,12 +13,12 @@
 //   void stop()
 // Task should have a void operator()().
 template<typename Task, template<typename> class BlockingQueue>
-class SimpleThreadPoolImpl {
+class SimpleThreadPool {
 public:
     // The default constructor determines the number of workers from the number of CPUs.
-    SimpleThreadPoolImpl();
-    SimpleThreadPoolImpl(int numThreads);
-    ~SimpleThreadPoolImpl();
+    SimpleThreadPool();
+    SimpleThreadPool(int numThreads);
+    ~SimpleThreadPool();
 
     // Submits the task for execution in the pool (f must a be callable of type void()).
     template<typename F>
@@ -42,13 +42,13 @@ private:
 };
 
 template<typename Task, template<typename> class Queue>
-SimpleThreadPoolImpl<Task, Queue>::SimpleThreadPoolImpl()
-    : SimpleThreadPoolImpl(std::thread::hardware_concurrency())
+SimpleThreadPool<Task, Queue>::SimpleThreadPool()
+    : SimpleThreadPool(std::thread::hardware_concurrency())
 {
 }
 
 template<typename Task, template<typename> class Queue>
-SimpleThreadPoolImpl<Task, Queue>::SimpleThreadPoolImpl(int numThreads)
+SimpleThreadPool<Task, Queue>::SimpleThreadPool(int numThreads)
 {
     for (int i = 0; i < numThreads; i++) {
         workerThreads.push_back(std::thread([this] { workerMain(); }));
@@ -56,7 +56,7 @@ SimpleThreadPoolImpl<Task, Queue>::SimpleThreadPoolImpl(int numThreads)
 }
 
 template<typename Task, template<typename> class Queue>
-SimpleThreadPoolImpl<Task, Queue>::~SimpleThreadPoolImpl()
+SimpleThreadPool<Task, Queue>::~SimpleThreadPool()
 {
     int waitUntilStopped = workerThreads.size();
     while (numStoppedThreads.load(std::memory_order_relaxed) != waitUntilStopped) {
@@ -69,14 +69,14 @@ SimpleThreadPoolImpl<Task, Queue>::~SimpleThreadPoolImpl()
 }
 
 template<typename Task, template<typename> class Queue>
-int SimpleThreadPoolImpl<Task, Queue>::numThreads() const
+int SimpleThreadPool<Task, Queue>::numThreads() const
 {
     return workerThreads.size();
 }
 
 template<typename Task, template<typename> class Queue>
 template<typename F>
-void SimpleThreadPoolImpl<Task, Queue>::submit(F&& f)
+void SimpleThreadPool<Task, Queue>::submit(F&& f)
 {
     if (!queue.push(Task(std::forward<F>(f)))) {
         // Queue is full, run the task in the caller thread.
@@ -86,7 +86,7 @@ void SimpleThreadPoolImpl<Task, Queue>::submit(F&& f)
 
 template<typename Task, template<typename> class Queue>
 template<typename F>
-void SimpleThreadPoolImpl<Task, Queue>::submitRange(F&& f, size_t from, size_t to)
+void SimpleThreadPool<Task, Queue>::submitRange(F&& f, size_t from, size_t to)
 {
     const size_t kMinGranularity = 16;
 
@@ -106,7 +106,7 @@ void SimpleThreadPoolImpl<Task, Queue>::submitRange(F&& f, size_t from, size_t t
 }
 
 template<typename Task, template<typename> class Queue>
-void SimpleThreadPoolImpl<Task, Queue>::workerMain()
+void SimpleThreadPool<Task, Queue>::workerMain()
 {
     Task task;
     while (queue.pop(task)) {

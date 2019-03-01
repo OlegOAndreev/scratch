@@ -12,11 +12,11 @@
 // A simple work-stealing threadpool implementation with no task dependencies and no futures.
 // Task should have a void operator()().
 template<typename Task>
-class SimpleWorkStealingPoolImpl {
+class SimpleWorkStealingPool {
 public:
-    SimpleWorkStealingPoolImpl();
-    SimpleWorkStealingPoolImpl(int numThreads);
-    ~SimpleWorkStealingPoolImpl();
+    SimpleWorkStealingPool();
+    SimpleWorkStealingPool(int numThreads);
+    ~SimpleWorkStealingPool();
 
     // Submits the task for execution in the pool (f must be a callable of type void()).
     template<typename F>
@@ -79,13 +79,13 @@ private:
 };
 
 template<typename Task>
-SimpleWorkStealingPoolImpl<Task>::SimpleWorkStealingPoolImpl()
-    : SimpleWorkStealingPoolImpl(std::thread::hardware_concurrency())
+SimpleWorkStealingPool<Task>::SimpleWorkStealingPool()
+    : SimpleWorkStealingPool(std::thread::hardware_concurrency())
 {
 }
 
 template<typename Task>
-SimpleWorkStealingPoolImpl<Task>::SimpleWorkStealingPoolImpl(int numThreads)
+SimpleWorkStealingPool<Task>::SimpleWorkStealingPool(int numThreads)
     : workerThreads(new PerThread[numThreads])
     , workerThreadsSize(numThreads)
 {
@@ -95,7 +95,7 @@ SimpleWorkStealingPoolImpl<Task>::SimpleWorkStealingPoolImpl(int numThreads)
 }
 
 template<typename Task>
-SimpleWorkStealingPoolImpl<Task>::~SimpleWorkStealingPoolImpl()
+SimpleWorkStealingPool<Task>::~SimpleWorkStealingPool()
 {
     for (int i = 0; i < workerThreadsSize; i++) {
         workerThreads[i].stopFlag.store(true, std::memory_order_relaxed);
@@ -115,7 +115,7 @@ SimpleWorkStealingPoolImpl<Task>::~SimpleWorkStealingPoolImpl()
 }
 
 template<typename Task>
-int SimpleWorkStealingPoolImpl<Task>::numThreads() const
+int SimpleWorkStealingPool<Task>::numThreads() const
 {
     return workerThreadsSize;
 }
@@ -123,13 +123,13 @@ int SimpleWorkStealingPoolImpl<Task>::numThreads() const
 #if defined(WORK_STEALING_STATS)
 
 template<typename Task>
-uint64_t SimpleWorkStealingPoolImpl<Task>::getTotalSemaphorePosts()
+uint64_t SimpleWorkStealingPool<Task>::getTotalSemaphorePosts()
 {
     return totalSemaphorePosts.load(std::memory_order_relaxed);
 }
 
 template<typename Task>
-uint64_t SimpleWorkStealingPoolImpl<Task>::getTotalSemaphoreWaits()
+uint64_t SimpleWorkStealingPool<Task>::getTotalSemaphoreWaits()
 {
     uint64_t ret = 0;
     for (int i = 0; i < workerThreadsSize; i++) {
@@ -139,7 +139,7 @@ uint64_t SimpleWorkStealingPoolImpl<Task>::getTotalSemaphoreWaits()
 }
 
 template<typename Task>
-uint64_t SimpleWorkStealingPoolImpl<Task>::getTotalTrySteals()
+uint64_t SimpleWorkStealingPool<Task>::getTotalTrySteals()
 {
     uint64_t ret = 0;
     for (int i = 0; i < workerThreadsSize; i++) {
@@ -149,7 +149,7 @@ uint64_t SimpleWorkStealingPoolImpl<Task>::getTotalTrySteals()
 }
 
 template<typename Task>
-uint64_t SimpleWorkStealingPoolImpl<Task>::getTotalSteals()
+uint64_t SimpleWorkStealingPool<Task>::getTotalSteals()
 {
     uint64_t ret = 0;
     for (int i = 0; i < workerThreadsSize; i++) {
@@ -159,7 +159,7 @@ uint64_t SimpleWorkStealingPoolImpl<Task>::getTotalSteals()
 }
 
 template<typename Task>
-void SimpleWorkStealingPoolImpl<Task>::clearStats()
+void SimpleWorkStealingPool<Task>::clearStats()
 {
     totalSemaphorePosts.store(0, std::memory_order_relaxed);
     for (int i = 0; i < workerThreadsSize; i++) {
@@ -171,7 +171,7 @@ void SimpleWorkStealingPoolImpl<Task>::clearStats()
 
 template<typename Task>
 template<typename F>
-void SimpleWorkStealingPoolImpl<Task>::submit(F&& f)
+void SimpleWorkStealingPool<Task>::submit(F&& f)
 {
     // We do not care about synchronization too much here: lastPushedThread is generally used to approximately
     // load-balance the worker threads.
@@ -216,7 +216,7 @@ void SimpleWorkStealingPoolImpl<Task>::submit(F&& f)
 
 template<typename Task>
 template<typename F>
-void SimpleWorkStealingPoolImpl<Task>::submitRange(F&& f, size_t from, size_t to)
+void SimpleWorkStealingPool<Task>::submitRange(F&& f, size_t from, size_t to)
 {
     const size_t kMinGranularity = 16;
 
@@ -259,7 +259,7 @@ void SimpleWorkStealingPoolImpl<Task>::submitRange(F&& f, size_t from, size_t to
 }
 
 template<typename Task>
-void SimpleWorkStealingPoolImpl<Task>::forkJoinWorkerMain(int threadNum)
+void SimpleWorkStealingPool<Task>::forkJoinWorkerMain(int threadNum)
 {
     PerThread& thisThread = workerThreads[threadNum];
     int threadToSteal = (threadNum + 1) % workerThreadsSize;
@@ -330,7 +330,7 @@ void SimpleWorkStealingPoolImpl<Task>::forkJoinWorkerMain(int threadNum)
 // Try to push task from functor f at least to one thread queue, starting with threadToPush. Updates
 template<typename Task>
 template<typename F>
-bool SimpleWorkStealingPoolImpl<Task>::tryToPushTask(F&& f, int& threadToPush)
+bool SimpleWorkStealingPool<Task>::tryToPushTask(F&& f, int& threadToPush)
 {
     int t = threadToPush;
     if (workerThreads[t].queue.enqueue(Task(std::forward<F>(f)))) {
@@ -355,7 +355,7 @@ bool SimpleWorkStealingPoolImpl<Task>::tryToPushTask(F&& f, int& threadToPush)
 // Try to steal a task from any thread, starting with threadToSteal. Updates both task and threadToSteal.
 // Returns true if a task has been successfully stolen, false otherwise.
 template<typename Task>
-bool SimpleWorkStealingPoolImpl<Task>::tryToStealTask(Task& task, int& threadToSteal)
+bool SimpleWorkStealingPool<Task>::tryToStealTask(Task& task, int& threadToSteal)
 {
     int t = threadToSteal;
     if (workerThreads[t].queue.dequeue(task)) {

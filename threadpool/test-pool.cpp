@@ -87,7 +87,8 @@ void testFixedFunction()
     });
     ASSERT_THAT(smallAndBigFunc2(0.0) == 28.0);
 
-    FixedFunction<double(double)> smallAndBigFunc3 = std::move(smallAndBigFunc2);
+    FixedFunction<double(double)> smallAndBigFunc3;
+    smallAndBigFunc3 = std::move(smallAndBigFunc2);
     smallAndBigFunc2 = std::move(smallAndBigFunc1);
     ASSERT_THAT(smallAndBigFunc2(0.0) == 1.0);
     ASSERT_THAT(smallAndBigFunc3(0.0) == 28.0);
@@ -192,9 +193,9 @@ void testCountWaiter()
 }
 
 
-using SimpleThreadPool = SimpleThreadPoolImpl<FixedFunction<void()>, SimpleBlockingTaskQueue>;
-using MpMcThreadPool = SimpleThreadPoolImpl<FixedFunction<void()>, MpMcBlockingTaskQueue>;
-using SimpleWorkStealingPool = SimpleWorkStealingPoolImpl<FixedFunction<void()>>;
+using TestSimpleThreadPool = SimpleThreadPool<FixedFunction<void()>, SimpleBlockingTaskQueue>;
+using TestMpMcThreadPool = SimpleThreadPool<FixedFunction<void()>, MpMcBlockingTaskQueue>;
+using TestSimpleWorkStealingPool = SimpleWorkStealingPool<FixedFunction<void()>>;
 
 // Simplest sanity checks for SimpleThreadPool.
 template<typename TP>
@@ -290,7 +291,7 @@ void printWorkStealingStats(T&)
     // Do nothing for all pools but SimpleWorkStealingPool.
 }
 
-void printWorkStealingStats(SimpleWorkStealingPool& tp)
+void printWorkStealingStats(TestSimpleWorkStealingPool& tp)
 {
     printf("Work-stealing stats: %lld semaphore posts, %lld semaphore waits, %lld try steals, %lld steals\n",
            (long long)tp.getTotalSemaphorePosts(), (long long)tp.getTotalSemaphoreWaits(),
@@ -529,7 +530,7 @@ int main(int argc, char** argv)
     }
 
     if (poolNames.empty() || setContains(poolNames, "simple")) {
-        SimpleThreadPool tp(numThreads);
+        TestSimpleThreadPool tp(numThreads);
 
         printf("Running simple pool with %d threads\n", tp.numThreads());
 
@@ -542,7 +543,7 @@ int main(int argc, char** argv)
     }
 
     if (poolNames.empty() || setContains(poolNames, "simple-mpmc")) {
-        MpMcThreadPool tp(numThreads);
+        TestMpMcThreadPool tp(numThreads);
 
         printf("Running simple mpmc pool with %d threads\n", tp.numThreads());
 
@@ -555,7 +556,7 @@ int main(int argc, char** argv)
     }
 
     if (poolNames.empty() || setContains(poolNames, "work-stealing")) {
-        SimpleWorkStealingPool tp(numThreads);
+        TestSimpleWorkStealingPool tp(numThreads);
 
         printf("Running work stealing pool with %d threads\n", tp.numThreads());
 
