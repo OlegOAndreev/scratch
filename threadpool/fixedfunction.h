@@ -28,8 +28,8 @@ public:
     // Calls the stored function pointer/functor object.
     R operator()(Args... args);
 
-    // Returns true if function is initialized.
-    operator bool() const;
+    // Returns true if function has not been initialized, false otherwise.
+    bool empty() const;
 
 private:
     // Maximum natural alignment (for SIMD types).
@@ -150,9 +150,9 @@ R FixedFunction<R(Args...), MaxSize, AllocOnOverflow>::operator()(Args... args)
 }
 
 template<typename R, size_t MaxSize, bool AllocOnOverflow, typename ...Args>
-FixedFunction<R(Args...), MaxSize, AllocOnOverflow>::operator bool() const
+bool FixedFunction<R(Args...), MaxSize, AllocOnOverflow>::empty() const
 {
-    return funcPtr != nullptr;
+    return funcPtr == nullptr;
 }
 
 namespace detail {
