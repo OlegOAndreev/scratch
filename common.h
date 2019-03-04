@@ -71,6 +71,36 @@ static_assert(sizeof(size_t) == sizeof(uintptr_t), "Very strange platform");
 #endif
 
 //
+// Error reporting
+//
+
+#if !defined(ENSURE)
+
+#include <cstdio>
+#include <cstdlib>
+
+#define ENSURE(cond, message) do { \
+    if (!(cond)) { \
+        fprintf(stderr, "FAIL: %s:%d: %s: %s\n", __FILE__, __LINE__, #cond, message); \
+        abort(); \
+    } \
+} while (0)
+
+#endif
+
+#if !defined(FAIL)
+
+#include <cstdio>
+#include <cstdlib>
+
+#define FAIL(message) do { \
+    fprintf(stderr, "FAIL: %s:%d: %s\n", __FILE__, __LINE__, message); \
+    abort(); \
+} while (0)
+
+#endif
+
+//
 // Bit manipulation
 //
 
