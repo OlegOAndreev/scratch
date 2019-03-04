@@ -13,6 +13,8 @@
 // Disable those checks
 #pragma push_macro("_FORTIFY_SOURCE")
 #pragma push_macro("__USE_FORTIFY_LEVEL")
+#undef _FORTIFY_SOURCE
+#undef __USE_FORTIFY_LEVEL
 #include <csetjmp>
 #pragma pop_macro("_FORTIFY_SOURCE")
 #pragma pop_macro("__USE_FORTIFY_LEVEL")
