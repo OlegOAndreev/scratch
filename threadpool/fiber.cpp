@@ -14,7 +14,7 @@
 
 struct FiberId::FiberImpl {
     char* stack = nullptr;
-    sigjmp_buf context = {0};
+    sigjmp_buf context = {};
 
     // The following two fields are used only when first starting the fiber.
     void(*entry)(void*) = nullptr;
@@ -31,7 +31,7 @@ thread_local FiberId::FiberImpl* passToSignalImpl = nullptr;
 thread_local FiberId::FiberImpl* runningImpl = nullptr;
 // Place in the running thread, which calls the first switchTo(). Invariant: if runningImpl is not null, this
 // context contains parent thread context.
-thread_local sigjmp_buf parentThreadContext = {0};
+thread_local sigjmp_buf parentThreadContext = {};
 
 void fiberEntry(int)
 {
