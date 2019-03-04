@@ -4,11 +4,6 @@
 
 #include "common.h"
 
-#if !defined(assert)
-#include <cstdlib>
-#define assert(x) if (!(x)) abort()
-#endif
-
 // A synchronization primitive for waiting until the target count value is reached (like CountDownLatch in Java).
 // CountWaiter is MPMC, both post() and wait() can be called by several threads simultaneously.
 class CountWaiter {
@@ -69,7 +64,7 @@ public:
 
         // The Semaphores should not have spurious wakeups, but still do a sanity check.
         counter = (state.load(std::memory_order_seq_cst) & kStateCounterMask) >> kStateCounterShift;
-        assert(counter > 0);
+        ENSURE(counter > 0, "Spurious wake on Semaphore");
 
         // This is not needed currently (with infinite waits), but let's leave it for timed wait in future.
         state.fetch_sub(1, std::memory_order_seq_cst);
