@@ -9,6 +9,8 @@
 // setjmp/longjmp implementation, taken from libco/sjlj.c. This implementation is a real horror movie.
 
 #include <csignal>
+#include <mutex>
+
 // At least on gcc+glibc the longjmp does the unneeded checks (see e.g. https://bugzilla.redhat.com/show_bug.cgi?id=557316)
 // Disable those checks
 #pragma push_macro("_FORTIFY_SOURCE")
@@ -18,7 +20,6 @@
 #include <csetjmp>
 #pragma pop_macro("_FORTIFY_SOURCE")
 #pragma pop_macro("__USE_FORTIFY_LEVEL")
-#include <mutex>
 
 struct FiberId::FiberImpl {
     char* stack = nullptr;
