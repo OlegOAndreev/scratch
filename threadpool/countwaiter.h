@@ -64,7 +64,7 @@ public:
 
         // The Semaphores should not have spurious wakeups, but still do a sanity check.
         counter = (state.load(std::memory_order_seq_cst) & kStateCounterMask) >> kStateCounterShift;
-        ENSURE(counter > 0, "Spurious wake on Semaphore");
+        ENSURE(counter == 0, "Spurious wake on Semaphore");
 
         // This is not needed currently (with infinite waits), but let's leave it for timed wait in future.
         state.fetch_sub(1, std::memory_order_seq_cst);
