@@ -84,7 +84,7 @@ template<typename Functor>
 FixedFunction<R(Args...), MaxSize, AllocOnOverflow>::FixedFunction(Functor&& functor)
 {
     using RealFunctor = typename std::remove_reference<Functor>::type;
-    if (sizeof(RealFunctor) <= sizeof(storage)) {
+    if constexpr (sizeof(RealFunctor) <= sizeof(storage)) {
         funcPtr = detail::funcPtrFromFunctor<RealFunctor, R, Args...>;
         movePtr = detail::movePtrFromFunctor<RealFunctor>;
         new(storage) RealFunctor(std::forward<RealFunctor>(functor));
