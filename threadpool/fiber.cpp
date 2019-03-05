@@ -35,17 +35,17 @@ namespace {
 static int const kLongJmpVal = 123;
 
 // The only way to pass arguments into sighandler.
-thread_local FiberId::FiberImpl* passToSignalImpl = nullptr;
+thread_local FiberId::FiberImpl* tlPassToSignalImpl = nullptr;
 // Currently running fiber.
-thread_local FiberId::FiberImpl* runningImpl = nullptr;
-// Place in the running thread, which calls the first switchTo(). Invariant: if runningImpl is not null, this
+thread_local FiberId::FiberImpl* tlRunningImpl = nullptr;
+// Place in the running thread, which calls the first switchTo(). Invariant: if tlRunningImpl is not null, this
 // context contains parent thread context.
-thread_local sigjmp_buf parentThreadContext = {};
+thread_local sigjmp_buf tlParentThreadContext = {};
 
 void fiberEntry(int)
 {
     // Copy thread-local var to stack, otherwise the second call to create() will overwrite the first value.
-    FiberId::FiberImpl* impl = passToSignalImpl;
+    FiberId::FiberImpl* impl = tlPassToSignalImpl;
     if (sigsetjmp(impl->context, 0) == kLongJmpVal) {
         try {
             impl->entry(impl->arg);
@@ -54,9 +54,9 @@ void fiberEntry(int)
             abort();
         }
         // Return to the point in the parent thread which called switchTo().
-        ENSURE(runningImpl == impl, "Inconsistent fiber state");
-        runningImpl = nullptr;
-        siglongjmp(parentThreadContext, kLongJmpVal);
+        ENSURE(tlRunningImpl == impl, "Inconsistent fiber state");
+        tlRunningImpl = nullptr;
+        siglongjmp(tlParentThreadContext, kLongJmpVal);
     }
 }
 
@@ -98,11 +98,11 @@ FiberId FiberId::create(size_t stackSize, void (*entry)(void*), void* arg)
             FAIL("sigaction");
         }
 
-        passToSignalImpl = impl;
+        tlPassToSignalImpl = impl;
         if (raise(SIGUSR2) < 0) {
             FAIL("raise");
         }
-        passToSignalImpl = nullptr;
+        tlPassToSignalImpl = nullptr;
 
         if (oldsigstack.ss_size > 0) {
             if (sigaltstack(&oldsigstack, nullptr) < 0) {
@@ -121,21 +121,23 @@ FiberId FiberId::create(size_t stackSize, void (*entry)(void*), void* arg)
 
 void FiberId::switchTo()
 {
-    if (runningImpl == impl) {
+    if (tlRunningImpl == impl) {
         return;
     }
-    if (runningImpl != nullptr) {
-        if (sigsetjmp(runningImpl->context, 0) == kLongJmpVal) {
+    if (tlRunningImpl != nullptr) {
+        if (sigsetjmp(tlRunningImpl->context, 0) == kLongJmpVal) {
             // Currently running fiber has been switched back to.
             return;
         }
     } else {
         // We are not in the fiber right now, store the thread context to return to.
-        if (sigsetjmp(parentThreadContext, 0) == kLongJmpVal) {
+        if (sigsetjmp(tlParentThreadContext, 0) == kLongJmpVal) {
             return;
         }
     }
-    runningImpl = impl;
+    // Please note, that we modify tlRunningImpl before the siglongjmp, not after the sigsetjmp. This prevents
+    // the errors when the compiler caches thread_local variable value and the fiber moves across the threads.
+    tlRunningImpl = impl;
     siglongjmp(impl->context, kLongJmpVal);
 }
 
@@ -164,9 +166,9 @@ namespace {
 
 // Must be set to the return value of ConvertThreadToFiber, used when returning from fiber entry back to "main"
 // thread entry.
-thread_local void* mainThreadFiber = nullptr;
+thread_local void* tlMainThreadFiber = nullptr;
 // Currently running fiber.
-thread_local FiberId::FiberImpl* runningImpl = nullptr;
+thread_local FiberId::FiberImpl* tlRunningImpl = nullptr;
 
 void __stdcall fiberEntry(void* arg)
 {
@@ -178,16 +180,16 @@ void __stdcall fiberEntry(void* arg)
         abort();
     }
     // Return control the point in the original thread which called switchTo() first.
-    runningImpl = nullptr;
-    SwitchToFiber(mainThreadFiber);
+    tlRunningImpl = nullptr;
+    SwitchToFiber(tlMainThreadFiber);
 }
 
 } // namespace
 
 FiberId FiberId::create(size_t stackSize, void (*entry)(void*), void* arg)
 {
-    if (mainThreadFiber == nullptr) {
-        mainThreadFiber = ConvertThreadToFiber(0);
+    if (tlMainThreadFiber == nullptr) {
+        tlMainThreadFiber = ConvertThreadToFiber(0);
     }
     FiberImpl* impl = new FiberImpl;
     impl->fiberHandle = CreateFiber(stackSize, fiberEntry, (void*)impl);
@@ -201,13 +203,13 @@ FiberId FiberId::create(size_t stackSize, void (*entry)(void*), void* arg)
 
 void FiberId::switchTo()
 {
-    if (mainThreadFiber == nullptr) {
-        mainThreadFiber = ConvertThreadToFiber(0);
+    if (tlMainThreadFiber == nullptr) {
+        tlMainThreadFiber = ConvertThreadToFiber(0);
     }
-    if (runningImpl == impl) {
+    if (tlRunningImpl == impl) {
         return;
     }
-    runningImpl = impl;
+    tlRunningImpl = impl;
     SwitchToFiber(impl->fiberHandle);
 }
 
