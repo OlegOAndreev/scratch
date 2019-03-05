@@ -71,7 +71,7 @@ private:
     std::atomic<uint64_t> totalSemaphorePosts{0};
 #endif
 
-    void forkJoinWorkerMain(int threadNum);
+    void workerMain(int threadNum);
 
     template<typename F>
     bool tryToPushTask(F&& f, int& threadToPush);
@@ -90,7 +90,7 @@ SimpleWorkStealingPool<Task>::SimpleWorkStealingPool(int numThreads)
     , workerThreadsSize(numThreads)
 {
     for (int i = 0; i < numThreads; i++) {
-        workerThreads[i].thread = std::thread([this, i] { forkJoinWorkerMain(i); });
+        workerThreads[i].thread = std::thread([this, i] { workerMain(i); });
     }
 }
 
@@ -259,7 +259,7 @@ void SimpleWorkStealingPool<Task>::submitRange(F&& f, size_t from, size_t to)
 }
 
 template<typename Task>
-void SimpleWorkStealingPool<Task>::forkJoinWorkerMain(int threadNum)
+void SimpleWorkStealingPool<Task>::workerMain(int threadNum)
 {
     PerThread& thisThread = workerThreads[threadNum];
     int threadToSteal = (threadNum + 1) % workerThreadsSize;
