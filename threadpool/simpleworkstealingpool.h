@@ -272,7 +272,7 @@ void SimpleWorkStealingPool<Task>::workerMain(int threadNum)
             continue;
         }
 
-        int const kSpinCount = 1000;
+        int const kSpinCount = 100;
 
         // Spin for a few iterations.
         bool foundTask = false;
