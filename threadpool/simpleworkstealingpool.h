@@ -248,10 +248,10 @@ void SimpleWorkStealingPool<Task>::submitRange(F&& f, size_t from, size_t to)
     // NOTE: See submit() for description of synchronization here.
     int sleeping = numSleepingWorkers.load(std::memory_order_seq_cst);
     if (sleeping > 0) {
-#if defined(WORK_STEALING_STATS)
-        totalSemaphorePosts.fetch_add(1, std::memory_order_relaxed);
-#endif
         int toWake = std::min(sleeping, pushedTasks);
+#if defined(WORK_STEALING_STATS)
+        totalSemaphorePosts.fetch_add(toWake, std::memory_order_relaxed);
+#endif
         for (int i = 0; i < toWake; i++) {
             sleepingSemaphore.post();
         }
