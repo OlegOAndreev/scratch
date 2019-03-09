@@ -12,6 +12,7 @@
 #include "common.h"
 #include "countwaiter.h"
 #include "fiber.h"
+#include "fiberworkstealingpool.h"
 #include "fixedfunction.h"
 #include "futureutils.h"
 #include "mpmcblockingtaskqueue.h"
@@ -343,7 +344,7 @@ double tinyJob(TinyJobInput const& input)
 {
     double ret = 0.0;
     for (int i = 0; i < input.iters; i++) {
-        ret += sqrt((i + 1) * input.start);
+        ret += double(i + 1) * input.start;
     }
     return ret;
 }
@@ -642,9 +643,8 @@ int main(int argc, char** argv)
 
         basicTests(tp);
 
-        tinyJobsTest(tp, 1);
         tinyJobsTest(tp, 20);
-//        tinyJobsTest(tp, 200);
+        tinyJobsTest(tp, 200);
 //        tinyJobsTest(tp, 2000);
     }
 
@@ -655,9 +655,8 @@ int main(int argc, char** argv)
 
         basicTests(tp);
 
-        tinyJobsTest(tp, 1);
         tinyJobsTest(tp, 20);
-//        tinyJobsTest(tp, 200);
+        tinyJobsTest(tp, 200);
 //        tinyJobsTest(tp, 2000);
     }
 
@@ -671,9 +670,8 @@ int main(int argc, char** argv)
         tp.clearStats();
 #endif
 
-        tinyJobsTest(tp, 1);
         tinyJobsTest(tp, 20);
-//        tinyJobsTest(tp, 200);
+        tinyJobsTest(tp, 200);
 //        tinyJobsTest(tp, 2000);
     }
 
