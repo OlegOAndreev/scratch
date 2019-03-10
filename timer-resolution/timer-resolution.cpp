@@ -501,8 +501,12 @@ void doMain(int doMask)
 
         printf("Testing CLOCK_MONOTONIC resolution\n");
         testClockResolution(CLOCK_MONOTONIC);
+        printf("Testing CLOCK_MONOTONIC_RAW resolution\n");
+        testClockResolution(CLOCK_MONOTONIC_RAW);
         printf("Testing CLOCK_PROCESS_CPUTIME_ID resolution\n");
         testClockResolution(CLOCK_PROCESS_CPUTIME_ID);
+        printf("Testing CLOCK_THREAD_CPUTIME_ID resolution\n");
+        testClockResolution(CLOCK_THREAD_CPUTIME_ID);
     }
 
     if (doMask & doSignalResolution) {
