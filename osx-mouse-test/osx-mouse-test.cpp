@@ -90,7 +90,8 @@ inline  int16_t ACCEL_TABLE_CONSUME_INT16 (const void ** t) {
     return val;
 }
 
-#define ACCELL_TABLE_CONSUME_POINT(t) {FIXED_TO_DOUBLE(ACCEL_TABLE_CONSUME_INT32(t)), FIXED_TO_DOUBLE(ACCEL_TABLE_CONSUME_INT32(t))}
+#define ACCELL_TABLE_CONSUME_POINT(t) {FIXED_TO_DOUBLE(ACCEL_TABLE_CONSUME_INT32(t)), \
+    FIXED_TO_DOUBLE(ACCEL_TABLE_CONSUME_INT32(t))}
 
 // Copied from IOHIDFamily-870.21.4/IOHIDEventSystemPlugIns/IOHIDAccelerationTable.cpp
 
@@ -197,7 +198,8 @@ void printOldAcceleration()
         printf("Failed to IOHIDGetAccelerationWithKey\n");
         abort();
     }
-    if (IOHIDGetAccelerationWithKey(handle, CFSTR(kIOHIDTrackpadAccelerationType), &trackpadAccel) != 0) {
+    if (IOHIDGetAccelerationWithKey(handle, CFSTR(kIOHIDTrackpadAccelerationType),
+                                    &trackpadAccel) != 0) {
         printf("Failed to IOHIDGetAccelerationWithKey\n");
         abort();
     }
@@ -216,7 +218,8 @@ void printDeviceImpl(io_service_t service, int padding)
     }
     
     CFMutableDictionaryRef properties;
-    if (IORegistryEntryCreateCFProperties(service, &properties, kCFAllocatorDefault, kNilOptions) != 0) {
+    if (IORegistryEntryCreateCFProperties(service, &properties, kCFAllocatorDefault,
+                                          kNilOptions) != 0) {
         printf("Failed to IORegistryEntryCreateCFProperties\n");
         abort();
     }
@@ -250,10 +253,13 @@ void printDevice(IOHIDDeviceRef device)
 // Taken from libpointing
 int getResolutionImpl(io_service_t service)
 {
-    CFTypeRef res = IORegistryEntrySearchCFProperty(service, kIOServicePlane, CFSTR(kIOHIDPointerResolutionKey), kCFAllocatorDefault, kIORegistryIterateRecursively);
+    CFTypeRef res = IORegistryEntrySearchCFProperty(
+                service, kIOServicePlane,CFSTR(kIOHIDPointerResolutionKey), kCFAllocatorDefault,
+                kIORegistryIterateRecursively);
     if (res) {
         SInt32 resolution = -1;
-        if (CFGetTypeID(res) == CFNumberGetTypeID() && CFNumberGetValue((CFNumberRef)res, kCFNumberSInt32Type, &resolution)) {
+        if (CFGetTypeID(res) == CFNumberGetTypeID()
+                && CFNumberGetValue((CFNumberRef)res,kCFNumberSInt32Type, &resolution)) {
             resolution = resolution >> 16;
         }
         return resolution;
@@ -274,11 +280,14 @@ bool setResolutionImpl(io_service_t service, int resolution)
         return false;
     }
 
-    CFTypeRef res = IORegistryEntryCreateCFProperty(service, CFSTR(kIOHIDPointerResolutionKey), kCFAllocatorDefault, kNilOptions);
+    CFTypeRef res = IORegistryEntryCreateCFProperty(service, CFSTR(kIOHIDPointerResolutionKey),
+                                                    kCFAllocatorDefault, kNilOptions);
     if (res) {
         SInt32 i32Resolution = resolution << 16;
-        CFNumberRef numberRef = CFNumberCreate(kCFAllocatorDefault, kCFNumberSInt32Type, &i32Resolution);
-        if (IORegistryEntrySetCFProperty(service, CFSTR(kIOHIDPointerResolutionKey), numberRef) != 0) {
+        CFNumberRef numberRef = CFNumberCreate(kCFAllocatorDefault, kCFNumberSInt32Type,
+                                               &i32Resolution);
+        if (IORegistryEntrySetCFProperty(
+                    service, CFSTR(kIOHIDPointerResolutionKey), numberRef) != 0) {
             printf("Failed to IORegistryEntrySetCFProperty\n");
             abort();
         }
@@ -312,15 +321,18 @@ bool setResolution(IOHIDDeviceRef device, int resolution)
 
 double getAccelerationImpl(io_service_t service)
 {
-    CFTypeRef res = IORegistryEntrySearchCFProperty(service, kIOServicePlane, CFSTR(kIOHIDPointerAccelerationTableKey), kCFAllocatorDefault, kIORegistryIterateRecursively);
+    CFTypeRef res = IORegistryEntrySearchCFProperty(
+                service, kIOServicePlane, CFSTR(kIOHIDPointerAccelerationTableKey),
+                kCFAllocatorDefault, kIORegistryIterateRecursively);
     if (res) {
         ACCEL_TABLE* table = (ACCEL_TABLE*)CFDataGetBytePtr((CFDataRef)res);
-        if (table->signature() != APPLE_ACCELERATION_MT_TABLE_SIGNATURE && table->signature() != APPLE_ACCELERATION_MT_TABLE_SIGNATURE) {
+        if (table->signature() != APPLE_ACCELERATION_MT_TABLE_SIGNATURE
+                && table->signature() != APPLE_ACCELERATION_MT_TABLE_SIGNATURE) {
             printf("Wrong accel table signature %x\n", table->signature());
             return -1;
         }
 
-//        something something modify accel tables;
+        // Something something modify accel tables;
 
         return -1;
     } else {
@@ -364,7 +376,7 @@ std::string getIOHIDStringProperty(IOHIDDeviceRef device, CFStringRef prop, bool
     return cfToString(str);
 }
 
-void iohidInputCallback(void* context, IOReturn res, void* sender, IOHIDValueRef val)
+void iohidInputCallback(void* /*context*/, IOReturn /*res*/, void* /*sender*/, IOHIDValueRef val)
 {
     printf("FIRED\n");
     IOHIDElementRef elem = IOHIDValueGetElement(val);
@@ -404,9 +416,11 @@ void initIOHID()
         IOHIDDeviceRef hidDevice = hidDevices[i];
         int32_t usagePage = getIOHIDInt32Property(hidDevice, CFSTR(kIOHIDPrimaryUsagePageKey));
         int32_t usage = getIOHIDInt32Property(hidDevice, CFSTR(kIOHIDPrimaryUsageKey));
-        std::string manufacturer = getIOHIDStringProperty(hidDevice, CFSTR(kIOHIDManufacturerKey), true);
+        std::string manufacturer = getIOHIDStringProperty(hidDevice, CFSTR(kIOHIDManufacturerKey),
+                                                          true);
         std::string product = getIOHIDStringProperty(hidDevice, CFSTR(kIOHIDProductKey), true);
-        printf("Device: %d: %s: %s (%d %d)\n", i, manufacturer.c_str(), product.c_str(), usagePage, usage);
+        printf("Device: %d: %s: %s (%d %d)\n", i, manufacturer.c_str(), product.c_str(), usagePage,
+               usage);
         printDevice(hidDevice);
         if (usagePage == kHIDPage_GenericDesktop && usage == kHIDUsage_GD_Mouse) {
             printf("Got mouse device\n");
@@ -416,7 +430,8 @@ void initIOHID()
             }
             IOHIDDeviceRegisterInputValueCallback(hidDevice, iohidInputCallback, nullptr);
             IOHIDDeviceScheduleWithRunLoop(hidDevice, CFRunLoopGetCurrent(), kCFRunLoopDefaultMode);
-            IOHIDQueueRef queue = IOHIDQueueCreate(kCFAllocatorDefault, hidDevice, 1024, kIOHIDOptionsTypeNone);
+            IOHIDQueueRef queue = IOHIDQueueCreate(kCFAllocatorDefault, hidDevice, 1024,
+                                                   kIOHIDOptionsTypeNone);
             Device device;
             device.hidDevice = hidDevice;
             device.name = manufacturer;
@@ -505,7 +520,7 @@ int main(int argc, char** argv)
             const char* name = argv[i + 1];
             int resolution = atoi(argv[i + 2]);
             for (const Device& device: devices) {
-                if (device.name.find_first_of(name) != -1) {
+                if (device.name.find_first_of(name) != std::string::npos) {
                     printf("Setting resolution for %s to %d\n", device.name.c_str(), resolution);
                     if (!setResolution(device.hidDevice, resolution)) {
                         printf("Setting resolution failed\n");
@@ -539,7 +554,8 @@ int main(int argc, char** argv)
         float cgDeltax = cgPoint.x - lastCgPoint.x;
         float cgDeltay = cgPoint.y - lastCgPoint.y;
         if (cgDeltax != 0 || cgDeltay != 0) {
-            printf("CG deltas: %d %d (%g %g)\n", (int)round(cgDeltax), (int)round(cgDeltay), cgDeltax, cgDeltay);
+            printf("CG deltas: %d %d (%g %g)\n", (int)round(cgDeltax), (int)round(cgDeltay),
+                   cgDeltax, cgDeltay);
             lastCgPoint = cgPoint;
             cgSpeed.push(sqrt(cgDeltax * cgDeltax + cgDeltay * cgDeltay));
             movement = true;
