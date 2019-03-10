@@ -43,7 +43,8 @@ int naive(int n)
     return naiveIter(x.data(), 0, n);
 }
 
-// x[i] = horizontal position of queen on i-th vertical, usedy[i] = true if y-th horizontal position is already used.
+// x[i] = horizontal position of queen on i-th vertical, usedy[i] = true if y-th horizontal
+// position is already used.
 int naive2Iter(int* x, char* usedy, int y, int n)
 {
     int total = 0;

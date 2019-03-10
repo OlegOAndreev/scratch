@@ -20,11 +20,14 @@ int main() {
         } else if (event.type == SDL_JOYHATMOTION) {
             printf("Joystick hat %d value %d\n", (int) event.jhat.hat, (int) event.jhat.value);
         } else if (event.type == SDL_JOYBUTTONDOWN || event.type == SDL_JOYBUTTONUP) {
-            printf("Joystick button %d state %d\n", (int) event.jbutton.button, (int) event.jbutton.state);
+            printf("Joystick button %d state %d\n", (int) event.jbutton.button,
+                   (int) event.jbutton.state);
         } else if (event.type == SDL_CONTROLLERAXISMOTION) {
-            printf("Controller axis %d value %d\n", (int) event.caxis.axis, (int) event.caxis.value);
+            printf("Controller axis %d value %d\n", (int) event.caxis.axis,
+                   (int) event.caxis.value);
         } else if (event.type == SDL_CONTROLLERBUTTONDOWN || event.type == SDL_CONTROLLERBUTTONUP) {
-            printf("Controller button %d state %d\n", (int) event.cbutton.button, (int) event.cbutton.state);
+            printf("Controller button %d state %d\n", (int) event.cbutton.button,
+                   (int) event.cbutton.state);
         } else if (event.type == SDL_JOYDEVICEADDED) {
             int joy_index = event.jdevice.which;
             SDL_Joystick* joystick = SDL_JoystickOpen(joy_index);

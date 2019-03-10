@@ -46,13 +46,35 @@ namespace std {
     public:
         thread() : handle(0) {}
         thread(const thread& other) = delete;
-        thread(thread&& other) : handle(other.handle) { other.handle = 0; }
+        thread(thread&& other) : handle(other.handle)
+        {
+            other.handle = 0;
+        }
         template<class Function, class... Args>
-        explicit thread(Function&& f, Args&&... args) { handle = (HANDLE)_beginthreadex(NULL, 0, threadFunc, new ThreadFunction(f, args...), 0, NULL); }
-        ~thread() { if (handle != 0) abort(); }
+        explicit thread(Function&& f, Args&&... args)
+        {
+            handle = (HANDLE)_beginthreadex(NULL, 0,threadFunc, new ThreadFunction(f, args...),
+                                            0, NULL);
+        }
+        ~thread()
+        {
+            if (handle != 0)
+                abort();
+        }
         thread& operator=(const thread&) = delete;
-        thread& operator=(thread&& other) { if (handle != 0) abort(); handle = other.handle; other.handle = 0; }
-        void join() { WaitForSingleObject(handle, INFINITE); CloseHandle(handle); handle = 0; }
+        thread& operator=(thread&& other)
+        {
+            if (handle != 0)
+                abort();
+            handle = other.handle;
+            other.handle = 0;
+        }
+        void join()
+        {
+            WaitForSingleObject(handle, INFINITE);
+            CloseHandle(handle);
+            handle = 0;
+        }
     private:
         HANDLE handle;
         using ThreadFunction = std::function<void(void)>;
@@ -433,8 +455,8 @@ struct LockFreeWorkData {
     bool popInput(unsigned& param, size_t& index, uint64_t& /*retryCount*/)
     {
         size_t curIndex = inputIndex.v.fetch_sub(1, std::memory_order_relaxed);
-        // The index can become underflow. This loop is generally a bad code, but we want to simulate
-        // the popping from the back of input vector that LockingWorkData does.
+        // The index can become underflow. This loop is generally a bad code, but we want
+        // to simulate the popping from the back of input vector that LockingWorkData does.
         if (curIndex > 0 && curIndex <= input.size()) {
             index = curIndex - 1;
             param = input[curIndex - 1];
@@ -544,7 +566,8 @@ struct PerRunStats {
 };
 
 template <typename WorkData>
-void runIteration(int numThreads, const std::vector<unsigned>& input, unsigned targetValue, PerRunStats& stats)
+void runIteration(int numThreads, const std::vector<unsigned>& input, unsigned targetValue,
+                  PerRunStats& stats)
 {
     std::vector<std::thread> threads;
     std::vector<PerThreadStats> threadStats;
@@ -588,7 +611,8 @@ void runIteration(int numThreads, const std::vector<unsigned>& input, unsigned t
 }
 
 template <typename WorkData>
-void run(const char* name, const char* methodName, int numThreads, int inputSize, unsigned workAmount)
+void run(const char* name, const char* methodName, int numThreads, int inputSize,
+         unsigned workAmount)
 {
     if (methodName != nullptr && strcmp(name, methodName) != 0) {
         return;
@@ -618,11 +642,11 @@ void run(const char* name, const char* methodName, int numThreads, int inputSize
     const PerRunStats& p90Stat = runStats[runStats.size() * 9 / 10];
     const PerRunStats& p98Stat = runStats[runStats.size() * 49 / 50];
     printf("%s: Elapsed: %d-%d-%d-%dms (average sequential run length: %.2f-%.2f-%.2f-%.2f,"
-            " retry count: %lld-%lld-%lld-%lld)\n",
-            name, (int)minStat.timeMs, (int)p50Stat.timeMs, (int)p90Stat.timeMs, (int)p98Stat.timeMs,
-            minStat.avgRunLength, p50Stat.avgRunLength, p90Stat.avgRunLength, p98Stat.avgRunLength,
-            (long long)minStat.totalRetryCount, (long long)p50Stat.totalRetryCount, (long long)p90Stat.totalRetryCount,
-            (long long)p98Stat.totalRetryCount);
+           " retry count: %lld-%lld-%lld-%lld)\n",
+           name, (int)minStat.timeMs, (int)p50Stat.timeMs, (int)p90Stat.timeMs, (int)p98Stat.timeMs,
+           minStat.avgRunLength, p50Stat.avgRunLength, p90Stat.avgRunLength, p98Stat.avgRunLength,
+           (long long)minStat.totalRetryCount, (long long)p50Stat.totalRetryCount,
+           (long long)p90Stat.totalRetryCount, (long long)p98Stat.totalRetryCount);
 }
 
 int main(int argc, char** argv)
@@ -631,8 +655,8 @@ int main(int argc, char** argv)
     //  * numThreads: self-descriptive;
     //  * workAmount: the average length of work simulation loop in doWork will be workAmount ^ 2
     //    (use 1 for trivial one-iteration loops, use 5 for 25 iteration loops, 10 for 1000 loops).
-    //  * inputSize: all threads get trivial pieces of work from preallocated array, inputSize is the length of
-    //    that array;
+    //  * inputSize: all threads get trivial pieces of work from preallocated array, inputSize
+    //    is the length of that array;
     if (argc < 3 || argc > 5) {
         printf("Usage: %s numThreads workAmount [method [inputSize]]\n", argv[0]);
         return 1;
@@ -642,42 +666,65 @@ int main(int argc, char** argv)
     const char* method = argc >= 4 ? argv[3] : nullptr;
     int inputSize = (argc == 5) ? atoi(argv[4]) : 20000000 / (workAmount * workAmount);
 
-    printf("Num threads: %d, input %d-%d size %d\n", numThreads, workAmount - 1, workAmount + 1, inputSize);
+    printf("Num threads: %d, input %d-%d size %d\n", numThreads, workAmount - 1, workAmount + 1,
+           inputSize);
 
     if (numThreads == 1) {
         run<UnlockedWorkData>("no lock", method, numThreads, inputSize, workAmount);
     }
     run<LockFreeWorkData>("lock-free", method, numThreads, inputSize, workAmount);
-    run<LockingWorkData<SpinLock<EmptyBackoff, CACHE_LINE_WIDTH, true>>>("spinlock", method, numThreads, inputSize, workAmount);
+    run<LockingWorkData<SpinLock<EmptyBackoff, CACHE_LINE_WIDTH, true>>>(
+                "spinlock", method,numThreads, inputSize, workAmount);
 #if !defined(_MSC_VER)
-    run<LockingWorkData<SpinLock<PauseBackoff, CACHE_LINE_WIDTH, true>>>("spinlock+pause", method, numThreads, inputSize, workAmount);
-    run<LockingWorkData<SpinLock<NopBackoff, CACHE_LINE_WIDTH, true>>>("spinlock+nop", method, numThreads, inputSize, workAmount);
+    run<LockingWorkData<SpinLock<PauseBackoff, CACHE_LINE_WIDTH, true>>>(
+                "spinlock+pause", method, numThreads, inputSize, workAmount);
+    run<LockingWorkData<SpinLock<NopBackoff, CACHE_LINE_WIDTH, true>>>(
+                "spinlock+nop", method, numThreads, inputSize, workAmount);
 #endif
-    run<LockingWorkData<SpinLock<SchedBackoff, CACHE_LINE_WIDTH, true>>>("spinlock+yield", method, numThreads, inputSize, workAmount);
-    run<LockingWorkData<SpinLock<SleepBackoff, CACHE_LINE_WIDTH, true>>>("spinlock+sleep", method, numThreads, inputSize, workAmount);
-    run<LockingWorkData<SpinLock<EmptyBackoff, CACHE_LINE_WIDTH, false>>>("spinlock,no load loop", method, numThreads, inputSize, workAmount);
+    run<LockingWorkData<SpinLock<SchedBackoff, CACHE_LINE_WIDTH, true>>>(
+                "spinlock+yield", method, numThreads, inputSize, workAmount);
+    run<LockingWorkData<SpinLock<SleepBackoff, CACHE_LINE_WIDTH, true>>>(
+                "spinlock+sleep", method, numThreads, inputSize, workAmount);
+    run<LockingWorkData<SpinLock<EmptyBackoff, CACHE_LINE_WIDTH, false>>>(
+                "spinlock,no load loop", method, numThreads, inputSize, workAmount);
 #if !defined(_MSC_VER)
-    run<LockingWorkData<SpinLock<PauseBackoff, CACHE_LINE_WIDTH, false>>>("spinlock+pause,no load loop", method, numThreads, inputSize, workAmount);
+    run<LockingWorkData<SpinLock<PauseBackoff, CACHE_LINE_WIDTH, false>>>(
+                "spinlock+pause,no load loop", method, numThreads, inputSize, workAmount);
 #endif
-    run<LockingWorkData<SpinLock<EmptyBackoff, sizeof(size_t), true>>>("spinlock,unaligned", method, numThreads, inputSize, workAmount);
+    run<LockingWorkData<SpinLock<EmptyBackoff, sizeof(size_t), true>>>(
+                "spinlock,unaligned", method, numThreads, inputSize, workAmount);
 #if !defined(_MSC_VER)
-    run<LockingWorkData<SpinLock<PauseBackoff, sizeof(size_t), true>>>("spinlock+pause,unaligned", method, numThreads, inputSize, workAmount);
+    run<LockingWorkData<SpinLock<PauseBackoff, sizeof(size_t), true>>>(
+                "spinlock+pause,unaligned", method, numThreads, inputSize, workAmount);
 #endif
-    run<LockingWorkData<TicketLock<EmptyBackoff, CACHE_LINE_WIDTH>>>("ticketlock", method, numThreads, inputSize, workAmount);
-    run<LockingWorkData<TicketLock<EmptyBackoff, sizeof(size_t)>>>("ticketlock,unaligned", method, numThreads, inputSize, workAmount);
-    run<LockingWorkData<PaddedBenaphoreLock>>("benaphore", method, numThreads, inputSize, workAmount);
-    run<LockingWorkData<BenaphoreLock>>("benaphore,unaligned", method, numThreads, inputSize, workAmount);
-    run<LockingWorkData<SemaphoreLock<CACHE_LINE_WIDTH>>>("semaphore", method, numThreads, inputSize, workAmount);
-    run<LockingWorkData<SemaphoreLock<sizeof(Semaphore)>>>("semaphore,unaligned", method, numThreads, inputSize, workAmount);
- #if !defined(__APPLE__) // std::mutex and default pthread_mutex is horribly slow on OS X, skip it altogether
-    run<LockingWorkData<MutexLock<CACHE_LINE_WIDTH>>>("std::mutex", method, numThreads, inputSize, workAmount);
-    run<LockingWorkData<MutexLock<sizeof(pthread_mutex_t)>>>("std::mutex,unaligned", method, numThreads, inputSize, workAmount);
-    run<LockingWorkData<PThreadMutexLock<CACHE_LINE_WIDTH>>>("pthread_mutex", method, numThreads, inputSize, workAmount);
-    run<LockingWorkData<PThreadMutexLock<sizeof(pthread_mutex_t)>>>("pthread_mutex,unaligned", method, numThreads, inputSize, workAmount);
+    run<LockingWorkData<TicketLock<EmptyBackoff, CACHE_LINE_WIDTH>>>(
+                "ticketlock", method, numThreads, inputSize, workAmount);
+    run<LockingWorkData<TicketLock<EmptyBackoff, sizeof(size_t)>>>(
+                "ticketlock,unaligned", method, numThreads, inputSize, workAmount);
+    run<LockingWorkData<PaddedBenaphoreLock>>(
+                "benaphore", method, numThreads, inputSize, workAmount);
+    run<LockingWorkData<BenaphoreLock>>(
+                "benaphore,unaligned", method, numThreads, inputSize, workAmount);
+    run<LockingWorkData<SemaphoreLock<CACHE_LINE_WIDTH>>>(
+                "semaphore", method, numThreads, inputSize, workAmount);
+    run<LockingWorkData<SemaphoreLock<sizeof(Semaphore)>>>(
+                "semaphore,unaligned", method, numThreads, inputSize, workAmount);
+    // std::mutex and default pthread_mutex is horribly slow on OS X, skip it altogether
+ #if !defined(__APPLE__)
+    run<LockingWorkData<MutexLock<CACHE_LINE_WIDTH>>>(
+                "std::mutex", method, numThreads, inputSize, workAmount);
+    run<LockingWorkData<MutexLock<sizeof(pthread_mutex_t)>>>(
+                "std::mutex,unaligned", method, numThreads, inputSize, workAmount);
+    run<LockingWorkData<PThreadMutexLock<CACHE_LINE_WIDTH>>>(
+                "pthread_mutex", method, numThreads, inputSize, workAmount);
+    run<LockingWorkData<PThreadMutexLock<sizeof(pthread_mutex_t)>>>(
+                "pthread_mutex,unaligned", method, numThreads, inputSize, workAmount);
 #endif
 #if defined(__APPLE__)
-    run<LockingWorkData<PThreadMutexUnfairLock<CACHE_LINE_WIDTH>>>("pthread_mutex,unfair", method, numThreads, inputSize, workAmount);
-    run<LockingWorkData<PThreadMutexUnfairLock<sizeof(pthread_mutex_t)>>>("pthread_mutex,unfair,unaligned", method, numThreads, inputSize, workAmount);
+    run<LockingWorkData<PThreadMutexUnfairLock<CACHE_LINE_WIDTH>>>(
+                "pthread_mutex,unfair", method, numThreads, inputSize, workAmount);
+    run<LockingWorkData<PThreadMutexUnfairLock<sizeof(pthread_mutex_t)>>>(
+                "pthread_mutex,unfair,unaligned", method, numThreads, inputSize, workAmount);
 #endif
 
     return 0;

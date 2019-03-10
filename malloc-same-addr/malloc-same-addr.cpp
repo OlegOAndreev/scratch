@@ -22,7 +22,8 @@ int main(int argc, char** argv)
         char* ptr = new char[curSize];
         printf("Size = %llu, ptr = %llx", (unsigned long long)curSize, (unsigned long long)ptr);
         if (oldPtrs.find((uintptr_t)ptr) != oldPtrs.end()) {
-            printf(" (Same pointer as for size %llu)\n", (unsigned long long)oldPtrs[(uintptr_t)ptr]);
+            printf(" (Same pointer as for size %llu)\n",
+                   (unsigned long long)oldPtrs[(uintptr_t)ptr]);
         } else {
             oldPtrs[(uintptr_t)ptr] = curSize;
             printf("\n");

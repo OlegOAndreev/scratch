@@ -22,10 +22,14 @@ int freeCount = 0;
 __attribute__((destructor))
 static void destroy()
 {
-    printf("Memcpy: %d calls, %llu kbytes\n", (int) memcpyCount, (unsigned long long) totalMemcpySize / 1024);
-    printf("Memmove: %d calls, %llu kbytes\n", (int) memmoveCount, (unsigned long long) totalMemmoveSize / 1024);
-    printf("Strlen: %d calls, %llu kbytes\n", (int) strlenCount, (unsigned long long) totalStrlenSize / 1024);
-    printf("Malloc: %d calls, %llu kbytes\n", (int) mallocCount, (unsigned long long) totalMallocSize / 1024);
+    printf("Memcpy: %d calls, %llu kbytes\n", (int) memcpyCount,
+           (unsigned long long) totalMemcpySize / 1024);
+    printf("Memmove: %d calls, %llu kbytes\n", (int) memmoveCount,
+           (unsigned long long) totalMemmoveSize / 1024);
+    printf("Strlen: %d calls, %llu kbytes\n", (int) strlenCount,
+           (unsigned long long) totalStrlenSize / 1024);
+    printf("Malloc: %d calls, %llu kbytes\n", (int) mallocCount,
+           (unsigned long long) totalMallocSize / 1024);
     printf("Free: %d calls\n", (int) freeCount);
 }
 
