@@ -95,6 +95,26 @@ void testFixedFunction()
     ASSERT_THAT(smallAndBigFunc2(0.0) == 1.0);
     ASSERT_THAT(smallAndBigFunc3(0.0) == 28.0);
 
+    FixedFunction<std::string(std::string)> copyStringFunc([](std::string s) {
+        return s + "abc";
+    });
+    ASSERT_THAT(copyStringFunc("123") == "123abc");
+
+    FixedFunction<std::string(std::string const&)> crefStringFunc([](std::string const& s) {
+        return s + "abcd";
+    });
+
+    ASSERT_THAT(crefStringFunc("1234") == "1234abcd");
+
+    FixedFunction<void(std::string const&, std::string&)> refStringFunc(
+                [](std::string const& src, std::string& dst) {
+        dst = src + "abcde";
+    });
+
+    std::string out;
+    refStringFunc("12345", out);
+    ASSERT_THAT(out == "12345abcde");
+
     printf("FixedFunction tests passed\n");
 }
 

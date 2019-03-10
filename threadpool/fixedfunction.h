@@ -158,7 +158,7 @@ FixedFunction<R(Args...), MaxSize, AllocOnOverflow>::~FixedFunction()
 template<typename R, size_t MaxSize, bool AllocOnOverflow, typename ...Args>
 R FixedFunction<R(Args...), MaxSize, AllocOnOverflow>::operator()(Args... args)
 {
-    return funcPtr(storage, args...);
+    return funcPtr(storage, std::forward<Args>(args)...);
 }
 
 template<typename R, size_t MaxSize, bool AllocOnOverflow, typename ...Args>
@@ -172,14 +172,14 @@ namespace detail {
 template<typename Functor, typename R, typename ...Args>
 R funcPtrFromFunctor(char* storage, Args... args)
 {
-    return (*((Functor*)storage))(args...);
+    return (*((Functor*)storage))(std::forward<Args>(args)...);
 }
 
 template<typename Functor, typename R, typename ...Args>
 R funcPtrFromFunctorOverflow(char* storage, Args... args)
 {
     char* realStorage = *(char**)storage;
-    return (*((Functor*)realStorage))(args...);
+    return (*((Functor*)realStorage))(std::forward<Args>(args)...);
 }
 
 template<typename R, typename ...Args>
@@ -187,7 +187,7 @@ R funcPtrFromPtr(char* storage, Args... args)
 {
     using FuncType = R(*)(Args...);
     FuncType func = *(FuncType*)storage;
-    return func(args...);
+    return func(std::forward<Args>(args)...);
 }
 
 template<typename Functor>
