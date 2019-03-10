@@ -16,9 +16,9 @@
 #include "fixedfunction.h"
 #include "futureutils.h"
 #include "mpmcblockingqueue.h"
-#include "simpleblockingqueue.h"
 #include "simplethreadpool.h"
 #include "simpleworkstealingpool.h"
+#include "stdblockingqueue.h"
 
 
 #define ASSERT_THAT(expr) \
@@ -662,7 +662,7 @@ int main(int argc, char** argv)
     }
 
     if (poolNames.empty() || setContains(poolNames, "simple")) {
-        SimpleThreadPool<TaskType, SimpleBlockingQueue<TaskType>> tp(numThreads);
+        SimpleThreadPool<TaskType, StdBlockingQueue<TaskType>> tp(numThreads);
 
         printf("Running simple pool with %d threads\n", tp.numThreads());
 

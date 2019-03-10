@@ -6,9 +6,10 @@
 #include <mutex>
 
 
-// The simple blocking queue, based on deque, protected by the lock + condition variable.
+// The simple std::-based blocking queue, based on deque, protected by the lock + condition
+// variable.
 template<typename T>
-class SimpleBlockingQueue {
+class StdBlockingQueue {
 public:
     bool push(T&& t)
     {
