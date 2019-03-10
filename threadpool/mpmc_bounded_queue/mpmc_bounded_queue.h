@@ -48,7 +48,8 @@ public:
   }
 
   // MODIFIED: Switched to universal references to support move-only data.
-  bool enqueue(T&& data)
+  template<typename U>
+  bool enqueue(U&& data)
   {
     cell_t* cell;
     size_t pos = enqueue_pos_.load(std::memory_order_relaxed);
