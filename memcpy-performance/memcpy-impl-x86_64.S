@@ -68,7 +68,8 @@ _naiveMemcpy_x86_64:
 2:  EPILOGUE
     ret
 
-/* The basic aligned memcpy: aligns the dst with 1-byte copies, does 8-byte copies, then 1-byte copies the rest. */
+/* The basic aligned memcpy: aligns the dst with 1-byte copies, does 8-byte copies, then 1-byte
+   copies the rest. */
 .p2align 4
 .global _naiveMemcpyAligned_x86_64
 _naiveMemcpyAligned_x86_64:
@@ -115,7 +116,8 @@ _naiveMemcpyAligned_x86_64:
 2:  EPILOGUE
     ret
 
-/* The unrolled memcpy: unrolled unaligned 8-byte copies (32 per loop), then copies the rest depending on bits in remainder. */
+/* The unrolled memcpy: unrolled unaligned 8-byte copies (32 per loop), then copies the rest
+   depending on bits in remainder. */
 .p2align 4
 .global _naiveMemcpyUnrolled_x86_64
 _naiveMemcpyUnrolled_x86_64:
@@ -204,8 +206,8 @@ _naiveSseMemcpy:
 2:  EPILOGUE
     ret
 
-/* The basic SSE memcpy with alignment: aligns the dst with 1-byte copies, does 16-byte copies, then 1-byte copies
-   the rest. */
+/* The basic SSE memcpy with alignment: aligns the dst with 1-byte copies, does 16-byte copies,
+   then 1-byte copies the rest. */
 .p2align 4
 .global _naiveSseMemcpyAligned
 _naiveSseMemcpyAligned:
@@ -252,8 +254,8 @@ _naiveSseMemcpyAligned:
 2:  EPILOGUE
     ret
 
-/* The basic SSE memcpy with unrolled body: aligns the dst with 1-byte copies, does 32-byte copies per loop, then
-   1-byte copies the rest. */
+/* The basic SSE memcpy with unrolled body: aligns the dst with 1-byte copies, does 32-byte copies
+   per loop, then 1-byte copies the rest. */
 .p2align 4
 .global _naiveSseMemcpyUnrolledAlignedBody
 _naiveSseMemcpyUnrolledAlignedBody:
@@ -387,9 +389,9 @@ _naiveSseMemcpyUnrolledAligned:
     ret
 
 
-/* The basic unrolled SSE memcpy: aligns dst with unaligned (overlapping) copies, does 32-byte copies per loop,
-   then does unaligned copies of the rest. Dramatically reduces the number of branches compared to
-   naiveSseMemcpyUnrolled. */
+/* The basic unrolled SSE memcpy: aligns dst with unaligned (overlapping) copies, does 32-byte
+   copies per loop, then does unaligned copies of the rest. Dramatically reduces the number
+   of branches compared to naiveSseMemcpyUnrolled. */
 .p2align 4
 .global _naiveSseMemcpyUnrolledAlignedV2
 _naiveSseMemcpyUnrolledAlignedV2:
@@ -397,7 +399,8 @@ _naiveSseMemcpyUnrolledAlignedV2:
     cmp $32, %rdx
     ja 3f
 
-    /* Copy [17-32], [9-16], [5-8] via two pairs of movs, the 1-4 bytes via single movs with branches. */
+    /* Copy [17-32], [9-16], [5-8] via two pairs of movs, the 1-4 bytes via single movs
+       with branches. */
 1:  cmp $16, %dl
     jbe 1f
     /* rdx = [17-32] */
@@ -464,8 +467,8 @@ _naiveSseMemcpyUnrolledAlignedV2:
 1:  mov %rdx, %rcx
     and $-32, %rcx
     jz 3f
-    /* Do 32-byte iters, rsi = end of 32-aligned src, rdi = end of 32-aligned dst, rcx = negated 32-aligned
-       number of bytes, rdx = rest of bytes to copy. */
+    /* Do 32-byte iters, rsi = end of 32-aligned src, rdi = end of 32-aligned dst,
+       rcx = negated 32-aligned number of bytes, rdx = rest of bytes to copy. */
     and $31, %rdx
     add %rcx, %rsi
     add %rcx, %rdi
@@ -502,7 +505,8 @@ _naiveSseMemcpyUnrolledAlignedV2NT:
     cmp $32, %rdx
     ja 3f
 
-    /* Copy [17-32], [9-16], [5-8] via two pairs of movs, the 1-4 bytes via single movs with branches. */
+    /* Copy [17-32], [9-16], [5-8] via two pairs of movs, the 1-4 bytes via single movs
+       with branches. */
 1:  cmp $16, %dl
     jbe 1f
     /* rdx = [17-32] */
@@ -569,8 +573,8 @@ _naiveSseMemcpyUnrolledAlignedV2NT:
 1:  mov %rdx, %rcx
     and $-32, %rcx
     jz 3f
-    /* Do 32-byte iters, rsi = end of 32-aligned src, rdi = end of 64-aligned dst, rcx = negated 32-aligned
-       number of bytes, rdx = rest of bytes to copy. */
+    /* Do 32-byte iters, rsi = end of 32-aligned src, rdi = end of 64-aligned dst,
+       rcx = negated 32-aligned number of bytes, rdx = rest of bytes to copy. */
     and $31, %rdx
     add %rcx, %rsi
     add %rcx, %rdi
@@ -600,7 +604,8 @@ _naiveSseMemcpyUnrolledAlignedV2NT:
 1:  EPILOGUE
     ret
 
-/* The basic AVX memcpy: aligns the dst with 1-byte copies, does 32-byte copies, then 1-byte copies the rest. */
+/* The basic AVX memcpy: aligns the dst with 1-byte copies, does 32-byte copies, then 1-byte
+   copies the rest. */
 .p2align 4
 .global _naiveAvxMemcpyAligned
 _naiveAvxMemcpyAligned:
@@ -744,9 +749,9 @@ _naiveAvxMemcpyUnrolledAligned:
 2:  EPILOGUE
     ret
 
-/* The basic unrolled AVX memcpy: aligns dst with unaligned (overlapping) copies, does 64-byte copies per loop,
-   then does unaligned copies of the rest. Dramatically reduces the number of branches compared to
-   naiveAvxMemcpyUnrolled */
+/* The basic unrolled AVX memcpy: aligns dst with unaligned (overlapping) copies, does 64-byte
+   copies per loop, then does unaligned copies of the rest. Dramatically reduces the number
+   of branches compared to naiveAvxMemcpyUnrolled */
 .p2align 4
 .global _naiveAvxMemcpyUnrolledAlignedV2
 _naiveAvxMemcpyUnrolledAlignedV2:
@@ -754,7 +759,8 @@ _naiveAvxMemcpyUnrolledAlignedV2:
     cmp $64, %rdx
     ja 3f
 
-    /* Copy [33-64], [17-32], [9-16], [5-8] via two pairs of movs, the 1-4 bytes via single movs with branches. */
+    /* Copy [33-64], [17-32], [9-16], [5-8] via two pairs of movs, the 1-4 bytes via single movs
+       with branches. */
     cmp $32, %dl
     jbe 1f
     /* rdx = [33-64] */
@@ -832,8 +838,8 @@ _naiveAvxMemcpyUnrolledAlignedV2:
 1:  mov %rdx, %rcx
     and $-64, %rcx
     jz 3f
-    /* Do 64-byte iters, rsi = end of 64-aligned src, rdi = end of 64-aligned dst, rcx = negated 64-aligned
-       number of bytes, rdx = rest of bytes to copy. */
+    /* Do 64-byte iters, rsi = end of 64-aligned src, rdi = end of 64-aligned dst,
+       rcx = negated 64-aligned number of bytes, rdx = rest of bytes to copy. */
     and $63, %rdx
     add %rcx, %rsi
     add %rcx, %rdi
@@ -871,7 +877,8 @@ _naiveAvxMemcpyUnrolledAlignedV2NT:
     cmp $64, %rdx
     ja 3f
 
-    /* Copy [33-64], [17-32], [9-16], [5-8] via two pairs of movs, the 1-4 bytes via single movs with branches. */
+    /* Copy [33-64], [17-32], [9-16], [5-8] via two pairs of movs, the 1-4 bytes via single movs
+       with branches. */
     cmp $32, %dl
     jbe 1f
     /* rdx = [33-64] */
@@ -949,8 +956,8 @@ _naiveAvxMemcpyUnrolledAlignedV2NT:
 1:  mov %rdx, %rcx
     and $-64, %rcx
     jz 3f
-    /* Do 64-byte iters, rsi = end of 64-aligned src, rdi = end of 64-aligned dst, rcx = negated 64-aligned
-       number of bytes, rdx = rest of bytes to copy. */
+    /* Do 64-byte iters, rsi = end of 64-aligned src, rdi = end of 64-aligned dst,
+       rcx = negated 64-aligned number of bytes, rdx = rest of bytes to copy. */
     and $63, %rdx
     add %rcx, %rsi
     add %rcx, %rdi
@@ -1032,8 +1039,8 @@ _memcpyFromMusl_x86_64:
 1:  EPILOGUE
     ret
 
-/* Copy of memcpy from Facebook folly: https://github.com/facebook/folly/blob/master/folly/memcpy.S, non-avx
-   parts stripped. */
+/* Copy of memcpy from Facebook folly: https://github.com/facebook/folly/blob/master/folly/memcpy.S,
+   non-avx parts stripped. */
 .global _folly_memcpy_short
 _folly_memcpy_short:
     //        if (length == 0) return;

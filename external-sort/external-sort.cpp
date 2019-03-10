@@ -19,7 +19,8 @@ size_t compareStrCount = 0;
 
 size_t const kDefaultMaxMemory = 1024 * 1024 * 1024LL;
 
-// Global state is bad, but passing a ton of not-really related parameters through functions is not good either.
+// Global state is bad, but passing a ton of not-really related parameters through functions
+// is not good either.
 size_t maxMemory = kDefaultMaxMemory;
 bool leaveChunks = false;
 bool preallocate = true;
@@ -128,17 +129,18 @@ std::string getNextChunkFile(char const* dstFile, size_t numChunks)
     return buf;
 }
 
-// Sorts chunk, writes into new chunk file (with name based on dstFile) and appends the new name to chunkFiles.
-// Updates totalSortTimeMs and totalWriteTimeMs.
-void sortAndWriteChunk(char const* dstFile, std::vector<std::string>* chunk, std::vector<std::string>* filenames,
+// Sorts chunk, writes into new chunk file (with name based on dstFile) and appends the new name
+// to chunkFiles. Updates totalSortTimeMs and totalWriteTimeMs.
+void sortAndWriteChunk(char const* dstFile, std::vector<std::string>* chunk,
+                       std::vector<std::string>* filenames,
                        int* totalSortTimeMs, int* totalWriteTimeMs)
 {
     uint64_t sortStartTime = getTimeTicks();
     std::sort(chunk->begin(), chunk->end());
     *totalSortTimeMs += elapsedMsec(sortStartTime);
 
-    // Write the curChunk into next chunk file. Be sure to call FileLineWriter destructor before computing
-    // the elapsed time.
+    // Write the curChunk into next chunk file. Be sure to call FileLineWriter destructor
+    // before computing the elapsed time.
     uint64_t writeStartTime = getTimeTicks();
     {
         std::string nextChunkFile = getNextChunkFile(dstFile, filenames->size());
@@ -150,7 +152,8 @@ void sortAndWriteChunk(char const* dstFile, std::vector<std::string>* chunk, std
                 preallocateSize += line.length() + 1;
             }
         }
-        printf("Writing chunk %s with preallocated len %lld\n", nextChunkFile.c_str(), (long long)preallocateSize);
+        printf("Writing chunk %s with preallocated len %lld\n", nextChunkFile.c_str(),
+               (long long)preallocateSize);
         FileLineWriter chunkWriter(nextChunkFile.c_str(), preallocateSize);
         for (std::string const& line : *chunk) {
             chunkWriter.writeLine(line);
@@ -159,8 +162,9 @@ void sortAndWriteChunk(char const* dstFile, std::vector<std::string>* chunk, std
     *totalWriteTimeMs += elapsedMsec(writeStartTime);
 }
 
-// Chunks the srcFile into chunks of no more than maxMemory (expects each line to be less than maxMemory),
-// sorts each chunk and writes it into a temporary file. Returns the list of chunk filenames and total length of the file.
+// Chunks the srcFile into chunks of no more than maxMemory (expects each line to be less
+// than maxMemory), sorts each chunk and writes it into a temporary file. Returns the list of
+// chunk filenames and total length of the file.
 ChunkFiles chunkAndSort(char const* srcFile, char const* dstFile)
 {
     uint64_t startTime = getTimeTicks();
@@ -174,7 +178,8 @@ ChunkFiles chunkAndSort(char const* srcFile, char const* dstFile)
     size_t curChunkMemory = 0;
     while (srcReader.readLine(&line)) {
         if (curChunkMemory + line.size() > maxMemory) {
-            sortAndWriteChunk(dstFile, &curChunk, &ret.filenames, &totalSortTimeMs, &totalWriteTimeMs);
+            sortAndWriteChunk(dstFile, &curChunk, &ret.filenames, &totalSortTimeMs,
+                              &totalWriteTimeMs);
             curChunk.clear();
             curChunkMemory = 0;
         }
@@ -227,8 +232,8 @@ void mergeChunks(ChunkFiles const& chunkFiles, char const* dstFile)
     printf("Merged %d chunks in %dms\n", (int)chunkFiles.filenames.size(), elapsedMsec(startTime));
 }
 
-// Sorts lines from srcFile into dstFile, using no more that maxMemory in the process. If leaveChunks is true,
-// does not remove temporary chunk files.
+// Sorts lines from srcFile into dstFile, using no more that maxMemory in the process.
+// If leaveChunks is true, does not remove temporary chunk files.
 void externalSort(char const* srcFile, char const* dstFile)
 {
     uint64_t startTime = getTimeTicks();
@@ -237,7 +242,8 @@ void externalSort(char const* srcFile, char const* dstFile)
     if (!leaveChunks) {
         uint64_t deleteStartTime = getTimeTicks();
         deleteFiles(chunkFiles.filenames);
-        printf("Deleted %d chunks in %dms\n", (int)chunkFiles.filenames.size(), elapsedMsec(deleteStartTime));
+        printf("Deleted %d chunks in %dms\n", (int)chunkFiles.filenames.size(),
+               elapsedMsec(deleteStartTime));
     }
     printf("Total sorting time is %dms\n", elapsedMsec(startTime));
 }
@@ -269,7 +275,8 @@ ChunkFiles chunkAndSortFaster(char const* srcFile, char const* dstFile)
             std::string nextChunkFile = getNextChunkFile(dstFile, ret.filenames.size());
             ret.filenames.push_back(nextChunkFile);
             off_t preallocateSize = preallocate ? chunkLength : 0;
-            printf("Writing chunk %s with preallocated len %lld\n", nextChunkFile.c_str(), (long long)preallocateSize);
+            printf("Writing chunk %s with preallocated len %lld\n", nextChunkFile.c_str(),
+                   (long long)preallocateSize);
             ChunkFileWriter chunkWriter(nextChunkFile.c_str(), preallocateSize);
             for (StringView line : chunkLines) {
                 chunkWriter.writeLine(line);
@@ -327,7 +334,8 @@ void externalSortFaster(char const* srcFile, char const* dstFile)
     if (!leaveChunks) {
         uint64_t deleteStartTime = getTimeTicks();
         deleteFiles(chunkFiles.filenames);
-        printf("Deleted %d chunks in %dms\n", (int)chunkFiles.filenames.size(), elapsedMsec(deleteStartTime));
+        printf("Deleted %d chunks in %dms\n", (int)chunkFiles.filenames.size(),
+               elapsedMsec(deleteStartTime));
     }
     printf("Total sorting time is %dms\n", elapsedMsec(startTime));
 }
@@ -362,7 +370,8 @@ void validateSort(char const* srcFile)
     printf("Validated successfully in %dms\n", elapsedMsec(startTime));
 }
 
-// A version of validateSort, which uses ChunkFileReader (and generally does almost zero allocations).
+// A version of validateSort, which uses ChunkFileReader (and generally does almost zero
+// allocations).
 void validateSortFaster(char const* srcFile)
 {
     uint64_t startTime = getTimeTicks();
@@ -370,18 +379,21 @@ void validateSortFaster(char const* srcFile)
         ChunkFileReader reader(srcFile);
         std::vector<StringView> lines;
         int lineCount = 1;
-        // Store the last chunk line to compare it to the first line of the new chunk. Valid only if lineCount > 1.
+        // Store the last chunk line to compare it to the first line of the new chunk. Valid only
+        // if lineCount > 1.
         std::string lastChunkLine;
         while (reader.readAndSplit(&lines)) {
             // Check if first line is less than the previous chunk last line.
             if (lineCount > 1) {
                 if (lastChunkLine > lines.front()) {
-                    printErrorInverseStrings(lastChunkLine, stringFromView(lines.front()), lineCount - 1);
+                    printErrorInverseStrings(lastChunkLine, stringFromView(lines.front()),
+                                             lineCount - 1);
                 }
             }
             for (size_t i = 1; i < lines.size(); i++, lineCount++) {
                 if (lines[i - 1] > lines[i]) {
-                    printErrorInverseStrings(stringFromView(lines[i - 1]), stringFromView(lines[i]), lineCount);
+                    printErrorInverseStrings(stringFromView(lines[i - 1]), stringFromView(lines[i]),
+                            lineCount);
                 }
             }
             lineCount++;
@@ -392,8 +404,8 @@ void validateSortFaster(char const* srcFile)
     printf("Validated successfully in %dms\n", elapsedMsec(startTime));
 }
 
-// Generates random dstFile with numLines and average line length = avgLineLen. The pair (numLines, avgLineLen) is used
-// as a randomization seed.
+// Generates random dstFile with numLines and average line length = avgLineLen. The pair (numLines,
+// avgLineLen) is used as a randomization seed.
 void generateFile(char const* dstFile, int numLines, int avgLineLen)
 {
     uint64_t startTime = getTimeTicks();
@@ -417,7 +429,8 @@ void generateFile(char const* dstFile, int numLines, int avgLineLen)
             writer.writeLine(line);
         }
     }
-    printf("Generated %d lines x %d avg len in %dms\n", numLines, avgLineLen, elapsedMsec(startTime));
+    printf("Generated %d lines x %d avg len in %dms\n", numLines, avgLineLen,
+           elapsedMsec(startTime));
 }
 
 // A copy of std::generate, which guarantees to be unrolled by 8 elements.
@@ -447,7 +460,8 @@ void generateUnrolled(T* p, size_t n, Gen gen)
     }
 }
 
-// A version of generateFile, which uses ChunkFileWriter for writing and generateUnrolled for filling the buffer.
+// A version of generateFile, which uses ChunkFileWriter for writing and generateUnrolled for
+// filling the buffer.
 void generateFileFaster(char const* dstFile, int numLines, int avgLineLen)
 {
     uint64_t startTime = getTimeTicks();
@@ -468,7 +482,8 @@ void generateFileFaster(char const* dstFile, int numLines, int avgLineLen)
             });
         }
     }
-    printf("Generated %d lines x %d avg len in %dms\n", numLines, avgLineLen, elapsedMsec(startTime));
+    printf("Generated %d lines x %d avg len in %dms\n", numLines, avgLineLen,
+           elapsedMsec(startTime));
 }
 
 // Benchmarks sorting the srcFile in chunks.
@@ -479,7 +494,8 @@ void benchmarkSort(char const* srcFile, char const* sortMethod)
     while (fileReader.readAndSplit(&lines)) {
         uint64_t startTime = getTimeTicks();
         callSortMethod(sortMethod, lines.begin(), lines.end());
-        printf("Sorted %d lines by %s sort in %dms\n", (int)lines.size(), sortMethod, elapsedMsec(startTime));
+        printf("Sorted %d lines by %s sort in %dms\n", (int)lines.size(), sortMethod,
+               elapsedMsec(startTime));
     }
 }
 
@@ -491,14 +507,17 @@ void printUsage(char const* argv0)
            "  sort-faster SRCFILE DSTFILE\t\t\tSorts SRCFILE into DSTFILE (with optimizations)\n"
            "  validate FILE\t\t\t\t\tValidates that the FILE is sorted\n"
            "  validate-faster FILE\t\t\t\tValidates that the FILE is sorted (with optimizations)\n"
-           "  generate FILE NUMLINES AVGLINE\t\tGenerates an ASCII FILE with given number of lines and average line length\n"
-           "  generate-faster FILE NUMLINES AVGLINE\t\tGenerates an ASCII file with given number of lines and average line length"
-           " (with optimizations)\n"
-           "  benchmark-sort FILE METHOD\t\t\tBenchmarks the sorting routine by sorting the file in memory\n"
+           "  generate FILE NUMLINES AVGLINE\t\tGenerates an ASCII FILE with given number of lines"
+           " and average line length\n"
+           "  generate-faster FILE NUMLINES AVGLINE\t\tGenerates an ASCII file with given number"
+           " of lines and average line length (with optimizations)\n"
+           "  benchmark-sort FILE METHOD\t\t\tBenchmarks the sorting routine by sorting the file"
+           " in memory\n"
            "Options:\n"
            "  --max-memory SIZE\t\tThe max amount of memory to be used for in-memory buffers\n"
            "  --leave-chunks\t\tDo not remove the chunks left after sorting\n"
-           "  --no-preallocate\t\tDo not preallocate file space (can be both a win and a loss depending on FS, OS etc.)\n",
+           "  --no-preallocate\t\tDo not preallocate file space (can be both a win and a loss"
+           " depending on FS, OS etc.)\n",
            argv0);
 }
 

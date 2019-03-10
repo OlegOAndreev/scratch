@@ -35,7 +35,8 @@ void preallocateForFd(int fd, off_t preallocateSize)
 #endif
 }
 
-// A wrapper around FILE*, allowing to read lines in std::string. Ignores last empty line to match the behavior of FileLineWriter.
+// A wrapper around FILE*, allowing to read lines in std::string. Ignores last empty line to match
+// the behavior of FileLineWriter.
 class FileLineReader {
 public:
     FileLineReader(char const* filename, size_t bufferCapacity = kDefaultBufferSize)
@@ -71,7 +72,8 @@ public:
         }
     }
 
-    // Reads next line and returns true and writes to str if the EOF has not been reached, returns false otherwise.
+    // Reads next line and returns true and writes to str if the EOF has not been reached, returns
+    // false otherwise.
     bool readLine(std::string* str)
     {
         str->clear();
@@ -88,8 +90,9 @@ public:
                 bufSize = fread(bufp, 1, bufCapacity, f);
                 bufRead = 0;
                 if (bufSize == 0) {
-                    // If we reached the end of file and did not read anything, this means either the file is empty
-                    // or the last line is empty. We treat these two cases the same.
+                    // If we reached the end of file and did not read anything, this means either
+                    // the file is empty or the last line is empty. We treat these two cases
+                    // the same.
                     return !str->empty();
                 }
             }
@@ -108,7 +111,8 @@ private:
 // A simple wrapper around FILE*, allowing to write lines to file.
 class FileLineWriter {
 public:
-    FileLineWriter(char const* filename, off_t preallocateSize = 0, size_t bufferSize = kDefaultBufferSize)
+    FileLineWriter(char const* filename, off_t preallocateSize = 0,
+                   size_t bufferSize = kDefaultBufferSize)
     {
         f = fopen(filename, "wb");
         if (f == nullptr) {
@@ -141,8 +145,8 @@ private:
     FILE* f;
 };
 
-// A wrapper around FILE*, reading big chunks of memory, splitting them into strings and providing access directly to the chunk.
-// Ignores last empty line to match the behavior of ChunkFileWriter.
+// A wrapper around FILE*, reading big chunks of memory, splitting them into strings and providing
+// access directly to the chunk. Ignores last empty line to match the behavior of ChunkFileWriter.
 class ChunkFileReader {
 public:
     ChunkFileReader(char const* filename, size_t bufferSize = kDefaultBufferSize)
@@ -189,7 +193,8 @@ private:
     std::unique_ptr<char[]> buf;
     size_t bufCapacity;
     size_t bufFilled;
-    // Remaining part of the line, not included in last readAndSplit output (basically location of the last separator + 1).
+    // Remaining part of the line, not included in last readAndSplit output (basically location
+    // of the last separator + 1).
     size_t bufRemaining;
 
     bool fillBuf()
@@ -243,7 +248,8 @@ private:
 // A wrapper around FILE*, providing the direct access to the buffer. Supports preallocating files.
 class ChunkFileWriter {
 public:
-    ChunkFileWriter(char const* filename, off_t preallocateSize = 0, size_t bufferSize = kDefaultBufferSize)
+    ChunkFileWriter(char const* filename, off_t preallocateSize = 0,
+                    size_t bufferSize = kDefaultBufferSize)
     {
         fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, S_IRUSR | S_IWUSR);
         if (fd == -1) {
@@ -275,7 +281,8 @@ public:
     char* getLinePtr(size_t length)
     {
         if (length > bufCapacity - 1) {
-            printf("Requested length larger than buffer capacity: %d vs %d", (int)length, (int)bufCapacity);
+            printf("Requested length larger than buffer capacity: %d vs %d", (int)length,
+                   (int)bufCapacity);
             exit(1);
         }
         if (bufWritten + length > bufCapacity - 1) {

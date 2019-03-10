@@ -21,7 +21,8 @@ FORCE_INLINE size_t toAlignPtr(char* p)
     return (UINTPTR_MAX - (uintptr_t)p + 1) & (alignment - 1);
 }
 
-// A version of naiveSseMemcpyUnrolledAligned, but with regular integer loads (and 8-byte alignment instead of 16-byte).
+// A version of naiveSseMemcpyUnrolledAligned, but with regular integer loads (and 8-byte alignment
+// instead of 16-byte).
 void naiveMemcpyUnrolledAlignedCpp(char* dst, const char* src, size_t size)
 {
     if (size >= 32) {
@@ -98,11 +99,13 @@ void naiveMemcpyUnrolledAlignedCpp(char* dst, const char* src, size_t size)
     }
 }
 
-// A version of naiveSseMemcpyUnrolledAlignedV2, but with regular integer loads (and 8-byte alignment instead of 16-byte).
+// A version of naiveSseMemcpyUnrolledAlignedV2, but with regular integer loads (and 8-byte
+// alignment instead of 16-byte).
 void naiveMemcpyUnrolledAlignedV2Cpp(char* dst, const char* src, size_t size)
 {
     if (size <= 32) {
-        // Copy [17-32], [9-16], [5-8] via two load/stores, the 1-4 bytes via single load/stores with branches.
+        // Copy [17-32], [9-16], [5-8] via two load/stores, the 1-4 bytes via single load/stores
+        // with branches.
         if (size > 16) {
             // Copy the first 16 bytes and the last 16 bytes (potentially overlapping).
             int64_t x0 = load_i64(src);
@@ -157,8 +160,8 @@ void naiveMemcpyUnrolledAlignedV2Cpp(char* dst, const char* src, size_t size)
         int64_t xlast3 = load_i64(src + size - 8);
         char* lastDst = dst + size - 32;
 
-        // Main loop: do 32-byte iters (one less iter if size % 64 == 0, because we have already loaded the last 64
-        // bytes).
+        // Main loop: do 32-byte iters (one less iter if size % 64 == 0, because we have already
+        // loaded the last 64 bytes).
         for (size_t i = (size - 1) / 32; i != 0; i--) {
             int64_t x0 = load_i64(src);
             int64_t x1 = load_i64(src + 8);
@@ -185,7 +188,8 @@ void naiveMemcpyUnrolledAlignedV2Cpp(char* dst, const char* src, size_t size)
 void naiveMemcpyUnrolledAlignedV3Cpp(char* dst, const char* src, size_t size)
 {
     if (size <= 64) {
-        // Copy [33-64], [17-32], [9-16], [5-8] via two load/stores, the 1-4 bytes via single load/stores with branches.
+        // Copy [33-64], [17-32], [9-16], [5-8] via two load/stores, the 1-4 bytes via single
+        // load/stores with branches.
         if (size > 16) {
             if (size > 32) {
                 // Copy the first 16 bytes and the last 16 bytes (potentially overlapping).
@@ -266,8 +270,8 @@ void naiveMemcpyUnrolledAlignedV3Cpp(char* dst, const char* src, size_t size)
         int64_t xlast7 = load_i64(src + size - 8);
         char* lastDst = dst + size - 64;
 
-        // Main loop: do 64-byte iters (one less iter if size % 64 == 0, because we have already loaded the last 64
-        // bytes).
+        // Main loop: do 64-byte iters (one less iter if size % 64 == 0, because we have already
+        // loaded the last 64 bytes).
         for (size_t i = (size - 1) / 64; i != 0; i--) {
             int64_t x0 = load_i64(src);
             int64_t x1 = load_i64(src + 8);
@@ -344,13 +348,15 @@ FORCE_INLINE void storea_v128(char* p, int8x16_t v)
 
 #if defined(CPU_IS_X86_64) || defined(CPU_IS_AARCH64)
 
-// A C++ reimplementation of naiveSseMemcpyUnrolledAlignedV2, templatized to provide different 128-bit types.
+// A C++ reimplementation of naiveSseMemcpyUnrolledAlignedV2, templatized to provide different
+// 128-bit types.
 template<typename I128>
 void naiveSimdMemcpyUnrolledAlignedV2Cpp(char* dst, const char* src, size_t size)
 {
     IACA_START
     if (size <= 32) {
-        // Copy [17-32], [9-16], [5-8] via two load/stores, the 1-4 bytes via single load/stores with branches.
+        // Copy [17-32], [9-16], [5-8] via two load/stores, the 1-4 bytes via single load/stores
+        // with branches.
         if (size > 16) {
             // Copy the first 16 bytes and the last 16 bytes (potentially overlapping).
             I128 x0 = load_v128(src);
@@ -399,8 +405,8 @@ void naiveSimdMemcpyUnrolledAlignedV2Cpp(char* dst, const char* src, size_t size
         I128 xlast1 = load_v128(src + size - 16);
         char* lastDst = dst + size - 32;
 
-        // Main loop: do 32-byte iters (one less iter if size % 64 == 0, because we have already loaded the last 64
-        // bytes).
+        // Main loop: do 32-byte iters (one less iter if size % 64 == 0, because we have already
+        // loaded the last 64 bytes).
         for (size_t i = (size - 1) / 32; i != 0; i--) {
             I128 x0 = load_v128(src);
             I128 x1 = load_v128(src + 16);
@@ -502,8 +508,8 @@ void naiveAvxMemcpyUnrolledAlignedV2Cpp(char* dst, const char* src, size_t size)
         __m256 ylast1 = load_v256(src + size - 32);
         char* lastDst = dst + size - 64;
 
-        // Main loop: do 64-byte iters (one less iter if size % 64 == 0, because we have already loaded the last 64
-        // bytes).
+        // Main loop: do 64-byte iters (one less iter if size % 64 == 0, because we have already
+        // loaded the last 64 bytes).
         for (size_t i = (size - 1) / 64; i != 0; i--) {
             __m256 y0 = load_v256(src);
             __m256 y1 = load_v256(src + 32);
@@ -626,8 +632,8 @@ void naiveAvxMemcpyUnrolledAlignedV3Cpp(char* dst, const char* src, size_t size)
                 size -= toAlignedDst;
             }
 
-            // Main loop: do 64-byte iters (one less iter if size % 64 == 0, because we have already loaded the last 64
-            // bytes).
+            // Main loop: do 64-byte iters (one less iter if size % 64 == 0, because we have
+            // already loaded the last 64 bytes).
             for (size_t i = (size - 1) / 64; i != 0; i--) {
                 __m256 y0 = load_v256(src);
                 __m256 y1 = load_v256(src + 32);

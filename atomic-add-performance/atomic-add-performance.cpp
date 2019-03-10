@@ -26,8 +26,8 @@ NO_INLINE void doSum(int64_t times, Value* value, Value const* nextValue, Adder 
 }
 
 template<typename Value, typename Adder>
-int64_t doMain(int64_t times, int numThreads, const char* name, Value* values, size_t valuesStride, bool fromNext,
-               int64_t baseDeltaTime, Adder adder)
+int64_t doMain(int64_t times, int numThreads, const char* name, Value* values, size_t valuesStride,
+               bool fromNext, int64_t baseDeltaTime, Adder adder)
 {
     if (fromNext && numThreads == 1) {
         return 0;
@@ -47,7 +47,8 @@ int64_t doMain(int64_t times, int numThreads, const char* name, Value* values, s
         threads.emplace_back([=, &flag, &stopFlag] {
             flag.fetch_add(1);
             if (fromNext) {
-                doSum(times, &values[(i + 1) * valuesStride], &values[((i + 2) % numThreads) * valuesStride], adder, r);
+                doSum(times, &values[(i + 1) * valuesStride],
+                        &values[((i + 2) % numThreads) * valuesStride], adder, r);
             } else {
                 Value dummyValue{1};
                 doSum(times, &values[(i + 1) * valuesStride], &dummyValue, adder, r);
@@ -129,23 +130,26 @@ int main(int argc, char** argv)
         *value += add ? v : -v;
     };
 
-    auto relaxedAtomicAdder = [](std::atomic<BaseT>* value, std::atomic<BaseT> const* nextValue, bool add) {
+    auto relaxedAtomicAdder = [](std::atomic<BaseT>* value, std::atomic<BaseT> const* nextValue,
+            bool add) {
         size_t v = nextValue->load(std::memory_order_relaxed);
         value->fetch_add(add ? v : -v, std::memory_order_relaxed);
     };
 
-    auto acqRelAtomicAdder = [](std::atomic<BaseT>* value, std::atomic<BaseT> const* nextValue, bool add) {
+    auto acqRelAtomicAdder = [](std::atomic<BaseT>* value, std::atomic<BaseT> const* nextValue,
+            bool add) {
         size_t v = nextValue->load(std::memory_order_acquire);
         value->fetch_add(add ? v : -v, std::memory_order_acq_rel);
     };
 
-    auto seqCstAtomicAdder = [](std::atomic<BaseT>* value, std::atomic<BaseT> const* nextValue, bool add) {
+    auto seqCstAtomicAdder = [](std::atomic<BaseT>* value, std::atomic<BaseT> const* nextValue,
+            bool add) {
         size_t v = nextValue->load(std::memory_order_seq_cst);
         value->fetch_add(add ? v : -v, std::memory_order_seq_cst);
     };
 
-    // Run some speedup loop (on e.g. Android you need a few seconds of CPU utilization in order to reach
-    // the required performance).
+    // Run some speedup loop (on e.g. Android you need a few seconds of CPU utilization in order
+    // to reach the required performance).
     printf("Speedup loop, ignore the values\n");
     doMain(times, numThreads, "IGNORE", atomicValuesPtr, kStride, false, 0, relaxedAtomicAdder);
     printf("++++\n");
@@ -159,38 +163,56 @@ int main(int argc, char** argv)
 
     printf("Testing with %d threads (strided values)\n----\n", numThreads);
     doMain(times, numThreads, "simple", simpleValuesPtr, kStride, false, baseDelta, simpleAdder);
-    doMain(times, numThreads, "relaxed atomic", atomicValuesPtr, kStride, false, baseDelta, relaxedAtomicAdder);
-    doMain(times, numThreads, "acqrel atomic", atomicValuesPtr, kStride, false, baseDelta, acqRelAtomicAdder);
-    doMain(times, numThreads, "seqcst atomic", atomicValuesPtr, kStride, false, baseDelta, seqCstAtomicAdder);
+    doMain(times, numThreads, "relaxed atomic", atomicValuesPtr, kStride, false, baseDelta,
+           relaxedAtomicAdder);
+    doMain(times, numThreads, "acqrel atomic", atomicValuesPtr, kStride, false, baseDelta,
+           acqRelAtomicAdder);
+    doMain(times, numThreads, "seqcst atomic", atomicValuesPtr, kStride, false, baseDelta,
+           seqCstAtomicAdder);
     printf("----\n");
     doMain(times, numThreads, "simple", simpleValuesPtr, kStride, true, baseDelta, simpleAdder);
-    doMain(times, numThreads, "relaxed atomic", atomicValuesPtr, kStride, true, baseDelta, relaxedAtomicAdder);
-    doMain(times, numThreads, "acqrel atomic", atomicValuesPtr, kStride, true, baseDelta, acqRelAtomicAdder);
-    doMain(times, numThreads, "seqcst atomic", atomicValuesPtr, kStride, true, baseDelta, seqCstAtomicAdder);
+    doMain(times, numThreads, "relaxed atomic", atomicValuesPtr, kStride, true, baseDelta,
+           relaxedAtomicAdder);
+    doMain(times, numThreads, "acqrel atomic", atomicValuesPtr, kStride, true, baseDelta,
+           acqRelAtomicAdder);
+    doMain(times, numThreads, "seqcst atomic", atomicValuesPtr, kStride, true, baseDelta,
+           seqCstAtomicAdder);
     printf("====\n");
 
     printf("Testing with %d threads (sequential values)\n----\n", numThreads);
     doMain(times, numThreads, "simple", simpleValuesPtr, 1, false, baseDelta, simpleAdder);
-    doMain(times, numThreads, "relaxed atomic", atomicValuesPtr, 1, false, baseDelta, relaxedAtomicAdder);
-    doMain(times, numThreads, "acqrel atomic", atomicValuesPtr, 1, false, baseDelta, acqRelAtomicAdder);
-    doMain(times, numThreads, "seqcst atomic", atomicValuesPtr, 1, false, baseDelta, seqCstAtomicAdder);
+    doMain(times, numThreads, "relaxed atomic", atomicValuesPtr, 1, false, baseDelta,
+           relaxedAtomicAdder);
+    doMain(times, numThreads, "acqrel atomic", atomicValuesPtr, 1, false, baseDelta,
+           acqRelAtomicAdder);
+    doMain(times, numThreads, "seqcst atomic", atomicValuesPtr, 1, false, baseDelta,
+           seqCstAtomicAdder);
     printf("----\n");
     doMain(times, numThreads, "simple", simpleValuesPtr, 1, true, baseDelta, simpleAdder);
-    doMain(times, numThreads, "relaxed atomic", atomicValuesPtr, 1, true, baseDelta, relaxedAtomicAdder);
-    doMain(times, numThreads, "acqrel atomic", atomicValuesPtr, 1, true, baseDelta, acqRelAtomicAdder);
-    doMain(times, numThreads, "seqcst atomic", atomicValuesPtr, 1, true, baseDelta, seqCstAtomicAdder);
+    doMain(times, numThreads, "relaxed atomic", atomicValuesPtr, 1, true, baseDelta,
+           relaxedAtomicAdder);
+    doMain(times, numThreads, "acqrel atomic", atomicValuesPtr, 1, true, baseDelta,
+           acqRelAtomicAdder);
+    doMain(times, numThreads, "seqcst atomic", atomicValuesPtr, 1, true, baseDelta,
+           seqCstAtomicAdder);
     printf("====\n");
 
     printf("Testing with %d threads (one value)\n----\n", numThreads);
     doMain(times, numThreads, "simple", simpleValuesPtr, 0, false, baseDelta, simpleAdder);
-    doMain(times, numThreads, "relaxed atomic", atomicValuesPtr, 0, false, baseDelta, relaxedAtomicAdder);
-    doMain(times, numThreads, "acqrel atomic", atomicValuesPtr, 0, false, baseDelta, acqRelAtomicAdder);
-    doMain(times, numThreads, "seqcst atomic", atomicValuesPtr, 0, false, baseDelta, seqCstAtomicAdder);
+    doMain(times, numThreads, "relaxed atomic", atomicValuesPtr, 0, false, baseDelta,
+           relaxedAtomicAdder);
+    doMain(times, numThreads, "acqrel atomic", atomicValuesPtr, 0, false, baseDelta,
+           acqRelAtomicAdder);
+    doMain(times, numThreads, "seqcst atomic", atomicValuesPtr, 0, false, baseDelta,
+           seqCstAtomicAdder);
     printf("----\n");
     doMain(times, numThreads, "simple", simpleValuesPtr, 0, true, baseDelta, simpleAdder);
-    doMain(times, numThreads, "relaxed atomic", atomicValuesPtr, 0, true, baseDelta, relaxedAtomicAdder);
-    doMain(times, numThreads, "acqrel atomic", atomicValuesPtr, 0, true, baseDelta, acqRelAtomicAdder);
-    doMain(times, numThreads, "seqcst atomic", atomicValuesPtr, 0, true, baseDelta, seqCstAtomicAdder);
+    doMain(times, numThreads, "relaxed atomic", atomicValuesPtr, 0, true, baseDelta,
+           relaxedAtomicAdder);
+    doMain(times, numThreads, "acqrel atomic", atomicValuesPtr, 0, true, baseDelta,
+           acqRelAtomicAdder);
+    doMain(times, numThreads, "seqcst atomic", atomicValuesPtr, 0, true, baseDelta,
+           seqCstAtomicAdder);
     printf("====\n");
 
     return totalSum;

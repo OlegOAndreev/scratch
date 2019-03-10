@@ -86,28 +86,44 @@ void naiveNeonMemcpyUnrolledAlignedV2Cpp(char* dst, const char* src, size_t size
 #if defined(HAS_ASM_MEMCPY)
 #if defined(CPU_IS_X86_64)
 void naiveMemcpy_x86_64(char* dst, const char* src, size_t size) asm("_naiveMemcpy_x86_64");
-void naiveMemcpyAligned_x86_64(char* dst, const char* src, size_t size) asm("_naiveMemcpyAligned_x86_64");
-void naiveMemcpyUnrolled_x86_64(char* dst, const char* src, size_t size) asm("_naiveMemcpyUnrolled_x86_64");
+void naiveMemcpyAligned_x86_64(char* dst, const char* src, size_t size)
+    asm("_naiveMemcpyAligned_x86_64");
+void naiveMemcpyUnrolled_x86_64(char* dst, const char* src, size_t size)
+    asm("_naiveMemcpyUnrolled_x86_64");
 void naiveSseMemcpy(char* dst, const char* src, size_t size) asm("_naiveSseMemcpy");
-void naiveSseMemcpyAligned(char* dst, const char* src, size_t size) asm("_naiveSseMemcpyAligned");
-void naiveSseMemcpyUnrolledAlignedBody(char* dst, const char* src, size_t size) asm("_naiveSseMemcpyUnrolledAlignedBody");
-void naiveSseMemcpyUnrolledAligned(char* dst, const char* src, size_t size) asm("_naiveSseMemcpyUnrolledAligned");
-void naiveSseMemcpyUnrolledAlignedV2(char* dst, const char* src, size_t size) asm("_naiveSseMemcpyUnrolledAlignedV2");
-void naiveSseMemcpyUnrolledAlignedV2NT(char* dst, const char* src, size_t size) asm("_naiveSseMemcpyUnrolledAlignedV2NT");
-void naiveAvxMemcpyAligned(char* dst, const char* src, size_t size) asm("_naiveAvxMemcpyAligned");
-void naiveAvxMemcpyUnrolledAligned(char* dst, const char* src, size_t size) asm("_naiveAvxMemcpyUnrolledAligned");
-void naiveAvxMemcpyUnrolledAlignedV2(char* dst, const char* src, size_t size) asm("_naiveAvxMemcpyUnrolledAlignedV2");
-void naiveAvxMemcpyUnrolledAlignedV2NT(char* dst, const char* src, size_t size) asm("_naiveAvxMemcpyUnrolledAlignedV2NT");
+void naiveSseMemcpyAligned(char* dst, const char* src, size_t size)
+    asm("_naiveSseMemcpyAligned");
+void naiveSseMemcpyUnrolledAlignedBody(char* dst, const char* src, size_t size)
+    asm("_naiveSseMemcpyUnrolledAlignedBody");
+void naiveSseMemcpyUnrolledAligned(char* dst, const char* src, size_t size)
+    asm("_naiveSseMemcpyUnrolledAligned");
+void naiveSseMemcpyUnrolledAlignedV2(char* dst, const char* src, size_t size)
+    asm("_naiveSseMemcpyUnrolledAlignedV2");
+void naiveSseMemcpyUnrolledAlignedV2NT(char* dst, const char* src, size_t size)
+    asm("_naiveSseMemcpyUnrolledAlignedV2NT");
+void naiveAvxMemcpyAligned(char* dst, const char* src, size_t size)
+    asm("_naiveAvxMemcpyAligned");
+void naiveAvxMemcpyUnrolledAligned(char* dst, const char* src, size_t size)
+    asm("_naiveAvxMemcpyUnrolledAligned");
+void naiveAvxMemcpyUnrolledAlignedV2(char* dst, const char* src, size_t size)
+    asm("_naiveAvxMemcpyUnrolledAlignedV2");
+void naiveAvxMemcpyUnrolledAlignedV2NT(char* dst, const char* src, size_t size)
+    asm("_naiveAvxMemcpyUnrolledAlignedV2NT");
 void repMovsbMemcpy(char* dst, const char* src, size_t size) asm("_repMovsbMemcpy");
 void repMovsqMemcpy(char* dst, const char* src, size_t size) asm("_repMovsqMemcpy");
 void memcpyFromMusl_x86_64(char* dst, const char* src, size_t size) asm("_memcpyFromMusl_x86_64");
 void folly_memcpy(char* dst, const char* src, size_t size) asm("_folly_memcpy");
 #elif defined(CPU_IS_AARCH64)
-void naiveMemcpy_aarch64(char* dst, const char* src, size_t size) asm("_naiveMemcpy_aarch64");
-void naiveMemcpyUnrolledAligned_aarch64(char* dst, const char* src, size_t size) asm("_naiveMemcpyUnrolledAligned_aarch64");
-void naiveMemcpyUnrolledAlignedV2_aarch64(char* dst, const char* src, size_t size) asm("_naiveMemcpyUnrolledAlignedV2_aarch64");
-void naiveMemcpyUnrolledAlignedV2NeonRegs_aarch64(char* dst, const char* src, size_t size) asm("_naiveMemcpyUnrolledAlignedV2NeonRegs_aarch64");
-void naiveMemcpyUnrolledAlignedV3NeonRegs_aarch64(char* dst, const char* src, size_t size) asm("_naiveMemcpyUnrolledAlignedV3NeonRegs_aarch64");
+void naiveMemcpy_aarch64(char* dst, const char* src, size_t size)
+    asm("_naiveMemcpy_aarch64");
+void naiveMemcpyUnrolledAligned_aarch64(char* dst, const char* src, size_t size)
+    asm("_naiveMemcpyUnrolledAligned_aarch64");
+void naiveMemcpyUnrolledAlignedV2_aarch64(char* dst, const char* src, size_t size)
+    asm("_naiveMemcpyUnrolledAlignedV2_aarch64");
+void naiveMemcpyUnrolledAlignedV2NeonRegs_aarch64(char* dst, const char* src, size_t size)
+    asm("_naiveMemcpyUnrolledAlignedV2NeonRegs_aarch64");
+void naiveMemcpyUnrolledAlignedV3NeonRegs_aarch64(char* dst, const char* src, size_t size)
+    asm("_naiveMemcpyUnrolledAlignedV3NeonRegs_aarch64");
 #endif
 #endif
 
@@ -216,10 +232,10 @@ bool testMemcpyFuncIter(MemcpyFuncType memcpyFunc, char* dst, char* src, size_t 
     return true;
 }
 
-// Tests memcpy with a few sizes near the given size and different alignments (srcBlock and dstBlock must have
-// some additional space after them).
-bool testMemcpyFuncSize(MemcpyFuncType memcpyFunc, char* dstBlock, char* srcBlock, size_t fromSize, size_t toSize,
-                        const char* memcpyName)
+// Tests memcpy with a few sizes near the given size and different alignments (srcBlock
+// and dstBlock must have some additional space after them).
+bool testMemcpyFuncSize(MemcpyFuncType memcpyFunc, char* dstBlock, char* srcBlock, size_t fromSize,
+                        size_t toSize, const char* memcpyName)
 {
     printf("== Testing sizes [%d, %d)\n", (int)fromSize, (int)toSize);
 
@@ -233,8 +249,9 @@ bool testMemcpyFuncSize(MemcpyFuncType memcpyFunc, char* dstBlock, char* srcBloc
             for (char* src = srcBlock; src < srcBlock + 16; src++) {
                 for (char* dst = dstBlock; dst < dstBlock + 16; dst++) {
                     if (!testMemcpyFuncIter(memcpyFunc, dst, src, testSize)) {
-                        printf("ERROR: %s failed on block size %d, src align %d, dst align %d\n", memcpyName,
-                               (int)testSize, (int)(src - srcBlock), (int)(dst - dstBlock));
+                        printf("ERROR: %s failed on block size %d, src align %d, dst align %d\n",
+                               memcpyName, (int)testSize,
+                               (int)(src - srcBlock), (int)(dst - dstBlock));
                         return false;
                     }
                 }
@@ -258,19 +275,26 @@ bool testMemcpyFunc(MemcpyFuncType memcpyFunc, const char* memcpyName)
     char* bigBlock = new char[bigBlockSize];
 
     // Test with various sizes. Sizes are specifically chosen to be near power-of-two.
-    if (!testMemcpyFuncSize(memcpyFunc, bigBlock, bigBlock + bigBlockSize / 2, 0, 150, memcpyName)) {
+    if (!testMemcpyFuncSize(
+                memcpyFunc, bigBlock, bigBlock + bigBlockSize / 2, 0, 150, memcpyName)) {
         return false;
     }
-    if (!testMemcpyFuncSize(memcpyFunc, bigBlock, bigBlock + bigBlockSize / 2, 900, 1100, memcpyName)) {
+    if (!testMemcpyFuncSize(
+                memcpyFunc, bigBlock, bigBlock + bigBlockSize / 2, 900, 1100, memcpyName)) {
         return false;
     }
-    if (!testMemcpyFuncSize(memcpyFunc, bigBlock, bigBlock + bigBlockSize / 2, (2 << 13) - 10, (2 << 13) + 10, memcpyName)) {
+    if (!testMemcpyFuncSize(
+                memcpyFunc, bigBlock, bigBlock + bigBlockSize / 2, (2 << 13) - 10, (2 << 13) + 10,
+                memcpyName)) {
         return false;
     }
-    if (!testMemcpyFuncSize(memcpyFunc, bigBlock, bigBlock + bigBlockSize / 2, (2 << 16) - 10, (2 << 16) + 10, memcpyName)) {
+    if (!testMemcpyFuncSize(
+                memcpyFunc, bigBlock, bigBlock + bigBlockSize / 2, (2 << 16) - 10, (2 << 16) + 10,
+                memcpyName)) {
         return false;
     }
-//    if (!testMemcpyFuncSize(memcpyFunc, bigBlock, bigBlock + MAIN_SIZE / 2, 1048560, memcpyName)) {
+//    if (!testMemcpyFuncSize(
+//                memcpyFunc, bigBlock, bigBlock + MAIN_SIZE / 2, 1048560, memcpyName)) {
 //        return false;
 //    }
 
@@ -322,13 +346,16 @@ NO_INLINE void doSimdWork(const char* buffer, size_t size)
 #endif
 }
 
-// Takes batches of various sizes in [minBlockSize, maxBlockSize] from second half of the buffer and copy them to the first half.
-size_t memcpyBuffer(MemcpyFuncType memcpyFunc, char* buffer, size_t bufferSize, size_t minBlockSize, size_t maxBlockSize,
-                    bool withIntWork, bool withSimdWork, bool nonRandomAddress)
+// Takes batches of various sizes in [minBlockSize, maxBlockSize] from second half of the buffer
+// and copy them to the first half.
+size_t memcpyBuffer(MemcpyFuncType memcpyFunc, char* buffer, size_t bufferSize,
+                    size_t minBlockSize, size_t maxBlockSize, bool withIntWork, bool withSimdWork,
+                    bool nonRandomAddress)
 {
     // Divide buffer in blocks with maxBlockSize, but copy only some random len each frame.
     size_t numBlocks = bufferSize / maxBlockSize;
-    // halfBlocks * blockSize * 2 <= numBlocks * blockSize <= bufferSize, so everything stays in bounds.
+    // halfBlocks * blockSize * 2 <= numBlocks * blockSize <= bufferSize, so everything stays
+    // in bounds.
     size_t halfBlocks = numBlocks / 2;
     // Completely randomly selected state.
     uint32_t xorstate[4] = { 1, 2, 3, 4 };
@@ -369,9 +396,9 @@ void preparePadding(char* padding, const char* name)
     padding[i] = '\0';
 }
 
-double benchMemcpy(MemcpyFuncType memcpyFunc, const char* memcpyName, char* buffer, size_t bufferSize,
-                   size_t minBlockSize, size_t maxBlockSize, bool withIntWork, bool withSimdWork, bool nonRandomAddress,
-                   const double* baseSpeed)
+double benchMemcpy(MemcpyFuncType memcpyFunc, const char* memcpyName, char* buffer,
+                   size_t bufferSize, size_t minBlockSize, size_t maxBlockSize, bool withIntWork,
+                   bool withSimdWork, bool nonRandomAddress, const double* baseSpeed)
 {
     int64_t timeFreq = getTimeFreq();
     double gbPerSec[3] = { 0.0 };
@@ -396,8 +423,8 @@ double benchMemcpy(MemcpyFuncType memcpyFunc, const char* memcpyName, char* buff
     preparePadding(memcpyNamePadding, memcpyName);
 
     char description[100];
-    sprintf(description, "%s%s%s", nonRandomAddress ? " non-random" : "", withIntWork ? " with int work" : "",
-            withSimdWork ? " with simd work" : "");
+    sprintf(description, "%s%s%s", nonRandomAddress ? " non-random" : "",
+            withIntWork ? " with int work" : "", withSimdWork ? " with simd work" : "");
 
     char speedStr[100];
     if (gbPerSec[0] > 10) {
@@ -415,14 +442,16 @@ double benchMemcpy(MemcpyFuncType memcpyFunc, const char* memcpyName, char* buff
         strcpy(relativeSpeedStr, "");
     }
 
-    printf("%s:%s copy block sizes [%d-%d] in buffer size %d%s: %s) Gb/sec%s\n", memcpyName, memcpyNamePadding,
-           (int)minBlockSize, (int)maxBlockSize, (int)bufferSize, description, speedStr, relativeSpeedStr);
+    printf("%s:%s copy block sizes [%d-%d] in buffer size %d%s: %s) Gb/sec%s\n", memcpyName,
+           memcpyNamePadding, (int)minBlockSize, (int)maxBlockSize, (int)bufferSize,
+           description, speedStr, relativeSpeedStr);
     return speed;
 }
 
 void runBench(MemcpyFuncType memcpyFunc, const char* memcpyName, size_t bufferSize,
-              const std::vector<size_t>& blockSizes, bool withIntWork, bool withSimdWork, bool nonRandomAddress,
-              const std::vector<double>* baseSpeeds, std::vector<double>* speeds)
+              const std::vector<size_t>& blockSizes, bool withIntWork, bool withSimdWork,
+              bool nonRandomAddress, const std::vector<double>* baseSpeeds,
+              std::vector<double>* speeds)
 {
     // Touch each buffer byte before memcpy.
     char* buffer = new char[bufferSize];
@@ -433,14 +462,16 @@ void runBench(MemcpyFuncType memcpyFunc, const char* memcpyName, size_t bufferSi
     speeds->clear();
     for (size_t i = 0; i < blockSizes.size(); i++) {
         const double* baseSpeed = (baseSpeeds != nullptr) ? baseSpeeds->data() + i : nullptr;
-        speeds->push_back(benchMemcpy(memcpyFunc, memcpyName, buffer, bufferSize, blockSizes[i], blockSizes[i],
-                    withIntWork, withSimdWork, nonRandomAddress, baseSpeed));
+        speeds->push_back(benchMemcpy(memcpyFunc, memcpyName, buffer, bufferSize, blockSizes[i],
+                                      blockSizes[i], withIntWork, withSimdWork, nonRandomAddress,
+                                      baseSpeed));
     }
 }
 
 void runBenchMulti(MemcpyFuncType memcpyFunc, const char* memcpyName, size_t bufferSize,
-                   const std::vector<size_t>& blockSizes, bool withIntWork, bool withSimdWork, bool nonRandomAddress,
-                   const std::vector<double>* baseSpeeds, std::vector<double>* speeds)
+                   const std::vector<size_t>& blockSizes, bool withIntWork, bool withSimdWork,
+                   bool nonRandomAddress, const std::vector<double>* baseSpeeds,
+                   std::vector<double>* speeds)
 {
     // Touch each buffer byte before memcpy.
     char* buffer = new char[bufferSize];
@@ -453,8 +484,9 @@ void runBenchMulti(MemcpyFuncType memcpyFunc, const char* memcpyName, size_t buf
         size_t minBlockSize = blockSizes[i];
         size_t maxBlockSize = minBlockSize * 2 + 16;
         const double* baseSpeed = (baseSpeeds != nullptr) ? baseSpeeds->data() + i : nullptr;
-        speeds->push_back(benchMemcpy(memcpyFunc, memcpyName, buffer, bufferSize, minBlockSize, maxBlockSize,
-                    withIntWork, withSimdWork, nonRandomAddress, baseSpeed));
+        speeds->push_back(benchMemcpy(memcpyFunc, memcpyName, buffer, bufferSize, minBlockSize,
+                                      maxBlockSize, withIntWork, withSimdWork, nonRandomAddress,
+                                      baseSpeed));
     }
 }
 
@@ -471,24 +503,34 @@ const char* stripPrefix(const char* s, const char* prefix)
 
 void printUsage(const char* argv0)
 {
-    printf("Usage: %s [--size SIZE] [--align ALIGN] [--with-int-work] [--with-simd-work] [--non-random-address] [--test] [MEMCPY NAMES...]\n"
+    printf("Usage: %s [--size SIZE] [--align ALIGN] [--with-int-work] [--with-simd-work]"
+           " [--non-random-address] [--test] [MEMCPY NAMES...]\n"
            "\t--size SIZE\t\tLimits the tested sizes, possible values:\n"
            "\t\tl1_SIZE\t\tDoes copies inside the L1 cache-sized buffer with given SIZE\n"
-           "\t\tl1_multi_SIZE\tDoes copies inside the L1 cache-sized buffer with multiple sizes near the SIZE\n"
-           "\t\tl2_SIZE\t\tDoes copies inside the L2 cache-sized buffer with multiple sizes near the SIZE\n"
-           "\t\tl2_multi_SIZE\tDoes copies inside the L2 cache-sized buffer with multiple sizes near the SIZE\n"
-           "\t\tmain_SIZE\tDoes copies inside the buffer larger than LLC with multiple sizes near the SIZE\n"
-           "\t\tmain_multi_SIZE\tDoes copies inside the buffer larger than LLC with multiple sizes near the SIZE\n"
-           "\t--with-int-work\t\tDo some simple integer work after each memcpy (hash some elements of data)\n"
-           "\t--with-simd-work\t\tDo some simple simd work after each memcpy (load and sum some vectors from data)\n"
-           "\t--non-random-address\tDo not randomize src and dst addresses when running each memcpy,"
+           "\t\tl1_multi_SIZE\tDoes copies inside the L1 cache-sized buffer with multiple sizes"
+           " near the SIZE\n"
+           "\t\tl2_SIZE\t\tDoes copies inside the L2 cache-sized buffer with multiple sizes near"
+           " the SIZE\n"
+           "\t\tl2_multi_SIZE\tDoes copies inside the L2 cache-sized buffer with multiple sizes"
+           " near the SIZE\n"
+           "\t\tmain_SIZE\tDoes copies inside the buffer larger than LLC with multiple sizes near"
+           " the SIZE\n"
+           "\t\tmain_multi_SIZE\tDoes copies inside the buffer larger than LLC with multiple sizes"
+           " near the SIZE\n"
+           "\t--with-int-work\t\tDo some simple integer work after each memcpy (hash some elements"
+           " of data)\n"
+           "\t--with-simd-work\t\tDo some simple simd work after each memcpy (load and sum some"
+           " vectors from data)\n"
+           "\t--non-random-address\tDo not randomize src and dst addresses when running each"
+           " memcpy,"
            " is not a very realistic workload\n"
            "\t--test\t\t\tRuns tests on memcpy, validating that memcpy does, in fact, copy memory,"
            " ignores every other argument except memcpy names\n",
            argv0);
 }
 
-void parseSize(const char* arg, size_t* bufferSize, std::vector<size_t>* blockSizes, bool* blockMultiSize)
+void parseSize(const char* arg, size_t* bufferSize, std::vector<size_t>* blockSizes,
+               bool* blockMultiSize)
 {
     if (strcmp(arg, "l1") == 0) {
         *bufferSize = L1_SIZE;
@@ -498,7 +540,8 @@ void parseSize(const char* arg, size_t* bufferSize, std::vector<size_t>* blockSi
     }
     if (strcmp(arg, "l1_multi") == 0) {
         *bufferSize = L1_SIZE;
-        blockSizes->assign(L1_BLOCK_MULTI_SIZES, L1_BLOCK_MULTI_SIZES + arraySize(L1_BLOCK_MULTI_SIZES));
+        blockSizes->assign(L1_BLOCK_MULTI_SIZES, L1_BLOCK_MULTI_SIZES
+                           + arraySize(L1_BLOCK_MULTI_SIZES));
         *blockMultiSize = true;
         return;
     }
@@ -510,7 +553,8 @@ void parseSize(const char* arg, size_t* bufferSize, std::vector<size_t>* blockSi
     }
     if (strcmp(arg, "l2_multi") == 0) {
         *bufferSize = L2_SIZE;
-        blockSizes->assign(L2_BLOCK_MULTI_SIZES, L2_BLOCK_MULTI_SIZES + arraySize(L2_BLOCK_MULTI_SIZES));
+        blockSizes->assign(L2_BLOCK_MULTI_SIZES, L2_BLOCK_MULTI_SIZES
+                           + arraySize(L2_BLOCK_MULTI_SIZES));
         *blockMultiSize = true;
         return;
     }
@@ -522,7 +566,8 @@ void parseSize(const char* arg, size_t* bufferSize, std::vector<size_t>* blockSi
     }
     if (strcmp(arg, "main_multi") == 0) {
         *bufferSize = MAIN_SIZE;
-        blockSizes->assign(MAIN_BLOCK_MULTI_SIZES, MAIN_BLOCK_MULTI_SIZES + arraySize(MAIN_BLOCK_MULTI_SIZES));
+        blockSizes->assign(MAIN_BLOCK_MULTI_SIZES, MAIN_BLOCK_MULTI_SIZES
+                           + arraySize(MAIN_BLOCK_MULTI_SIZES));
         *blockMultiSize = true;
         return;
     }
@@ -600,7 +645,8 @@ void listAllMemcpys(std::vector<MemcpyFuncType>* memcpys, std::vector<const char
 }
 
 // Computes a diff metric between baselineSpeeds and speeds.
-double computeSpeedup(const std::vector<size_t>& blockSizes, const std::vector<double>& baselineSpeeds,
+double computeSpeedup(const std::vector<size_t>& blockSizes,
+                      const std::vector<double>& baselineSpeeds,
                       const std::vector<double>& speeds)
 {
     if (blockSizes.size() != baselineSpeeds.size() || baselineSpeeds.size() != speeds.size()) {
@@ -734,8 +780,8 @@ int main(int argc, char** argv)
         // The array size is memcpys.size().
         std::vector<double> totalSpeedup;
         if (blockMultiSize) {
-            runBenchMulti(memcpys[0], memcpyNames[0], bufferSize, blockSizes, withIntWork, withSimdWork,
-                    nonRandomAddress, nullptr, &baselineSpeeds);
+            runBenchMulti(memcpys[0], memcpyNames[0], bufferSize, blockSizes, withIntWork,
+                    withSimdWork, nonRandomAddress, nullptr, &baselineSpeeds);
         } else {
             runBench(memcpys[0], memcpyNames[0], bufferSize, blockSizes, withIntWork, withSimdWork,
                     nonRandomAddress, nullptr, &baselineSpeeds);
@@ -744,11 +790,11 @@ int main(int argc, char** argv)
         printf("\n");
         for (size_t i = 1; i < memcpys.size(); i++) {
             if (blockMultiSize) {
-                runBenchMulti(memcpys[i], memcpyNames[i], bufferSize, blockSizes, withIntWork, withSimdWork,
-                              nonRandomAddress, &baselineSpeeds, &speeds);
+                runBenchMulti(memcpys[i], memcpyNames[i], bufferSize, blockSizes, withIntWork,
+                              withSimdWork, nonRandomAddress, &baselineSpeeds, &speeds);
             } else {
-                runBench(memcpys[i], memcpyNames[i], bufferSize, blockSizes, withIntWork, withSimdWork,
-                         nonRandomAddress, &baselineSpeeds, &speeds);
+                runBench(memcpys[i], memcpyNames[i], bufferSize, blockSizes, withIntWork,
+                         withSimdWork, nonRandomAddress, &baselineSpeeds, &speeds);
             }
             double speedup = computeSpeedup(blockSizes, baselineSpeeds, speeds);
             totalSpeedup.push_back(speedup);

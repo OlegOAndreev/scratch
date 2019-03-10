@@ -13,12 +13,14 @@
 #include "common.h"
 
 
-// General notes on various pitch-shifting methods: http://blogs.zynaptiq.com/bernsee/time-pitch-overview/
+// General notes on various pitch-shifting methods:
+// http://blogs.zynaptiq.com/bernsee/time-pitch-overview/
 //
 // Basic phase vocoder implementation: http://downloads.dspdimension.com/smbPitchShift.cpp
 //
 // Desription of phase gradient approach to improve the phase vocoder: Phase Vocoder Done Right,
-// Zdeneˇk Pru ̊ša and Nicki Holighaus, Acoustics Research Institute, Austrian Academy of Sciences Vienna, Austria
+// Zdeneˇk Pru ̊ša and Nicki Holighaus, Acoustics Research Institute, Austrian Academy
+// of Sciences Vienna, Austria
 
 enum class SampleFormat {
     Sint16,
@@ -161,8 +163,8 @@ SoundData loadWav(const char* path)
     } else if (fmtHeader.formatTag == kWaveFormatTagFloat) {
         data.format = SampleFormat::Float;
         if (fmtHeader.bitsPerSample != 32 || fmtHeader.blockAlign != 4 * fmtHeader.numChannels) {
-            printf("%s has float format, but %d bits per sample %d\n", path, (int)fmtHeader.bitsPerSample,
-                   (int)fmtHeader.blockAlign);
+            printf("%s has float format, but %d bits per sample %d\n", path,
+                   (int)fmtHeader.bitsPerSample, (int)fmtHeader.blockAlign);
             exit(1);
         }
     } else {
@@ -185,7 +187,8 @@ SoundData loadWav(const char* path)
             data.samples.resize(header.chunkSize);
             size_t readBytes = fread(data.samples.data(), 1, header.chunkSize, f);
             if (readBytes != header.chunkSize) {
-                printf("%s has less bytes than required: %d vs %d\n", path, (int)readBytes, (int)header.chunkSize);
+                printf("%s has less bytes than required: %d vs %d\n", path, (int)readBytes,
+                       (int)header.chunkSize);
                 exit(1);
             }
             break;
@@ -193,7 +196,8 @@ SoundData loadWav(const char* path)
         fseek(f, header.chunkSize, SEEK_CUR);
     }
 
-    printf("%s: %d ch, rate %d, %d samples\n", path, data.numChannels, data.rate, (int)data.numSamples);
+    printf("%s: %d ch, rate %d, %d samples\n", path, data.numChannels, data.rate,
+           (int)data.numSamples);
     return data;
 }
 
@@ -280,10 +284,12 @@ SoundData prepareSine(int waveHz, double seconds, int rate, SampleFormat format)
     data.samples.resize(data.getByteLength());
     switch (format) {
     case SampleFormat::Sint16:
-        prepareSineSamples<int16_t>(data.numSamples, waveHz, rate, -10000, 10000, (int16_t*)data.samples.data());
+        prepareSineSamples<int16_t>(data.numSamples, waveHz, rate, -10000, 10000,
+                                    (int16_t*)data.samples.data());
         break;
     case SampleFormat::Float:
-        prepareSineSamples<float>(data.numSamples, waveHz, rate, -0.3, 0.3, (float*)data.samples.data());
+        prepareSineSamples<float>(data.numSamples, waveHz, rate, -0.3, 0.3,
+                                  (float*)data.samples.data());
         break;
     }
     return data;
@@ -298,16 +304,16 @@ DT castAndClamp(ST v)
     return std::min(std::max(v, dstMin), dstMax);
 }
 
-// Struct, holding the necessary values to resample audio chunk by chunk. The main problem this struct solves
-// is passing the last position (and, potentially, last value) from resample for the previous chunk to resample
-// for the next chunk.
+// Struct, holding the necessary values to resample audio chunk by chunk. The main use-case for
+// this struct solves is passing the last position (and, potentially, last value) from resample
+// for the previous chunk to resample for the next chunk.
 template<typename ST>
 struct LinearResampleState {
     int numChannels;
 
-    // Iterator position, stored for continuing resampling the next block. Positions and deltas are encoded
-    // as int+float pair. If nextSrcIntPos == SIZE_MAX, lastSample must be used as a first element before processing
-    // next src block.
+    // Iterator position, stored for continuing resampling the next block. Positions and deltas
+    // are encoded as int+float pair. If nextSrcIntPos == SIZE_MAX, lastSample must be used
+    // as a first element before processing next src block.
     size_t nextSrcIntPos = 0;
     double nextSrcFloatPos = 0.0;
     // This value is used if the nextSrcIntPos == SIZE_MAX.
@@ -320,11 +326,12 @@ struct LinearResampleState {
     }
 };
 
-// Does the cheapest of the cheapest resamples from src to dst, writes ~ srcSamples * stretch samples. The resample
-// works very poorly for small stretch values (e.g. < 0.5) as it basically starts ignoring every second src sample.
+// Does the cheapest of the cheapest resamples from src to dst, writes ~ srcSamples * stretch
+// samples. The resample works very poorly for small stretch values (e.g. < 0.5) as it basically
+// starts ignoring every second src sample.
 template<typename ST, typename DT>
-size_t resampleChunk(LinearResampleState<ST>* state, const ST* src, size_t srcSamples, double stretch, DT* dst,
-                     size_t dstRemaining)
+size_t resampleChunk(LinearResampleState<ST>* state, const ST* src, size_t srcSamples,
+                     double stretch, DT* dst, size_t dstRemaining)
 {
     int numChannels = state->numChannels;
     Span2d<const ST> srcS(src, srcSamples, numChannels);
@@ -351,7 +358,8 @@ size_t resampleChunk(LinearResampleState<ST>* state, const ST* src, size_t srcSa
         size_t dstPos = 0;
         size_t srcIntPos = state->nextSrcIntPos;
         double srcFloatPos = state->nextSrcFloatPos;
-        // Process src positions between the last sample from previous block and first sample from current block.
+        // Process src positions between the last sample from previous block and first sample
+        // from current block.
         if (srcIntPos == SIZE_MAX) {
             while (true) {
                 // Sanity check that dst is allocated correctly.
@@ -370,8 +378,8 @@ size_t resampleChunk(LinearResampleState<ST>* state, const ST* src, size_t srcSa
                     srcIntPos++;
                     srcFloatPos -= 1.0;
                 }
-                // Use defined overflow for size_t. NOTE: The would certainly be cleaner if ssize_t has been used
-                // for srcIntPos and lastSrcIntPos.
+                // Use defined overflow for size_t. NOTE: The would certainly be cleaner
+                // if ssize_t has been used for srcIntPos and lastSrcIntPos.
                 if (srcIntPos != SIZE_MAX) {
                     break;
                 }
@@ -388,7 +396,8 @@ size_t resampleChunk(LinearResampleState<ST>* state, const ST* src, size_t srcSa
                 exit(1);
             }
             for (int ch = 0; ch < numChannels; ch++) {
-                ST d = srcS(srcIntPos, ch) * (1 - srcFloatPos) + srcS(srcIntPos + 1, ch) * srcFloatPos;
+                ST d = srcS(srcIntPos, ch) * (1 - srcFloatPos)
+                        + srcS(srcIntPos + 1, ch) * srcFloatPos;
                 dstS(dstPos, ch) = castAndClamp<ST, DT>(d);
             }
             dstPos++;
@@ -400,8 +409,9 @@ size_t resampleChunk(LinearResampleState<ST>* state, const ST* src, size_t srcSa
             }
         }
         if (srcIntPos == srcSamples - 1) {
-            // The src position is between the last sample from the current block and the first sample of the next block.
-            // Store the last sample for interpolating during next call to resampleChunk.
+            // The src position is between the last sample from the current block and
+            // the first sample of the next block. Store the last sample for interpolating
+            // during next call to resampleChunk.
             state->nextSrcIntPos = SIZE_MAX;
             for (int ch = 0; ch < numChannels; ch++) {
                 state->lastSample[ch] = srcS(srcIntPos, ch);
@@ -415,12 +425,13 @@ size_t resampleChunk(LinearResampleState<ST>* state, const ST* src, size_t srcSa
 }
 
 template<typename T>
-size_t simpleStretchSoundSamples(const T* src, size_t numSamples, int numChannels, const StretchParams& params, T* dst,
-                                 size_t dstNumSamples)
+size_t simpleStretchSoundSamples(const T* src, size_t numSamples, int numChannels,
+                                 const StretchParams& params, T* dst, size_t dstNumSamples)
 {
     double stretch;
     if (params.pitchShift != 1.0 && params.timeStretch != 1.0) {
-        printf("Simple stretch method only works if you specify either time stretching or pitch shifting\n");
+        printf("Simple stretch method only works if you specify either time stretching"
+               " or pitch shifting\n");
         exit(1);
     } else if (params.pitchShift != 1.0) {
         stretch = 1 / params.pitchShift;
@@ -520,7 +531,8 @@ struct SimpleVocoderState {
 // Returns the phaseDiff normalized back to [-M_PI, M_PI] range.
 kiss_fft_scalar normalizePhase(kiss_fft_scalar phaseDiff)
 {
-    // Assumes that phaseDiff is not that far the range so that we do not use fmod, which can be pretty slow.
+    // Assumes that phaseDiff is not that far the range so that we do not use fmod, which
+    // can be pretty slow.
 #if 1
     if (phaseDiff < -M_PI) {
         do {
@@ -554,17 +566,19 @@ void stretchFreqSimple(StftState* stft, SimpleVocoderState* vocoder, double pitc
 
     size_t overlap = stft->fftSize / stft->offset;
     // Overlaps must be powers of two, so use it to optimize performance: replacing the k % overlap
-    // with k & overlapMask. You can always replace k * origPhaseMult with (k % overlap) * origPhaseMult.
+    // with k & overlapMask. You can always replace k * origPhaseMult with
+    // (k % overlap) * origPhaseMult.
     size_t overlapMask = overlap - 1;
     if ((overlapMask & overlap) != 0) {
         printf("Overlap must be pow-of-2\n");
         exit(1);
     }
-    // origPhaseMult is used to calculate the expected phase difference for a basis for frequency bin k:
-    // e^(2 * pi * k * t / freqSize) = e^(2 * pi * k / overlap) when t = stft->offset, therefore the expected phase at
-    // t = stft->offset equals to origPhaseMult * k. In order to constrain the phase difference to [0, 2 * pi),
-    // simply replace the k with (k % overlap): origPhaseMult * (k % overlap). As noted above, this is equivalent
-    // to origPhaseMulti * (k & overlapMask).
+    // origPhaseMult is used to calculate the expected phase difference for a basis for
+    // frequency bin k: e^(2 * pi * k * t / freqSize) = e^(2 * pi * k / overlap)
+    // when t = stft->offset, therefore the expected phase at t = stft->offset equals
+    // to origPhaseMult * k. In order to constrain the phase difference to [0, 2 * pi), simply
+    // replace the k with (k % overlap): origPhaseMult * (k % overlap). As noted above,
+    // this is equivalent to origPhaseMulti * (k & overlapMask).
     double origPhaseMult = 2 * M_PI / overlap;
 
     std::fill(synMagnitudes, synMagnitudes + freqSize, 0.0);
@@ -580,25 +594,27 @@ void stretchFreqSimple(StftState* stft, SimpleVocoderState* vocoder, double pitc
         bool largeMagn = (magn > synMagnitudes[newk]);
         synMagnitudes[newk] += magn;
         kiss_fft_scalar phase = std::atan2(freq[k].i, freq[k].r);
-        // If multiple old phase bins stretch into one new phase bin (if pitchShift < 1.0), we add their
-        // magnitudes but want to want to choose only one phase (summing up phases from multiple bins
-        // make no sense). Therefore, we separately compute newPhaseDiffs and then add them to prevNewPhases
-        // in the end when finally computing dstFreq. Ideally we would choose the phase from the bin with
-        // the highest magnitude here.
+        // If multiple old phase bins stretch into one new phase bin (if pitchShift < 1.0),
+        // we add their magnitudes but want to want to choose only one phase (summing up phases
+        // from multiple bins make no sense). Therefore, we separately compute newPhaseDiffs
+        // and then add them to prevNewPhases in the end when finally computing dstFreq. Ideally
+        // we would choose the phase from the bin with the highest magnitude here.
         if (largeMagn) {
-            // Original phase diff is the difference between the potential phase (phase of the frequency bin k
-            // at the end of the previous block) and the actual phase for the frequency bin k at the start
-            // of the new block. This phase diff is then applied to the stretched frequencies. The final formula
-            // is simplified a bit from the one from smbPitchShift.cpp
-            // Modulo overlapMask is important here, because otherwise the origPhaseMult * k can be very large
-            // and normalizePhase does not expect it.
+            // Original phase diff is the difference between the potential phase (phase of
+            // the frequency bin k at the end of the previous block) and the actual phase
+            // for the frequency bin k at the start of the new block. This phase diff is then
+            // applied to the stretched frequencies. The final formula is simplified version of
+            // the one from smbPitchShift.cpp Modulo overlapMask is important here, because
+            // otherwise the origPhaseMult * k can be very largenn  and normalizePhase does
+            // not expect it.
             kiss_fft_scalar anaPhaseDiff = normalizePhase(phase - prevAnaPhases[k]
                                                           - origPhaseMult * (k & overlapMask));
             // The following two lines are basically equivalent to
             //   synPhaseDiffs[newk] = pitchShift * (anaPhaseDiff + origPhaseMult * k).
             // The main difference is that the synPhaseDiffs is much closer to zero, so that
             // normalizePhase would take less time later.
-            kiss_fft_scalar synPhaseDiff = anaPhaseDiff * pitchShift + (k * pitchShift - newk) * origPhaseMult;
+            kiss_fft_scalar synPhaseDiff = anaPhaseDiff * pitchShift
+                    + (k * pitchShift - newk) * origPhaseMult;
             synPhaseDiffs[newk] = origPhaseMult * (newk & overlapMask) + synPhaseDiff;
         }
         prevAnaPhases[k] = phase;
@@ -606,8 +622,8 @@ void stretchFreqSimple(StftState* stft, SimpleVocoderState* vocoder, double pitc
 
     kiss_fft_cpx* dstFreq = stft->dstFreqBuf.data();
     for (size_t k = 0; k < freqSize; k++) {
-        // Do the normalize here so that the newPhases does not become too large so that the floating point
-        // errors stay bounded.
+        // Do the normalize here so that the newPhases does not become too large to limit the
+        // the floating point errors stay bounded.
         prevSynPhases[k] = normalizePhase(prevSynPhases[k] + synPhaseDiffs[k]);
         dstFreq[k].r = synMagnitudes[k] * std::cos(prevSynPhases[k]);
         dstFreq[k].i = synMagnitudes[k] * std::sin(prevSynPhases[k]);
@@ -674,9 +690,10 @@ struct PhaseGradientVocoderState {
     }
 };
 
-// Phase vocoder with phase gradient impl: take stft->freq and compute stft->dstFreq for given channel
-// with given pitchShift.
-void stretchFreqPhaseGradient(StftState* stft, PhaseGradientVocoderState* vocoder, double pitchShift, int channel)
+// Phase vocoder with phase gradient impl: take stft->freq and compute stft->dstFreq for given
+// channel with given pitchShift.
+void stretchFreqPhaseGradient(StftState* stft, PhaseGradientVocoderState* vocoder,
+                              double pitchShift, int channel)
 {
     // Ignore frequencies with magnitude < (max magnitude * kMaxMagnitudeTolerance).
     static const float kMinMagnitudeTolerance = 1e-3;
@@ -694,8 +711,9 @@ void stretchFreqPhaseGradient(StftState* stft, PhaseGradientVocoderState* vocode
     uint8_t* phaseAssigned = vocoder->phaseAssigned.data();
 
     size_t overlap = stft->fftSize / stft->offset;
-    // Overlaps must be powers of two, so use it to optimize performance: replacing the k % overlap
-    // with k & overlapMask. You can always replace k * origPhaseMult with (k % overlap) * origPhaseMult.
+    // Overlaps must be powers of two, so use it to optimize performance: replacing
+    // the k % overlap with k & overlapMask. You can always replace k * origPhaseMult
+    // with (k % overlap) * origPhaseMult.
     size_t overlapMask = overlap - 1;
     if ((overlapMask & overlap) != 0) {
         printf("Overlap must be pow-of-2\n");
@@ -727,8 +745,8 @@ void stretchFreqPhaseGradient(StftState* stft, PhaseGradientVocoderState* vocode
         }
 
         kiss_fft_scalar magn = anaMagnitudes[k];
-        // If pitchShift < 1.0, several analysis frequency bins may correspond to one synthesis bin, therefore,
-        // add, not replace.
+        // If pitchShift < 1.0, several analysis frequency bins may correspond to one synthesis bin,
+        // therefore, add, not replace.
         synMagnitudes[newk] += magn;
 
         // Optimization: do not compute phase for frequencies below the minMagn threshold.
@@ -738,8 +756,8 @@ void stretchFreqPhaseGradient(StftState* stft, PhaseGradientVocoderState* vocode
             numUnassigned++;
             maxHeap.push({k, prevAnaMagnitudes[k], true});
         } else {
-            // The original paper assigns random values to frequencies below the min magnitude, but we simply leave
-            // the phase to be 0.0 (see std::fill above for synPhases).
+            // The original paper assigns random values to frequencies below the min magnitude,
+            // but we simply leave the phase to be 0.0 (see std::fill above for synPhases).
             anaPhases[k] = 0.0;
             phaseAssigned[k] = true;
         }
@@ -747,7 +765,8 @@ void stretchFreqPhaseGradient(StftState* stft, PhaseGradientVocoderState* vocode
 
     while (numUnassigned > 0) {
         if (maxHeap.empty()) {
-            printf("INTERNAL ERROR: no more elements remaining in the heap, %d still unassigned\n", numUnassigned);
+            printf("INTERNAL ERROR: no more elements remaining in the heap, %d still unassigned\n",
+                   numUnassigned);
             break;
         }
         PhaseGradientVocoderState::HeapElem topElem = maxHeap.top();
@@ -761,20 +780,24 @@ void stretchFreqPhaseGradient(StftState* stft, PhaseGradientVocoderState* vocode
 
                 size_t newk = k * pitchShift;
                 if (newk < freqSize) {
-                    // Original phase diff is the difference between the potential phase (phase of the frequency bin k
-                    // at the end of the previous block) and the actual phase for the frequency bin k at the start
-                    // of the new block. This phase diff is then applied to the stretched frequencies. The final formula
+                    // Original phase diff is the difference between the potential phase (phase
+                    // of the frequency bin k at the end of the previous block) and the actual
+                    // phase for the frequency bin k at the start of the new block. This phase
+                    // diff is then applied to the stretched frequencies. The final formula
                     // is simplified a bit from the one from smbPitchShift.cpp
-                    // Modulo overlapMask is important here, because otherwise the origPhaseMult * k can be very large
-                    // and normalizePhase does not expect it.
-                    kiss_fft_scalar anaPhaseDiff = normalizePhase(anaPhases[k] - prevAnaPhases[k]
-                                                                  - origPhaseMult * (k & overlapMask));
+                    // Modulo overlapMask is important here, because otherwise the origPhaseMult * k
+                    // can be very large and normalizePhase does not expect it.
+                    kiss_fft_scalar anaPhaseDiff = normalizePhase(
+                                anaPhases[k] - prevAnaPhases[k]
+                                - origPhaseMult * (k & overlapMask));
                     // The following two lines are basically equivalent to
                     //   synPhaseDiffs[newk] = pitchShift * (anaPhaseDiff + origPhaseMult * k).
                     // The main difference is that the synPhaseDiffs is much closer to zero, so that
                     // normalizePhase would take less time later.
-                    kiss_fft_scalar synPhaseDiff = anaPhaseDiff * pitchShift + (k * pitchShift - newk) * origPhaseMult;
-                    synPhases[newk] = prevSynPhases[newk] + synPhaseDiff + origPhaseMult * (newk & overlapMask);
+                    kiss_fft_scalar synPhaseDiff = anaPhaseDiff * pitchShift
+                            + (k * pitchShift - newk) * origPhaseMult;
+                    synPhases[newk] = prevSynPhases[newk] + synPhaseDiff
+                            + origPhaseMult * (newk & overlapMask);
                 }
             }
         } else {
@@ -805,8 +828,8 @@ void stretchFreqPhaseGradient(StftState* stft, PhaseGradientVocoderState* vocode
 
     kiss_fft_cpx* dstFreq = stft->dstFreqBuf.data();
     for (size_t k = 0; k < freqSize; k++) {
-        // Do the normalize here so that the prevNewPhases does not become too large so that the floating point
-        // errors stay bounded.
+        // Do the normalize here so that the prevNewPhases does not become too large to limit the
+        // floating point errors.
         prevSynPhases[k] = normalizePhase(synPhases[k]);
         dstFreq[k].r = synMagnitudes[k] * std::cos(prevSynPhases[k]);
         dstFreq[k].i = synMagnitudes[k] * std::sin(prevSynPhases[k]);
@@ -816,27 +839,31 @@ void stretchFreqPhaseGradient(StftState* stft, PhaseGradientVocoderState* vocode
     std::copy(anaPhases, anaPhases + freqSize, prevAnaPhases);
 }
 
-// Takes stft->srcBuf, does STFT, changes pitch by pitchShift via frequencies and does inverse STFT to stft->dstBuf.
-void doStftPitchChange(StftState* stft, SimpleVocoderState* simpleVocoder, PhaseGradientVocoderState* gradientVocoder,
+// Takes stft->srcBuf, does STFT, changes pitch by pitchShift via frequencies and does inverse
+// STFT to stft->dstBuf.
+void doStftPitchChange(StftState* stft, SimpleVocoderState* simpleVocoder,
+                       PhaseGradientVocoderState* gradientVocoder,
                        double pitchShift, bool phaseGradient)
 {
     for (int channel = 0; channel < stft->numChannels; channel++) {
-        kiss_fftr(stft->fftCfg, stft->srcBuf.data() + stft->fftSize * channel, stft->freqBuf.data());
+        kiss_fftr(stft->fftCfg, stft->srcBuf.data() + stft->fftSize * channel,
+                  stft->freqBuf.data());
         if (phaseGradient) {
             stretchFreqPhaseGradient(stft, gradientVocoder, pitchShift, channel);
         } else {
             stretchFreqSimple(stft, simpleVocoder, pitchShift, channel);
         }
-        kiss_fftri(stft->fftiCfg, stft->dstFreqBuf.data(), stft->dstBuf.data() + stft->fftSize * channel);
+        kiss_fftri(stft->fftiCfg, stft->dstFreqBuf.data(), stft->dstBuf.data()
+                   + stft->fftSize * channel);
     }
 }
 
-// The simples STFT pitch shifter: first change frequency (shift frequencies for each individual STFT block separately)
-// and then basically do the linear interpolation like the simple stretch.
+// The simples STFT pitch shifter: first change frequency (shift frequencies for each individual
+// STFT block separately) and then basically do the linear interpolation like the simple stretch.
 // The algorithm is described in http://blogs.zynaptiq.com/bernsee/pitch-shifting-using-the-ft/
 template<typename T>
-size_t stftStretchSoundSamples(const T* src, size_t numSamples, int numChannels, const StretchParams& params,
-                               T* dst, size_t dstNumSamples)
+size_t stftStretchSoundSamples(const T* src, size_t numSamples, int numChannels,
+                               const StretchParams& params, T* dst, size_t dstNumSamples)
 {
     // See comments when defining the window below for explanation.
     if (params.overlap < 4) {
@@ -844,8 +871,8 @@ size_t stftStretchSoundSamples(const T* src, size_t numSamples, int numChannels,
         exit(1);
     }
 
-    // Offset of next block from to the previous one must always be fftSize / (n * 2) so that sum of offset
-    // hann windows is always constant.
+    // Offset of next block from to the previous one must always be fftSize / (n * 2) so that
+    // sum of offset hann windows is always constant.
     size_t fftSize = params.fftSize;
     size_t offset = fftSize / params.overlap;
     // If we are time stretching, we have to compensate with pitch shift.
@@ -856,30 +883,32 @@ size_t stftStretchSoundSamples(const T* src, size_t numSamples, int numChannels,
     StftState stft(fftSize, offset, numChannels);
     SimpleVocoderState simpleVocoder(fftSize, numChannels);
     PhaseGradientVocoderState phaseGradientVocoder(fftSize, numChannels);
-    // STFT outputs are accumulated in circular buffer in dstAccumBuf. The part of dstAccumBuf, for which all
-    // overlapped blocks have been summed, will be stretched and written to dst.
+    // STFT outputs are accumulated in circular buffer in dstAccumBuf. The part of dstAccumBuf,
+    // for which all overlapped blocks have been summed, will be stretched and written to dst.
     std::vector<kiss_fft_scalar> dstAccumBuf;
     dstAccumBuf.resize(fftSize * numChannels);
     Span2d<kiss_fft_scalar> dstAccumBufV(dstAccumBuf.data(), fftSize, numChannels);
 
     size_t dstWritten = 0;
 
-    // One window will be used both for analysis and synthesis (i.e. forward and inverse transforms). This idea
-    // is taken from smbPitchShift.cpp and is based on the fact that for overlaps >= 4 the sum of square hann window
-    // is constant.
+    // One window will be used both for analysis and synthesis (i.e. forward and inverse
+    // transforms). This idea is taken from smbPitchShift.cpp and is based on the fact that
+    // for overlaps >= 4 the sum of square hann window is constant.
     // The explanation why having windows both for forward and inverse transform is more optimal
     // (instead of just forward transform) is given here: https://gauss256.github.io/blog/cola.html:
-    // > As mentioned above, it is most common to choose a = 1. The reason is that in the case where we did modify
-    // > the STFT, there may not be a time-domain signal whose STFT matches our modified version. Choosing a = 1
-    // > gives the Griffin-Lim [http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.306.7858&rep=rep1&type=pdf]
-    // > optimal estimate (optimal in a least-squares sense) for a time-domain signal from a modified STFT.
-    // > SciPy implements a = 1 for the signal reconstruction in the istft routine.
+    // > As mentioned above, it is most common to choose a = 1. The reason is that in the case
+    // > where we did modify the STFT, there may not be a time-domain signal whose STFT matches
+    // > our modified version. Choosing a = 1 gives the Griffin-Lim
+    // > [http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.306.7858&rep=rep1&type=pdf]
+    // > optimal estimate (optimal in a least-squares sense) for a time-domain signal from
+    // > a modified STFT. SciPy implements a = 1 for the signal reconstruction in the istft routine.
     kiss_fft_scalar* window = stft.window.data();
     fillHannWindow(window, fftSize);
 
     LinearResampleState<kiss_fft_scalar> resampleState(numChannels);
-    // Start with negative block offset, because each element must be overlapped by all possible offsets windows.
-    // Real block offset is block - fftSize, but we do not want ot mess with unsigned integers here.
+    // Start with negative block offset, because each element must be overlapped by all possible
+    // offsets windows. Real block offset is block - fftSize, but we do not want ot mess with
+    // unsigned integers here.
     for (size_t block = offset; block < fftSize; block += offset) {
         size_t prefix = fftSize - block;
         // read != fftSize-prefix holds only when the numSamples < fftSize-offset.
@@ -898,10 +927,11 @@ size_t stftStretchSoundSamples(const T* src, size_t numSamples, int numChannels,
             }
         }
 
-        doStftPitchChange(&stft, &simpleVocoder, &phaseGradientVocoder, finalPitchShift, params.phaseGradient);
+        doStftPitchChange(&stft, &simpleVocoder, &phaseGradientVocoder, finalPitchShift,
+                          params.phaseGradient);
 
-        // Write dstBuf to dstAccumBuf. For blocks with negative offset we never wrap around the dstAccumBuf,
-        // always start writing at index 0.
+        // Write dstBuf to dstAccumBuf. For blocks with negative offset we never wrap around
+        // the dstAccumBuf, always start writing at index 0.
         for (int channel = 0; channel < numChannels; channel++) {
             kiss_fft_scalar *dstBuf = stft.dstBuf.data();
             for (size_t k = 0; k < read; k++) {
@@ -925,13 +955,15 @@ size_t stftStretchSoundSamples(const T* src, size_t numSamples, int numChannels,
             }
         }
 
-        doStftPitchChange(&stft, &simpleVocoder, &phaseGradientVocoder, finalPitchShift, params.phaseGradient);
+        doStftPitchChange(&stft, &simpleVocoder, &phaseGradientVocoder, finalPitchShift,
+                          params.phaseGradient);
 
         for (int channel = 0; channel < numChannels; channel++) {
             kiss_fft_scalar* dstBuf = stft.dstBufCh(channel);
-            // Write dstBuf to dstAccumBuf. We want to write dstBuf[k] to dstAccumBufS((block + k) % fftSize).
-            // The last part dstBuf[fftSize - offset, fftSize) must overwrite, not add to the dstAccumBuf. Thus,
-            // we have to do two or three separate loops, the last one overwriting, not adding the data.
+            // Write dstBuf to dstAccumBuf. We want to write dstBuf[k]
+            // to dstAccumBufS((block + k) % fftSize). The last part dstBuf[fftSize - offset,
+            // fftSize) must overwrite, not add to the dstAccumBuf. Thus, we have to do two
+            // or three separate loops, the last one overwriting, not adding the data.
 #define DST_BUF(k) (dstBuf[k] * window[k] * 4) / (fftSize * params.overlap)
             if (accumStart != 0) {
                 // We wrap around the dstAccumBuf, do two loops when writing.
@@ -955,10 +987,12 @@ size_t stftStretchSoundSamples(const T* src, size_t numSamples, int numChannels,
 #undef DST_BUF
         }
 
-        // We can take the dstAccumBuf[accumStart:accumStart + offset], stretch and write it to the dst.
+        // We can take the dstAccumBuf[accumStart:accumStart + offset], stretch and write it
+        // to the dst.
         size_t numOutput = std::min(offset, numSamples - block);
-        dstWritten += resampleChunk(&resampleState, dstAccumBufV.row(accumStart), numOutput, params.timeStretch,
-                                    dstV.row(dstWritten), dstNumSamples - dstWritten);
+        dstWritten += resampleChunk(&resampleState, dstAccumBufV.row(accumStart), numOutput,
+                                    params.timeStretch, dstV.row(dstWritten),
+                                    dstNumSamples - dstWritten);
     }
 
     return dstWritten;
@@ -1007,8 +1041,8 @@ void printFreq(T* data, size_t numSamples, int numChannels, int rate)
         magnitudes[k].r = freq[k].r;
         magnitudes[k].i = freq[k].i;
 #if 0
-        printf("[%d (%d-%dHz)]: %g (%g %g)\n", (int)k, (int)(k * rate / n), (int)((k + 1) * rate / n)
-               magnitudes[k].magnitude, freq[k].r, freq[k].i);
+        printf("[%d (%d-%dHz)]: %g (%g %g)\n", (int)k, (int)(k * rate / n),
+               (int)((k + 1) * rate / n), magnitudes[k].magnitude, freq[k].r, freq[k].i);
 #endif
     }
     std::sort(magnitudes.begin(), magnitudes.end(), [] (const Magnitude& m1, const Magnitude& m2) {
@@ -1030,21 +1064,21 @@ SoundData stretchSound(const SoundData& src, StretchMethod method, const Stretch
     dst.format = src.format;
     dst.rate = src.rate;
     dst.numChannels = src.numChannels;
-    // NOTE: Calculating the actual number of samples, which will be written while stretching, can be quite
-    // error-prone due to floating point math errors. The easy way: overallocate the dst buffer and get
-    // the number of samples actually written from the stretching function.
+    // NOTE: Calculating the actual number of samples, which will be written while stretching,
+    // can be quite error-prone due to floating point math errors. The easy way: overallocate
+    // the dst buffer and get the number of samples actually written from the stretching function.
     dst.numSamples = src.numSamples * params.timeStretch * 1.1 + 1;
     dst.samples.resize(dst.getByteLength());
 
     size_t dstWritten;
     switch (dst.format) {
     case SampleFormat::Sint16:
-        dstWritten = doStretchSound((int16_t*)src.samples.data(), src.numSamples, src.numChannels, method, params,
-                                    (int16_t*)dst.samples.data(), dst.numSamples);
+        dstWritten = doStretchSound((int16_t*)src.samples.data(), src.numSamples, src.numChannels,
+                                    method, params, (int16_t*)dst.samples.data(), dst.numSamples);
         break;
     case SampleFormat::Float:
-        dstWritten = doStretchSound((float*)src.samples.data(), src.numSamples, src.numChannels, method, params,
-                                    (float*)dst.samples.data(), dst.numSamples);
+        dstWritten = doStretchSound((float*)src.samples.data(), src.numSamples, src.numChannels,
+                                    method, params, (float*)dst.samples.data(), dst.numSamples);
         break;
     }
 
@@ -1076,21 +1110,23 @@ void printUsage(const char* argv0)
     printf("Usage: %s [options]\n"
            "Options:\n"
            "\t--input-file FILE.WAV\t\tLoad source from WAV file\n"
-           "\t--input-sine HZ\t\t\tGenerate source sine wave with given frequency\n"
+           "\t--input-sine HZ\t\t\tGenerate source sine wave with given frequency, 400 by default\n"
            "\t--input-sine-length SEC\t\tLength of sine wave in seconds, 5 by default\n"
-           "\t--input-sine-rate RATE\t\tSet rate when generating source sine wave, 48000 by default\n"
-           "\t--input-sine-fmt s16|f32\tSet format when generating source sine wave, float by default\n"
+           "\t--input-sine-rate RATE\t\tSet rate when generating source sine wave, 48000"
+           " by default\n"
+           "\t--input-sine-fmt s16|f32\tSet format when generating source sine wave, float"
+           " by default\n"
            "\t--output-file FILE.wav\t\tPath to resampled file, out.wav by default\n"
            "\t--time-stretch VALUE\t\tStretch time by this value, 1.0 by default (no stretching)\n"
            "\t--pitch-shift VALUE\t\tShift pitch by this value, 1.0 by default (no change)\n"
-           "\t--method METHOD\t\t\tWhich method to use for stretching: simple (do not preserve time),"
-           " stft (default)\n"
-           "\t--fft-size SIZE\t\t\tSize of the FFT to be used (not applicable if simple method is used,"
-           " %d by default.\n"
-           "\t--overlap N\t\t\tNumber of FFT frames overlapping each sample (not applicable if simple method is used,"
-           " %d by default.\n"
-           "\t--phase-gradient\t\tUse phase gradient method as described in Phase Vocoder Done Right"
-           " by Zdenek Prusa and Nicki Holighaus\n",
+           "\t--method METHOD\t\t\tWhich method to use for stretching: simple (do not"
+           " preserve time), stft (default)\n"
+           "\t--fft-size SIZE\t\t\tSize of the FFT to be used (not applicable if simple method"
+           " is used, %d by default.\n"
+           "\t--overlap N\t\t\tNumber of FFT frames overlapping each sample (not applicable if"
+           " simple method is used, %d by default.\n"
+           "\t--phase-gradient\t\tUse phase gradient method as described in Phase Vocoder Done"
+           " Right by Zdenek Prusa and Nicki Holighaus\n",
            argv0,
            (int)params.fftSize,
            params.overlap);
@@ -1100,7 +1136,7 @@ int main(int argc, char** argv)
 {
     const char* inputPath = nullptr;
     const char* outputPath = "out.wav";
-    int inputSineWaveHz = 0;
+    int inputSineWaveHz = 400;
     int inputSineWaveRate = 48000;
     double inputSineLength = 5.0;
     SampleFormat inputSineWaveFmt = SampleFormat::Float;
@@ -1249,7 +1285,8 @@ int main(int argc, char** argv)
     } else {
         printf("Input: %dhz wave with %d rate", inputSineWaveHz, inputSineWaveRate);
     }
-    printf(", output: %s, time stretch: %g, pitch change: %g\n", outputPath, params.timeStretch, params.pitchShift);
+    printf(", output: %s, time stretch: %g, pitch change: %g\n", outputPath, params.timeStretch,
+           params.pitchShift);
     switch (method) {
     case StretchMethod::Simple:
         printf("Method: simple\n");
@@ -1263,7 +1300,8 @@ int main(int argc, char** argv)
     if (inputPath) {
         srcData = Wave::loadWav(inputPath);
     } else {
-        srcData = prepareSine(inputSineWaveHz, inputSineLength, inputSineWaveRate, inputSineWaveFmt);
+        srcData = prepareSine(inputSineWaveHz, inputSineLength, inputSineWaveRate,
+                              inputSineWaveFmt);
     }
 
     params.rate = srcData.rate;

@@ -25,7 +25,8 @@ _naiveMemcpy_aarch64:
     b.hi 1b
 2:  ret
 
-/* A version of _naiveSseMemcpyUnrolledAligned with pairs of regular registers (via ldp/stp) and 16-byte alignment. */
+/* A version of _naiveSseMemcpyUnrolledAligned with pairs of regular registers (via ldp/stp)
+   and 16-byte alignment. */
 .p2align 4
 .global _naiveMemcpyUnrolledAligned_aarch64
 _naiveMemcpyUnrolledAligned_aarch64:
@@ -33,7 +34,8 @@ _naiveMemcpyUnrolledAligned_aarch64:
     cmp x2, #32
     b.lo 3f
 
-    /* Align the dst (x0) to 16-byte, x3 is the required distance to move (toAlignPtr() from memcpy-cpp-impl.cpp) */
+    /* Align the dst (x0) to 16-byte, x3 is the required distance to move (toAlignPtr()
+       from memcpy-cpp-impl.cpp) */
     neg x3, x0
     and x3, x3, #15
     sub x2, x2, x3
@@ -51,7 +53,8 @@ _naiveMemcpyUnrolledAligned_aarch64:
     ldr x4, [x1], #8
     str x4, [x0], #8
 
-1:  /* Check if can run at least one iteration after the aligning, if not, get to the x2 < 32 code  */
+1:  /* Check if can run at least one iteration after the aligning, if not, get
+       to the x2 < 32 code */
     subs x2, x2, #32
     b.lo 3f
 
@@ -85,7 +88,8 @@ _naiveMemcpyUnrolledAligned_aarch64:
     stp x3, x4, [x0]
 4:  ret
 
-/* An version of _naiveSseMemcpyUnrolledAlignedV2 with regular registers (via ldp/stp) and 16-byte alignment. */
+/* An version of _naiveSseMemcpyUnrolledAlignedV2 with regular registers (via ldp/stp)
+   and 16-byte alignment. */
 .p2align 4
 .global _naiveMemcpyUnrolledAlignedV2_aarch64
 _naiveMemcpyUnrolledAlignedV2_aarch64:
@@ -96,9 +100,10 @@ _naiveMemcpyUnrolledAlignedV2_aarch64:
     add x4, x1, x2
     b.hi 3f
 
-    /* Copy [17-32], [9-16], [5-8] via two pairs of load/stores, the 1-3 bytes via single load/stores with branches.
-       Unlike, e.g. _naiveSseMemcpyUnrolledAlignedV2, it is very easy to do single instruction test and branch on ARM
-       to check for 2^n <= reg < 2^(n+1), so we are using it by decrementing x2 beforehand. */
+    /* Copy [17-32], [9-16], [5-8] via two pairs of load/stores, the 1-3 bytes via single
+       load/stores with branches. Unlike, e.g. _naiveSseMemcpyUnrolledAlignedV2, it is very easy
+       to do single instruction test and branch on ARM to check for 2^n <= reg < 2^(n+1),
+       so we are using it by decrementing x2 beforehand. */
     sub x9, x2, 1
     /* Pre-check that size is not empty */
     cbz x2, 2f
@@ -142,7 +147,8 @@ _naiveMemcpyUnrolledAlignedV2_aarch64:
     strb w6, [x3, #-1]
     ret
 
-3:  /* Align the dst (x0) to 16 bytes by simply copying the first 16 bytes (we can, because size is >= 32) */
+3:  /* Align the dst (x0) to 16 bytes by simply copying the first 16 bytes (we can, because
+       size is >= 32) */
     /* x7 is the required distance to move to align */
     neg x7, x0
     ands x7, x7, #15
@@ -153,7 +159,8 @@ _naiveMemcpyUnrolledAlignedV2_aarch64:
     stp x5, x6, [x0]
     add x0, x0, x7
 
-1:  /* Copy the last 32 bytes beforehand, they will overlap with the previous iterations if size % 32 != 0. */
+1:  /* Copy the last 32 bytes beforehand, they will overlap with the previous iterations
+       if size % 32 != 0. */
     subs x2, x2, #32
     ldp x5, x6, [x4, #-32]
     ldp x7, x8, [x4, #-16]
@@ -184,9 +191,10 @@ _naiveMemcpyUnrolledAlignedV2NeonRegs_aarch64:
     add x4, x1, x2
     b.hi 3f
 
-    /* Copy [17-32], [9-16], [5-8] via two pairs of load/stores, the 1-3 bytes via single load/stores with branches.
-       Unlike, e.g. _naiveSseMemcpyUnrolledAlignedV2, it is very easy to do single instruction test and branch on ARM
-       to check for 2^n <= reg < 2^(n+1), so we are using it by decrementing x2 beforehand. */
+    /* Copy [17-32], [9-16], [5-8] via two pairs of load/stores, the 1-3 bytes via single
+       load/stores with branches. Unlike, e.g. _naiveSseMemcpyUnrolledAlignedV2, it is very easy
+       to do single instruction test and branch on ARM to check for 2^n <= reg < 2^(n+1),
+       so we are using it by decrementing x2 beforehand. */
     sub x9, x2, 1
     /* Pre-check that size is not empty */
     cbz x2, 2f
@@ -230,7 +238,8 @@ _naiveMemcpyUnrolledAlignedV2NeonRegs_aarch64:
     strb w6, [x3, #-1]
     ret
 
-3:  /* Align the dst (x0) to 32 bytes by simply copying the first 32 bytes (we can, because size is >= 32) */
+3:  /* Align the dst (x0) to 32 bytes by simply copying the first 32 bytes (we can, because
+       size is >= 32) */
     /* x7 is the required distance to move to align */
     neg x7, x0
     ands x7, x7, #31
@@ -241,7 +250,8 @@ _naiveMemcpyUnrolledAlignedV2NeonRegs_aarch64:
     stp q0, q1, [x0]
     add x0, x0, x7
 
-1:  /* Copy the last 32 bytes beforehand, they will overlap with the previous iterations if size % 32 != 0. */
+1:  /* Copy the last 32 bytes beforehand, they will overlap with the previous iterations
+       if size % 32 != 0. */
     subs x2, x2, #32
     ldp q2, q3, [x4, #-32]
     b.ls 2f
@@ -257,7 +267,8 @@ _naiveMemcpyUnrolledAlignedV2NeonRegs_aarch64:
 2:  stp q2, q3, [x3, #-32]
     ret
 
-/* A version of _naiveMemcpyUnrolledAlignedV2NeonRegs_aarch64 with 64 byte iterations and 16-byte alignment. */
+/* A version of _naiveMemcpyUnrolledAlignedV2NeonRegs_aarch64 with 64 byte iterations
+   and 16-byte alignment. */
 .p2align 4
 .global _naiveMemcpyUnrolledAlignedV3NeonRegs_aarch64
 _naiveMemcpyUnrolledAlignedV3NeonRegs_aarch64:
@@ -268,9 +279,10 @@ _naiveMemcpyUnrolledAlignedV3NeonRegs_aarch64:
     add x4, x1, x2
     b.hi 4f
 
-    /* Copy [33-64], [17-32], [9-16], [5-8] via two pairs of load/stores, the 1-3 bytes via single load/stores with branches.
-       Unlike, e.g. _naiveSseMemcpyUnrolledAlignedV2, it is very easy to do single instruction test and branch on ARM
-       to check for 2^n <= reg < 2^(n+1), so we are using it by decrementing x2 beforehand. */
+    /* Copy [33-64], [17-32], [9-16], [5-8] via two pairs of load/stores, the 1-3 bytes via single
+       load/stores with branches. Unlike, e.g. _naiveSseMemcpyUnrolledAlignedV2, it is very easy
+       to do single instruction test and branch on ARM to check for 2^n <= reg < 2^(n+1),
+       so we are using it by decrementing x2 beforehand. */
     sub x9, x2, 1
     /* Pre-check that size is not empty */
     cbz x2, 2f
@@ -329,7 +341,8 @@ _naiveMemcpyUnrolledAlignedV3NeonRegs_aarch64:
     strb w6, [x3, #-1]
     ret
 
-4:  /* Align the dst (x0) to 32 bytes by simply copying the first 32 bytes (we can, because size is >= 64) */
+4:  /* Align the dst (x0) to 32 bytes by simply copying the first 32 bytes (we can, because
+       size is >= 64) */
     /* x7 is the required distance to move to align */
     neg x7, x0
     ands x7, x7, #31
@@ -340,7 +353,8 @@ _naiveMemcpyUnrolledAlignedV3NeonRegs_aarch64:
     stp q0, q1, [x0]
     add x0, x0, x7
 
-1:  /* Copy the last 64 bytes beforehand, they will overlap with the previous iterations if size % 64 != 0. */
+1:  /* Copy the last 64 bytes beforehand, they will overlap with the previous iterations
+       if size % 64 != 0. */
     subs x2, x2, #64
     ldp q4, q5, [x4, #-64]
     ldp q6, q7, [x4, #-32]

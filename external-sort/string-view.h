@@ -5,8 +5,8 @@
 
 #include "common.h"
 
-// If defined, enables the "small compare optimization", which adds the inlined comparison of the first few bytes before
-// calling memcmp.
+// If defined, enables the "small compare optimization", which adds the inlined comparison of the
+// first few bytes before calling memcmp.
 #define USE_SMALL_COMPARE
 
 // Your minimalist string view.
@@ -51,7 +51,8 @@ FORCE_INLINE bool strEqual(char const* begin1, size_t length1, char const* begin
         if (first1 != first2) {
             return false;
         }
-        return memcmp(begin1 + sizeof(uintptr_t), begin2 + sizeof(uintptr_t), length1 - sizeof(uintptr_t)) == 0;
+        return memcmp(begin1 + sizeof(uintptr_t), begin2 + sizeof(uintptr_t),
+                      length1 - sizeof(uintptr_t)) == 0;
     } else {
         for (size_t i = 0; i < length1; i++) {
             if (begin1[i] != begin2[i]) {
@@ -75,15 +76,16 @@ FORCE_INLINE bool strLess(char const* begin1, size_t length1, char const* begin2
         uintptr_t first1 = load_uintptr(begin1);
         uintptr_t first2 = load_uintptr(begin2);
         if (first1 != first2) {
-            // This is required, because the first differing byte will be the least significant different byte in case of
-            // little endian loads.
+            // This is required, because the first differing byte will be the least significant
+            // different byte in case of little endian loads.
 #if defined(COMMON_LITTLE_ENDIAN)
             first1 = byteSwap(first1);
             first2 = byteSwap(first2);
 #endif
             return first1 < first2;
         }
-        int ret = memcmp(begin1 + sizeof(uintptr_t), begin2 + sizeof(uintptr_t), std::min(length1, length2) - sizeof(uintptr_t));
+        int ret = memcmp(begin1 + sizeof(uintptr_t), begin2 + sizeof(uintptr_t),
+                         std::min(length1, length2) - sizeof(uintptr_t));
         if (ret != 0) {
             return ret < 0;
         } else {
@@ -117,15 +119,16 @@ FORCE_INLINE bool strGreater(char const* begin1, size_t length1, char const* beg
         uintptr_t first1 = load_uintptr(begin1);
         uintptr_t first2 = load_uintptr(begin2);
         if (first1 != first2) {
-            // This is required, because the first differing byte will be the least significant different byte in case of
-            // little endian loads.
+            // This is required, because the first differing byte will be the least significant
+            // different byte in case of little endian loads.
 #if defined(COMMON_LITTLE_ENDIAN)
             first1 = byteSwap(first1);
             first2 = byteSwap(first2);
 #endif
             return first1 > first2;
         }
-        int ret = memcmp(begin1 + sizeof(uintptr_t), begin2 + sizeof(uintptr_t), std::min(length1, length2) - sizeof(uintptr_t));
+        int ret = memcmp(begin1 + sizeof(uintptr_t), begin2 + sizeof(uintptr_t),
+                         std::min(length1, length2) - sizeof(uintptr_t));
         if (ret != 0) {
             return ret > 0;
         } else {

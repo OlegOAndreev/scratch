@@ -80,7 +80,7 @@ struct SamplesBuffer {
             size_t untilEnd = size - outputPos;
             memcpy(dst, samples.get() + outputPos, untilEnd);
             outputPos = len - untilEnd;
-            memcpy(static_cast<Uint8*>(dst) + untilEnd, samples.get(), outputPos);
+            memcpy((Uint8*)dst + untilEnd, samples.get(), outputPos);
         }
     }
 
@@ -98,14 +98,14 @@ struct SamplesBuffer {
                 size_t untilEnd = size - inputPos;
                 memcpy(samples.get() + inputPos, src, untilEnd);
                 inputPos = len - untilEnd;
-                memcpy(samples.get(), static_cast<const Uint8*>(src) + untilEnd, inputPos);
+                memcpy(samples.get(), (const Uint8*)src + untilEnd, inputPos);
             }
         } else {
             for (size_t i = 0; i < len; i += sampleSize) {
-                memcpy(samples.get() + inputPos, static_cast<const Uint8*>(src) + i, sampleSize);
+                memcpy(samples.get() + inputPos, (const Uint8*)src + i, sampleSize);
                 inputPos += sampleSize;
                 for (int channel = 1; channel < kNumChannels; channel++) {
-                    memcpy(samples.get() + inputPos, static_cast<const Uint8*>(src) + i, sampleSize);
+                    memcpy(samples.get() + inputPos, (const Uint8*)src + i, sampleSize);
                     inputPos += sampleSize;
                 }
                 if (inputPos >= size) {
@@ -138,7 +138,8 @@ struct WaveWriter {
 
     void writeHeader()
     {
-        static_assert(SDL_BYTEORDER == SDL_LIL_ENDIAN, "Big endian is not supported by WAVE writer");
+        static_assert(SDL_BYTEORDER == SDL_LIL_ENDIAN,
+                      "Big endian is not supported by WAVE writer");
         WaveHeader header;
         // Write the default values, they will be overwritten later.
         if (write(fd, &header, sizeof(header)) != sizeof(header)) {
@@ -229,7 +230,8 @@ void prepareSineWave(int waveHz)
     samples.init(sampleRate * kNumChannels * SDL_AUDIO_BITSIZE(audioFormat) / 8);
     switch (audioFormat) {
         case AUDIO_S16:
-            prepareSineWaveImpl<Sint16>(sampleRate, 0, waveHz, -10000, 10000, samples.ptr<Sint16>());
+            prepareSineWaveImpl<Sint16>(sampleRate, 0, waveHz, -10000, 10000,
+                                        samples.ptr<Sint16>());
             break;
         case AUDIO_F32:
             prepareSineWaveImpl<float>(sampleRate, 0, waveHz, -0.3, 0.3, samples.ptr<float>());
@@ -260,7 +262,8 @@ void writeWaveData(size_t len)
     // Trivial method: just write 48000 * 2 channels * 1 second.
     static Uint8 scratch[96000];
     if (len > sizeof(scratch)) {
-        printf("Internal error: len > input scratch buffer size: %d > %d\n", (int)len, (int)sizeof(scratch) );
+        printf("Internal error: len > input scratch buffer size: %d > %d\n", (int)len,
+               (int)sizeof(scratch) );
     }
     samples.copyFrom(scratch, len);
     waveWriter.writeData(scratch, len);
@@ -375,7 +378,8 @@ void copyFromSoundioFramesAndDup(int framesToRead, struct SoundIoChannelArea* ar
     }
 }
 
-void soundioWriteCallback(struct SoundIoOutStream* outstream, int /*frameCountMin*/, int frameCountMax)
+void soundioWriteCallback(struct SoundIoOutStream* outstream, int /*frameCountMin*/,
+                          int frameCountMax)
 {
     int framesLeft = frameCountMax;
     while (framesLeft > 0) {
@@ -530,8 +534,8 @@ bool initSDL(OutputMode outputMode)
         printf("Different format obtained\n");
         return 1;
     }
-    printf("SDL output params: %d ch, %d sample rate, %d samples, %d format\n", obtainedSpec.channels,
-           obtainedSpec.freq, obtainedSpec.samples, obtainedSpec.format);
+    printf("SDL output params: %d ch, %d sample rate, %d samples, %d format\n",
+           obtainedSpec.channels, obtainedSpec.freq, obtainedSpec.samples, obtainedSpec.format);
     if (outputMode != OutputMode::SineWave) {
         desiredSpec.channels = 1;
         desiredSpec.callback = sdlInputCallback;
@@ -553,8 +557,8 @@ bool initSDL(OutputMode outputMode)
             printf("Different format obtained\n");
             return 1;
         }
-        printf("SDL input params: %d ch, %d sample rate, %d samples, %d format\n", obtainedSpec.channels,
-               obtainedSpec.freq, obtainedSpec.samples, obtainedSpec.format);
+        printf("SDL input params: %d ch, %d sample rate, %d samples, %d format\n",
+               obtainedSpec.channels, obtainedSpec.freq, obtainedSpec.samples, obtainedSpec.format);
         SDL_PauseAudioDevice(inputDev, 0);
     }
     SDL_PauseAudioDevice(outputDev, 0);
@@ -626,7 +630,8 @@ bool initSoundIO(OutputMode outputMode)
         return false;
     }
     if (soundioOutStream->layout_error != 0) {
-        printf("Unable to set channel layout: %s\n", soundio_strerror(soundioOutStream->layout_error));
+        printf("Unable to set channel layout: %s\n",
+               soundio_strerror(soundioOutStream->layout_error));
         return false;
     }
 
@@ -681,7 +686,8 @@ bool initSoundIO(OutputMode outputMode)
             return false;
         }
         if (soundioInStream->layout_error != 0) {
-            printf("Unable to set channel layout: %s\n", soundio_strerror(soundioInStream->layout_error));
+            printf("Unable to set channel layout: %s\n",
+                   soundio_strerror(soundioInStream->layout_error));
             return false;
         }
 
@@ -804,7 +810,8 @@ int main(int argc, char** argv)
                    "\t--sine-wave HZ\t\t\tOutput sine wave with given HZ, %d by default\n"
                    "\t--delay-mic MS\t\t\tCapture microphone and output with given delay\n"
                    "Options:\n"
-                   "\t--file FILE.WAV\t\t\tWrite output to file in WAV format instead of playing it\n"
+                   "\t--file FILE.WAV\t\t\tWrite output to file in WAV format instead"
+                   " of playing it\n"
                    "\t--backend (sdl|soundio)\t\tAudio backend, SDL by default.\n"
                    "\t--rate SAMPLE_RATE\t\tInput/output sample rate, %d by default\n"
                    "\t--samples SAMPLES\t\tNumber of frames in the buffers, %d by default\n"
