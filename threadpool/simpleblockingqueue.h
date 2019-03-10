@@ -7,29 +7,29 @@
 
 
 // The simple blocking queue, based on deque, protected by the lock + condition variable.
-template<typename Task>
-class SimpleBlockingTaskQueue {
+template<typename T>
+class SimpleBlockingQueue {
 public:
-    bool push(Task&& task)
+    bool push(T&& t)
     {
         {
             std::lock_guard<std::mutex> l(lock);
-            tasks.push_back(std::move(task));
+            deque.push_back(std::move(t));
         }
         consumerWakeup.notify_one();
         return true;
     }
 
-    void pop(Task& task)
+    void pop(T& t)
     {
         std::unique_lock<std::mutex> l(lock);
-        consumerWakeup.wait(l, [this] { return !tasks.empty(); });
-        task = std::move(tasks.front());
-        tasks.pop_front();
+        consumerWakeup.wait(l, [this] { return !deque.empty(); });
+        t = std::move(deque.front());
+        deque.pop_front();
     }
 
 private:
-    std::deque<Task> tasks;
+    std::deque<T> deque;
 
     std::mutex lock;
     std::condition_variable consumerWakeup;

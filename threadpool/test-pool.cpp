@@ -15,8 +15,8 @@
 #include "fiberworkstealingpool.h"
 #include "fixedfunction.h"
 #include "futureutils.h"
-#include "mpmcblockingtaskqueue.h"
-#include "simpleblockingtaskqueue.h"
+#include "mpmcblockingqueue.h"
+#include "simpleblockingqueue.h"
 #include "simplethreadpool.h"
 #include "simpleworkstealingpool.h"
 
@@ -662,7 +662,7 @@ int main(int argc, char** argv)
     }
 
     if (poolNames.empty() || setContains(poolNames, "simple")) {
-        SimpleThreadPool<TaskType, SimpleBlockingTaskQueue<TaskType>> tp(numThreads);
+        SimpleThreadPool<TaskType, SimpleBlockingQueue<TaskType>> tp(numThreads);
 
         printf("Running simple pool with %d threads\n", tp.numThreads());
 
