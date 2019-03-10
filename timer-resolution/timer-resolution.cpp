@@ -136,6 +136,8 @@ void startItimerHandler(int which, int frequency, SigHandlerFunction handler)
         case ITIMER_PROF:
             signo = SIGPROF;
             break;
+        default:
+            return;
     }
 
     struct sigaction sa;
