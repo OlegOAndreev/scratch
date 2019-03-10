@@ -25,10 +25,11 @@ template<typename It>
 void siftDown(It first, size_t size, size_t idx)
 {
 #if 1
-    // No fast-exit here, it is a un-optimization both on gcc and clang for int, string and stringview in my experience.
+    // No fast-exit here, it is a un-optimization both on gcc and clang for int, string
+    // and stringview in my experience.
     auto newValue = std::move(*(first + idx));
-    // if idx < halfSize, there are both children available, the case of parent with only one child is processed separately
-    // after the main loop.
+    // if idx < halfSize, there are both children available, the case of parent with only one child
+    // is processed separately after the main loop.
     size_t halfSize = (size - 1) / 2;
     while (idx < halfSize) {
         // Index of the first child.
@@ -47,8 +48,9 @@ void siftDown(It first, size_t size, size_t idx)
         idx = childIdx;
     }
 
-    // Check if this is the case where there is one element with only one child. This can happen only if the size is even
-    // and we reached here because the index was larger or equal to halfSize.
+    // Check if this is the case where there is one element with only one child. This can happen
+    // only if the size is even and we reached here because the index was larger or equal
+    // to halfSize.
     if (idx == halfSize && size % 2 == 0) {
         size_t childIdx = idx * 2 + 1;
         It childIt = first + childIdx;
@@ -62,7 +64,8 @@ void siftDown(It first, size_t size, size_t idx)
         *(first + idx) = std::move(newValue);
     }
 #else
-    // No fast-exit here, it is a un-optimization both on gcc and clang for int, string and stringview in my experience.
+    // No fast-exit here, it is a un-optimization both on gcc and clang for int, string
+    // and stringview in my experience.
     auto newValue = std::move(*(first + idx));
     // If idx >= halfSize, we are in a leaf.
     size_t halfSize = size / 2;
@@ -84,17 +87,19 @@ void siftDown(It first, size_t size, size_t idx)
 #endif
 }
 
-// An optimization from libstdc++: start with moving the value into the leaf and the do a siftUp. This is an optimization
-// because the new value has a very large probability of being a leaf value (or near-leaf), so we skip a lot of useless
-// value compares. Ideally, alt version should be used for int/float-type values.
+// An optimization from libstdc++: start with moving the value into the leaf and the do a siftUp.
+// This is an optimization because the new value has a very large probability of being a leaf value
+// (or near-leaf), so we skip a lot of useless value compares. Ideally, alt version should be used
+// for int/float-type values.
 template<typename It>
 void siftDownAlt(It first, size_t size, size_t idx)
 {
     size_t startIdx = idx;
-    // No fast-exit here, it is a un-optimization both on gcc and clang for int, string and stringview in my experience.
+    // No fast-exit here, it is a un-optimization both on gcc and clang for int, string
+    // and stringview in my experience.
     auto newValue = std::move(*(first + idx));
-    // if idx < halfSize, there are both children available, the case of parent with only one child is processed separately
-    // after the main loop.
+    // if idx < halfSize, there are both children available, the case of parent with only one child
+    // is processed separately after the main loop.
     size_t halfSize = (size - 1) / 2;
     while (idx < halfSize) {
         // Index of the first child.
@@ -109,15 +114,17 @@ void siftDownAlt(It first, size_t size, size_t idx)
         idx = childIdx;
     }
 
-    // Check if this is the case where there is one element with only one child. This can happen only if the size is even
-    // and we reached here because the index was larger or equal to halfSize.
+    // Check if this is the case where there is one element with only one child. This can happen
+    // only if the size is even and we reached here because the index was larger or equal
+    // to halfSize.
     if (idx == halfSize && size % 2 == 0) {
         size_t childIdx = idx * 2 + 1;
         *(first + idx) = std::move(*(first + childIdx));
         idx = childIdx;
     }
 
-    // We now overshot the target index and the idx is the leaf index. Return newValue to where it belongs.
+    // We now overshot the target index and the idx is the leaf index. Return newValue
+    // to where it belongs.
     size_t parentIdx = (idx - 1) / 2;
     while (idx > startIdx && *(first + parentIdx) < newValue) {
         *(first + idx) = std::move(*(first + parentIdx));

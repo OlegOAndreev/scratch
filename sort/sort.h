@@ -22,7 +22,8 @@ size_t const kMinSortCutoff = 2;
 // Cutoff for using insertion sort instead of quicksort for general element type (e.g. std::string).
 size_t const kDefaultCutoff = 5;
 
-// Cutoff for using insertion sort instead of quicksort for arithmetic element type (e.g. int or float).
+// Cutoff for using insertion sort instead of quicksort for arithmetic element type (e.g. int
+// or float).
 size_t const kArithmeticTypeCutoff = 30;
 
 // The size of the array when the switch from median-of-3 to median-of-5 happens.
@@ -181,8 +182,8 @@ void selectionSort(It first, It last)
     }
 }
 
-// An optimization to regular insertion sort: if isLeftmost is false, assume that there is a (first - 1) element which
-// is not larger than all the elements in [first, last)
+// An optimization to regular insertion sort: if isLeftmost is false, assume that there
+// is a (first - 1) element which is not larger than all the elements in [first, last)
 template<typename It>
 FORCE_INLINE void insertionSortImpl(It first, It last, bool isLeftmost)
 {
@@ -208,7 +209,8 @@ FORCE_INLINE void insertionSortImpl(It first, It last, bool isLeftmost)
             }
             auto v = std::move(*i);
             It j;
-            // We do not need the (j > first) check here because the first - 1 is always the smallest element.
+            // We do not need the (j > first) check here because the first - 1 is always
+            // the smallest element.
             for (j = i; v < *(j - 1); --j) {
                 *j = std::move(*(j - 1));
             }
@@ -313,7 +315,8 @@ void heapStdSort(It first, It last)
     }
 }
 
-// A heap-sort implementation, using makeHeapAlt/popHeapAlt with alternative implementation from max-heap.h.
+// A heap-sort implementation, using makeHeapAlt/popHeapAlt with alternative implementation
+// from max-heap.h.
 template<typename It>
 void heapSortAlt(It first, It last)
 {
@@ -325,9 +328,9 @@ void heapSortAlt(It first, It last)
 
 namespace detail {
 
-// Basic by-the-books implementation of the quicksort with Hoare partitioning, median-of-3 pivot selection and
-// copying the pivot value into tmp variable. The only optimization is the isLeftmost, which allows insertion sort
-// to be slightly more optimal.
+// Basic by-the-books implementation of the quicksort with Hoare partitioning, median-of-3 pivot
+// selection and copying the pivot value into tmp variable. The only optimization is the isLeftmost,
+// which allows insertion sort to be slightly more optimal.
 template<typename It>
 void quickSortImpl(It first, It last, size_t cutoff, size_t remainingDepth, bool isLeftmost = true)
 {
@@ -347,7 +350,8 @@ void quickSortImpl(It first, It last, size_t cutoff, size_t remainingDepth, bool
         size_t pivotIdx = median3(first, 0, size / 2, size - 1);
         auto pivot = *(first + pivotIdx);
 
-        // Partition. [first, left) is less or equal to pivot, [right, last) is greater or equal to pivot.
+        // Partition. [first, left) is less or equal to pivot, [right, last) is greater or equal
+        // to pivot.
         It left = first;
         It right = last;
         while (left < right) {
@@ -377,10 +381,11 @@ void quickSortImpl(It first, It last, size_t cutoff, size_t remainingDepth, bool
 }
 
 
-// An alternative to quickSortImpl: moves the pivot to the temp variable, replacing it with the first element. Also the partition
-// scheme is slightly altered (one less comparison).
+// An alternative to quickSortImpl: moves the pivot to the temp variable, replacing it with
+// the first element. Also the partition scheme is slightly altered (one less comparison).
 template<typename It>
-void quickSortAltImpl(It first, It last, size_t cutoff, size_t remainingDepth, bool isLeftmost = true)
+void quickSortAltImpl(It first, It last, size_t cutoff, size_t remainingDepth,
+                      bool isLeftmost = true)
 {
     while (true) {
         if ((size_t)(last - first) <= cutoff) {
@@ -394,7 +399,8 @@ void quickSortAltImpl(It first, It last, size_t cutoff, size_t remainingDepth, b
         }
         remainingDepth--;
 
-        // Median either of 3 or 5 elements (median of 3 elements can be insufficient for cases like asc-desc array).
+        // Median either of 3 or 5 elements (median of 3 elements can be insufficient for cases
+        // like asc-desc array).
         size_t size = last - first;
         size_t pivotIdx = (size < kQuickSortAltSwitchToMedian5)
                 ? median3(first, 0, size / 2, size - 1)
@@ -405,24 +411,26 @@ void quickSortAltImpl(It first, It last, size_t cutoff, size_t remainingDepth, b
             *(first + pivotIdx) = std::move(*first);
         }
 
-        // Partition: [first + 1, left) is less or equal to pivot, [right, last) is greater or equal to pivot.
+        // Partition: [first + 1, left) is less or equal to pivot, [right, last) is greater or equal
+        // to pivot.
         It left = first + 1;
         It right = last;
         while (true) {
-            // NOTE: Unlike the quickSortImpl, this version requires that pivot is median of 3 or more elements
-            // for the following two while loops to not go outside of bounds:
-            //  1) it guarantees that there is at least one element less or equal to pivot and at least one or two elements
-            //     greater or equal to pivot, so both loops will terminate in the first iteration of the while (true) loop;
-            //  2) after that either left >= right and the loop terminates, or left < right and then the swapped elements
-            //     will serve as sentinels.
+            // NOTE: Unlike the quickSortImpl, this version requires that pivot is median of 3
+            // or more elements for the following two while loops to not go outside of bounds:
+            //  1) it guarantees that there is at least one element less or equal to pivot and
+            //     at least one or two elements greater or equal to pivot, so both loops will
+            //     terminate in the first iteration of the while (true) loop;
+            //  2) after that either left >= right and the loop terminates, or left < right
+            //     and then the swapped elements will serve as sentinels.
             while (pivot < *(right - 1)) {
                 --right;
             }
             while (*left < pivot) {
                 ++left;
             }
-            // NOTE: We do slightly different comparison from normal quicksort and do the last iteration after the loop
-            // if needed.
+            // NOTE: We do slightly different comparison from normal quicksort and do the last
+            // iteration after the loop if needed.
             if (left >= right - 2) {
                 break;
             }
@@ -436,8 +444,9 @@ void quickSortAltImpl(It first, It last, size_t cutoff, size_t remainingDepth, b
             --right;
         }
 
-        // After the last iteration [left, last) is greater or equal to pivot (right can be equal to left - 1).
-        // Move the pivot back to the center. Now this element is in the right place, exclude it from sorting.
+        // After the last iteration [left, last) is greater or equal to pivot (right can be equal
+        // to left - 1). Move the pivot back to the center. Now this element is in the right place,
+        // exclude it from sorting.
         *first = std::move(*(left - 1));
         *(left - 1) = std::move(pivot);
 
@@ -453,7 +462,8 @@ void quickSortAltImpl(It first, It last, size_t cutoff, size_t remainingDepth, b
 }
 
 template<typename It>
-void quickSortThreeWayImpl(It first, It last, size_t cutoff, size_t remainingDepth, bool isLeftmost = true)
+void quickSortThreeWayImpl(It first, It last, size_t cutoff, size_t remainingDepth,
+                           bool isLeftmost = true)
 {
     while (true) {
         if ((size_t)(last - first) <= cutoff) {
@@ -509,7 +519,8 @@ void quickSortThreeWayImpl(It first, It last, size_t cutoff, size_t remainingDep
     }
 }
 
-// Selects two elements from: 0, 1/3th element, 2/3th and last element. Do a 4-element sorting network.
+// Selects two elements from: 0, 1/3th element, 2/3th and last element. Do a 4-element
+// sorting network.
 template<typename It>
 void dualPivotSelection(It first, It last, size_t* pivot1Idx, size_t* pivot2Idx)
 {
@@ -538,7 +549,8 @@ void dualPivotSelection(It first, It last, size_t* pivot1Idx, size_t* pivot2Idx)
 }
 
 template<typename It>
-void quickSortDualPivotImpl(It first, It last, size_t cutoff, size_t remainingDepth, bool isLeftmost = true)
+void quickSortDualPivotImpl(It first, It last, size_t cutoff, size_t remainingDepth,
+                            bool isLeftmost = true)
 {
     while (true) {
         if ((size_t)(last - first) <= cutoff) {
@@ -568,8 +580,8 @@ void quickSortDualPivotImpl(It first, It last, size_t cutoff, size_t remainingDe
             *(first + pivot2Idx) = std::move(*(last - 1));
         }
 
-        // Partition: [first + 1, left1) is less than pivot1, [left1, left2) is greater or equal to pivot1
-        // and less or equal to pivot2, [right, last - 1) is greater than pivot2.
+        // Partition: [first + 1, left1) is less than pivot1, [left1, left2) is greater
+        // or equal to pivot1 and less or equal to pivot2, [right, last - 1) is greater than pivot2.
         It left1 = first + 1;
         It left2 = left1;
         It right = last - 1;
@@ -596,8 +608,9 @@ void quickSortDualPivotImpl(It first, It last, size_t cutoff, size_t remainingDe
         ++left2;
 
         // Final partition is [first, left1), [left1 + 1, left2 - 1) and [left2, last).
-        // NOTE: Interesting enough, including this tail-call optimization mis-optimizes the loop on clang -O2, but not -O3 or gcc,
-        // clang version Apple LLVM version 8.1.0 (clang-802.0.42).
+        // NOTE: Interesting enough, including this tail-call optimization mis-optimizes the loop
+        // on clang -O2, but not -O3 or gcc, clang version Apple LLVM version 8.1.0
+        // (clang-802.0.42).
         size_t l1 = left1 - first;
         size_t l2 = left2 - left1 - 2;
         size_t l3 = last - left2;
@@ -633,10 +646,11 @@ void quickSortDualPivotImpl(It first, It last, size_t cutoff, size_t remainingDe
     }
 }
 
-// A slightly different dual-pivot quicksort implementation: always makes two pivots different (pivot1 < pivot2, not
-// pivot1 <= pivot2 like the default implementation).
+// A slightly different dual-pivot quicksort implementation: always makes two pivots different
+// (pivot1 < pivot2, not pivot1 <= pivot2 like the default implementation).
 template<typename It>
-void quickSortDualPivotAltImpl(It first, It last, size_t cutoff, size_t remainingDepth, bool isLeftmost = true)
+void quickSortDualPivotAltImpl(It first, It last, size_t cutoff, size_t remainingDepth,
+                               bool isLeftmost = true)
 {
     while (true) {
         if ((size_t)(last - first) <= cutoff) {
@@ -653,7 +667,8 @@ void quickSortDualPivotAltImpl(It first, It last, size_t cutoff, size_t remainin
         size_t pivot1Idx;
         size_t pivot2Idx;
         dualPivotSelection(first, last, &pivot1Idx, &pivot2Idx);
-        // We need the pivot1 to be strictly less than pivot2 in all cases (or exit early if the array is constant).
+        // We need the pivot1 to be strictly less than pivot2 in all cases (or exit early if
+        // the array is constant).
         if (*(first + pivot1Idx) == *(first + pivot2Idx)) {
             size_t i;
             size_t size = last - first;
@@ -685,8 +700,8 @@ void quickSortDualPivotAltImpl(It first, It last, size_t cutoff, size_t remainin
             *(first + pivot2Idx) = std::move(*(last - 1));
         }
 
-        // Partition: [first + 1, left1) is less or equal than pivot1, [left1, left2) is greater than pivot1
-        // and less or equal than pivot2, [right, last - 1) is greater than pivot2.
+        // Partition: [first + 1, left1) is less or equal than pivot1, [left1, left2) is greater
+        // than pivot1 and less or equal than pivot2, [right, last - 1) is greater than pivot2.
         It left1 = first + 1;
         // Do an initial positioning of left so that we do not do useless swaps of initial portion
         // of values in the first partition part.
@@ -718,8 +733,9 @@ void quickSortDualPivotAltImpl(It first, It last, size_t cutoff, size_t remainin
         ++left2;
 
         // Final partition is [first, left1), [left1 + 1, left2 - 1) and [left2, last).
-        // NOTE: Interesting enough, including this tail-call optimization mis-optimizes the loop on clang -O2, but not -O3 or gcc,
-        // clang version Apple LLVM version 8.1.0 (clang-802.0.42).
+        // NOTE: Interesting enough, including this tail-call optimization mis-optimizes the loop
+        // on clang -O2, but not -O3 or gcc, clang version Apple LLVM version 8.1.0
+        // (clang-802.0.42).
         size_t l1 = left1 - first;
         size_t l2 = left2 - left1 - 2;
         size_t l3 = last - left2;
@@ -823,7 +839,8 @@ FORCE_INLINE It2 moveInit(It1 first, It1 last, It2 out)
     return out;
 }
 
-// Merges sorted chunks of size chunkLen into sorted chunks of size chunkLen * 2 into uninitialized buffer.
+// Merges sorted chunks of size chunkLen into sorted chunks of size chunkLen * 2 into
+// an uninitialized buffer.
 template<typename It, typename V>
 void mergeChunksUninit(It first, It last, size_t chunkLen, V* buffer)
 {
@@ -863,7 +880,8 @@ void mergeChunks(It1 first, It1 last, size_t chunkLen, It2 out)
     }
 }
 
-// Bottom-up merge sorts starting with chunkLen size. Assumes that buffer is at least of size (last - first) * sizeof(*first).
+// Bottom-up merge sorts starting with chunkLen size. Assumes that buffer is at least of size
+// (last - first) * sizeof(*first).
 template<typename It, typename V>
 void mergeSortWithBufImpl(It first, It last, size_t chunkLen, V* buffer)
 {
@@ -908,8 +926,8 @@ void mergeSortWithBufImpl(It first, It last, size_t chunkLen, V* buffer)
         chunkLen *= 2;
     }
 
-    // If we still have to do one more merge, do it, otherwise simply move all the contents from the buffer
-    // to the original range.
+    // If we still have to do one more merge, do it, otherwise simply move all the contents from
+    // the buffer to the original range.
     if (chunkLen < size) {
         mergeChunks(buffer, bufferLast, chunkLen, first);
     } else {
@@ -926,8 +944,8 @@ void mergeSortWithBufImpl(It first, It last, size_t chunkLen, V* buffer)
     }
 }
 
-// Bottom-up merge sort, which always assumes it can allocate the temporary buffer either on stack or on heap
-// and starts from insertion sort with chunks of size chunkLen.
+// Bottom-up merge sort, which always assumes it can allocate the temporary buffer either on stack
+// or on heap and starts from insertion sort with chunks of size chunkLen.
 template<typename It>
 void mergeSortImpl(It first, It last, size_t chunkLen)
 {
@@ -959,8 +977,9 @@ void mergeSortImpl(It first, It last, size_t chunkLen)
     }
 }
 
-// Top-down merge sorts starting with chunkLen size. Assumes that buffer is at least of size (last - first) * sizeof(V).
-// The invariant is that [first, last) becomes sorted and buffer is only a temporary.
+// Top-down merge sorts starting with chunkLen size. Assumes that buffer is at least of size
+// (last - first) * sizeof(V). The invariant is that [first, last) becomes sorted and buffer
+// is only a temporary.
 template<typename It, typename V>
 void mergeSortAltWithBufImpl(It first, It last, size_t cutoff, V* buffer)
 {
@@ -972,8 +991,8 @@ void mergeSortAltWithBufImpl(It first, It last, size_t cutoff, V* buffer)
     V* bufferMid2 = buffer + size / 2;
     V* bufferMid3 = buffer + size / 2 + size / 4;
     V* bufferLast = buffer + size;
-    // We want to do four sorts and two merges in one function call. It allows assuming that buffer is uninitialized
-    // (the callers will the assume that buffer is already initialized).
+    // We want to do four sorts and two merges in one function call. It allows assuming that buffer
+    // is uninitialized (the callers will the assume that buffer is already initialized).
     if (size <= cutoff * 4) {
         if (size > cutoff * 2) {
             // Do all 4 sorts and 2 merges.
@@ -1009,8 +1028,8 @@ void mergeSortAltWithBufImpl(It first, It last, size_t cutoff, V* buffer)
     mergeInit(buffer, bufferMid2, bufferMid2, bufferLast, first);
 }
 
-// Top-down merge sort, which always assumes it can allocate the temporary buffer either on stack or on heap
-// and switches to insertion sort after cutoff.
+// Top-down merge sort, which always assumes it can allocate the temporary buffer either
+// on stack or on heap and switches to insertion sort after cutoff.
 template<typename It>
 void mergeSortAltImpl(It first, It last, size_t cutoff)
 {
@@ -1050,8 +1069,9 @@ void mergeSortAltImpl(It first, It last, size_t cutoff)
 
 } // namespace detail
 
-// A quicksort implementation, just for comparison with std::sort. Runs heapSort if recursed more than log(last - first),
-// insertion sorts for small arrays (less than cutoff), uses specialized small sort for 2, 3 and 4 elements.
+// A quicksort implementation, just for comparison with std::sort. Runs heapSort if recursed more
+// than log(last - first), insertion sorts for small arrays (less than cutoff), uses specialized
+// small sort for 2, 3 and 4 elements.
 template<typename It>
 void quickSort(It first, It last, size_t cutoff = 0)
 {
@@ -1063,7 +1083,8 @@ void quickSort(It first, It last, size_t cutoff = 0)
     detail::quickSortImpl(first, last, cutoff, nextLog2(last - first) * 4);
 }
 
-// A variation of quickSort, which partitions elements in stricter fashion (no swaps for elements equal to pivot).
+// A variation of quickSort, which partitions elements in stricter fashion (no swaps for elements
+// equal to pivot).
 template<typename It>
 void quickSortAlt(It first, It last, size_t cutoff = 0)
 {
@@ -1075,8 +1096,8 @@ void quickSortAlt(It first, It last, size_t cutoff = 0)
     detail::quickSortAltImpl(first, last, cutoff, nextLog2(last - first) * 4);
 }
 
-// A variation of quickSort which does three-way partition: partition array into (less than pivot), (pivot)
-// and (greater than pivot) arrays.
+// A variation of quickSort which does three-way partition: partition array into (less than pivot),
+// (pivot) and (greater than pivot) arrays.
 template<typename It>
 void quickSortThreeWay(It first, It last, size_t cutoff = 0)
 {
@@ -1088,7 +1109,8 @@ void quickSortThreeWay(It first, It last, size_t cutoff = 0)
     detail::quickSortThreeWayImpl(first, last, cutoff, nextLog2(last - first) * 4);
 }
 
-// An implementation of dual-pivot quicksort: partition array into (less than pivot1), (pivot) and (greater than pivot) arrays.
+// An implementation of dual-pivot quicksort: partition array into (less than pivot1), (pivot)
+// and (greater than pivot) arrays.
 template<typename It>
 void quickSortDualPivot(It first, It last, size_t cutoff = 0)
 {

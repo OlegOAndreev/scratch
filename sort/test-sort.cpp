@@ -93,12 +93,14 @@ struct SaferInt {
     int value;
 };
 
-// Small compare optimization: only load the few bytes from the start of the strings and compare them. If they are
-// equal, compare the rest.
+// Small compare optimization: only load the few bytes from the start of the strings and compare
+// them. If they are equal, compare the rest.
 
-// If defined, use inlined small compare optimization with intptr_t, is exclusive with USE_SMALL_COMPARE_INT32.
+// If defined, use inlined small compare optimization with intptr_t, is exclusive
+// with USE_SMALL_COMPARE_INT32.
 #define USE_SMALL_COMPARE_UINTPTR
-// If defined, use inlined small compare optimization with int32_t, is exclusive with USE_SMALL_COMPARE_INTPTR.
+// If defined, use inlined small compare optimization with int32_t, is exclusive
+// with USE_SMALL_COMPARE_INTPTR.
 //#define USE_SMALL_COMPARE_UINT32
 
 #if defined(USE_SMALL_COMPARE_UINTPTR)
@@ -355,7 +357,8 @@ double compareSortImpl(ToStdout const& toStdout, char const* sortMethod1, char c
     }
 
     double ratio = (double)runTime1 / runTime2;
-    printf("%s: %dms (%s) vs %dms (%s) (%.2f, ", arrayType, runTime1, sortMethod1, runTime2, sortMethod2, ratio);
+    printf("%s: %dms (%s) vs %dms (%s) (%.2f, ", arrayType, runTime1, sortMethod1, runTime2,
+           sortMethod2, ratio);
     printFaster(sortMethod1, sortMethod2, ratio);
     printf(")\n");
     return ratio;
@@ -368,10 +371,12 @@ void compareSort(ToStdout const& toStdout, char const* sortMethod1, char const* 
     // Sort two times, compare the ratios.
     std::vector<std::vector<T>> arraysCopy1 = arrays;
     std::vector<std::vector<T>> arraysCopy2 = arrays;
-    double ratio1 = compareSortImpl(toStdout, sortMethod1, sortMethod2, arraysCopy1, arraysCopy2, arrayType);
+    double ratio1 = compareSortImpl(toStdout, sortMethod1, sortMethod2, arraysCopy1, arraysCopy2,
+                                    arrayType);
     arraysCopy1 = arrays;
     arraysCopy2 = arrays;
-    double ratio2 = compareSortImpl(toStdout, sortMethod2, sortMethod1, arraysCopy1, arraysCopy2, arrayType);
+    double ratio2 = compareSortImpl(toStdout, sortMethod2, sortMethod1, arraysCopy1, arraysCopy2,
+                                    arrayType);
     double diff = ratio1 * ratio2;
     if (diff > 1.1 || diff < 0.9) {
         printf("== WARNING: FLAKY RESULTS ==\n");
@@ -515,7 +520,8 @@ void testSortImpl(char const* typeName, Generator const& generator, ToStdout con
 #endif
 
     printf("All %s tests on %s vs %s [%d-%d) passed in %dms\n",
-           typeName, sortMethod1, sortMethod2, (int)minSize, (int)maxSize, elapsedMsec(totalStartTime));
+           typeName, sortMethod1, sortMethod2, (int)minSize, (int)maxSize,
+           elapsedMsec(totalStartTime));
     printf("-------------------------\n");
 }
 
@@ -530,7 +536,8 @@ void testSortInt(char const* sortMethod1, char const* sortMethod2, size_t minSiz
     testSortImpl<int>("int", generator, toStdout, sortMethod1, sortMethod2, minSize, maxSize);
 }
 
-void testSortSaferInt(char const* sortMethod1, char const* sortMethod2, size_t minSize, size_t maxSize)
+void testSortSaferInt(char const* sortMethod1, char const* sortMethod2, size_t minSize,
+                      size_t maxSize)
 {
     auto generator = [] (size_t value) {
         return SaferInt(value);
@@ -538,10 +545,12 @@ void testSortSaferInt(char const* sortMethod1, char const* sortMethod2, size_t m
     auto toStdout = [] (SaferInt value) {
         printf("%d", value.value);
     };
-    testSortImpl<SaferInt>("SaferInt", generator, toStdout, sortMethod1, sortMethod2, minSize, maxSize);
+    testSortImpl<SaferInt>("SaferInt", generator, toStdout, sortMethod1, sortMethod2, minSize,
+                           maxSize);
 }
 
-void testSortDouble(char const* sortMethod1, char const* sortMethod2, size_t minSize, size_t maxSize)
+void testSortDouble(char const* sortMethod1, char const* sortMethod2, size_t minSize,
+                    size_t maxSize)
 {
     auto generator = [] (size_t value) {
         return double(value) * 1.234;
@@ -552,7 +561,8 @@ void testSortDouble(char const* sortMethod1, char const* sortMethod2, size_t min
     testSortImpl<double>("double", generator, toStdout, sortMethod1, sortMethod2, minSize, maxSize);
 }
 
-void testSortString(char const* sortMethod1, char const* sortMethod2, size_t minSize, size_t maxSize)
+void testSortString(char const* sortMethod1, char const* sortMethod2, size_t minSize,
+                    size_t maxSize)
 {
     int maxLen = 8;
     auto generator = [maxLen] (size_t value) {
@@ -570,10 +580,12 @@ void testSortString(char const* sortMethod1, char const* sortMethod2, size_t min
         printf("%s", str.c_str());
     };
 
-    testSortImpl<std::string>("std::string", generator, toStdout, sortMethod1, sortMethod2, minSize, maxSize);
+    testSortImpl<std::string>("std::string", generator, toStdout, sortMethod1, sortMethod2,
+                              minSize, maxSize);
 }
 
-void testSortBigString(char const* sortMethod1, char const* sortMethod2, size_t minSize, size_t maxSize)
+void testSortBigString(char const* sortMethod1, char const* sortMethod2, size_t minSize,
+                       size_t maxSize)
 {
     int maxLen = 100;
     auto generator = [maxLen] (size_t value) {
@@ -591,10 +603,12 @@ void testSortBigString(char const* sortMethod1, char const* sortMethod2, size_t 
         printf("%s", str.c_str());
     };
 
-    testSortImpl<std::string>("std::string-big", generator, toStdout, sortMethod1, sortMethod2, minSize, maxSize);
+    testSortImpl<std::string>("std::string-big", generator, toStdout, sortMethod1, sortMethod2,
+                              minSize, maxSize);
 }
 
-void testSortStringView(char const* sortMethod1, char const* sortMethod2, size_t minSize, size_t maxSize)
+void testSortStringView(char const* sortMethod1, char const* sortMethod2, size_t minSize,
+                        size_t maxSize)
 {
     SimpleStringRope rope;
     int maxLen = 8;
@@ -617,7 +631,8 @@ void testSortStringView(char const* sortMethod1, char const* sortMethod2, size_t
         printf("%.*s", (int)view.length, view.ptr);
     };
 
-    testSortImpl<SimpleStringView>("SimpleStringView", generator, toStdout, sortMethod1, sortMethod2, minSize, maxSize);
+    testSortImpl<SimpleStringView>("SimpleStringView", generator, toStdout, sortMethod1,
+                                   sortMethod2, minSize, maxSize);
 }
 
 void parseSize(char const* arg, size_t* minSize, size_t* maxSize)
@@ -635,7 +650,8 @@ void parseSize(char const* arg, size_t* minSize, size_t* maxSize)
 int main(int argc, char** argv)
 {
     if (argc < 3 || argc > 5) {
-        printf("Usage: %s sort-method sort-method [int|safer-int|double|string|big-string|string-view] [size[-size]]\n", argv[0]);
+        printf("Usage: %s sort-method sort-method [int|safer-int|double|string|big-string"
+               "|string-view] [size[-size]]\n", argv[0]);
         return 1;
     }
 
@@ -644,7 +660,8 @@ int main(int argc, char** argv)
     if (argc == 3 || argc == 4) {
         printf("Running with default sizes\n");
         char const* type = argc > 3 ? argv[3] : nullptr;
-        // Some default sizes, which are not too slow and not too fast on my machine (Macbook Pro 13 2015).
+        // Some default sizes, which are not too slow and not too fast on my machine
+        // (Macbook Pro 13 2015).
         if (type == nullptr || strcmp(type, "int") == 0) {
             testSortInt(sortMethod1, sortMethod2, 0, 8000);
             testSortInt(sortMethod1, sortMethod2, 10000, 11000);
@@ -696,9 +713,12 @@ int main(int argc, char** argv)
     }
 
 #if defined(COUNT_OPS)
-    printf("Number copies: SaferInt %d, SimpleStringView %d\n", numSaferIntCopies, numStringViewCopies);
-    printf("Number moves: SaferInt %d, SimpleStringView %d\n", numSaferIntMoves, numStringViewMoves);
-    printf("Number compares: SaferInt %d, SimpleStringView %d\n", numSaferIntCompares, numStringViewCompares);
+    printf("Number copies: SaferInt %d, SimpleStringView %d\n", numSaferIntCopies,
+           numStringViewCopies);
+    printf("Number moves: SaferInt %d, SimpleStringView %d\n", numSaferIntMoves,
+           numStringViewMoves);
+    printf("Number compares: SaferInt %d, SimpleStringView %d\n", numSaferIntCompares,
+           numStringViewCompares);
 #endif
 
     return 0;
