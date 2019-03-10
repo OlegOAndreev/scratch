@@ -1,16 +1,24 @@
 project(gamepad-id)
 cmake_minimum_required(VERSION 2.8)
+include(CheckIncludeFiles)
 
 if(NOT MSVC)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -ggdb -Wall -Wextra -Wshadow")
 endif()
 
-include(FindPkgConfig)
-pkg_search_module(SDL2 REQUIRED sdl2)
+if(UNIX)
+  include_directories(/usr/local/include)
+  link_directories(/usr/local/lib)
+  set(CMAKE_REQUIRED_INCLUDES "${CMAKE_REQUIRED_INCLUDES} /usr/local/include")
+endif()
 
-include_directories(${SDL2_INCLUDE_DIRS})
-link_directories(${SDL2_LIBRARY_DIRS})
+# SDL2 (https://www.libsdl.org) must be installed (either in /usr/local or locally)
+check_include_files("SDL2/SDL.h" HAVE_SDL_H)
+if(NOT HAVE_SDL_H)
+  message(FATAL_ERROR "SDL2/SDL.h not found, compile and install SDL2")
+endif()
+list(APPEND LIBRARIES SDL2)
 
 add_executable(${PROJECT_NAME} gamepad-id.cpp)
 
-target_link_libraries(${PROJECT_NAME} ${SDL2_LIBRARIES})
+target_link_libraries(${PROJECT_NAME} ${LIBRARIES})

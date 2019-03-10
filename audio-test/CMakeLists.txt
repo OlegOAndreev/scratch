@@ -7,8 +7,10 @@ if(NOT MSVC)
   set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} -fsanitize=address")
 endif()
 
-if(CMAKE_SYSTEM_NAME STREQUAL Linux)
+if(UNIX)
   include_directories(/usr/local/include)
+  link_directories(/usr/local/lib)
+  set(CMAKE_REQUIRED_INCLUDES "${CMAKE_REQUIRED_INCLUDES} /usr/local/include")
 endif()
 
 # SDL2 (https://www.libsdl.org) must be installed (either in /usr/local or locally)
