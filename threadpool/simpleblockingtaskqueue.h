@@ -6,44 +6,31 @@
 #include <mutex>
 
 
-// The simple blocking task queue, protected by the lock + condvar.
+// The simple blocking queue, based on deque, protected by the lock + condition variable.
 template<typename Task>
 class SimpleBlockingTaskQueue {
 public:
     bool push(Task&& task)
     {
-        std::unique_lock<std::mutex> l(lock);
-        tasks.push_back(std::move(task));
-        workerWakeup.notify_one();
+        {
+            std::lock_guard<std::mutex> l(lock);
+            tasks.push_back(std::move(task));
+        }
+        consumerWakeup.notify_one();
         return true;
     }
 
-    bool pop(Task& task)
+    void pop(Task& task)
     {
         std::unique_lock<std::mutex> l(lock);
-        if (stopFlag) {
-            return false;
-        }
-        workerWakeup.wait(l, [this] { return stopFlag || !tasks.empty(); });
-        if (stopFlag) {
-            return false;
-        }
+        consumerWakeup.wait(l, [this] { return !tasks.empty(); });
         task = std::move(tasks.front());
         tasks.pop_front();
-        return true;
-    }
-
-    void stop()
-    {
-        std::unique_lock<std::mutex> l(lock);
-        stopFlag = true;
-        workerWakeup.notify_all();
     }
 
 private:
     std::deque<Task> tasks;
-    bool stopFlag = false;
 
     std::mutex lock;
-    std::condition_variable workerWakeup;
+    std::condition_variable consumerWakeup;
 };

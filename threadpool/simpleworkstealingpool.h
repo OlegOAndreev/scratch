@@ -24,7 +24,8 @@ public:
 
     // Submits a number of ranged tasks for range [from, to) for execution in the pool,
     // i.e. splits the range [from, to) into subranges [from, r1), [r1, r2)
-    // and calls f for each: f(from, r1), f(r1, r2), ... (f must be a callable of type void(size_t, size_t)).
+    // and calls f for each: f(from, r1), f(r1, r2), ... (f must be a callable
+    // of type void(size_t, size_t)).
     template<typename F>
     void submitRange(F&& f, size_t from, size_t to);
 
@@ -32,10 +33,10 @@ public:
     int numThreads() const;
 
 #if defined(WORK_STEALING_STATS)
-    uint64_t getTotalSemaphorePosts();
-    uint64_t getTotalSemaphoreWaits();
-    uint64_t getTotalTrySteals();
-    uint64_t getTotalSteals();
+    uint64_t getTotalSemaphorePosts() const;
+    uint64_t getTotalSemaphoreWaits() const;
+    uint64_t getTotalTrySteals() const;
+    uint64_t getTotalSteals() const;
 
     void clearStats();
 #endif
@@ -104,7 +105,8 @@ SimpleWorkStealingPool<Task>::~SimpleWorkStealingPool()
     int numStoppedThreads = 0;
     while (numStoppedThreads != workerThreadsSize) {
         for (int i = 0; i < workerThreadsSize; i++) {
-            if (workerThreads[i].stopped.load(std::memory_order_relaxed) && workerThreads[i].thread.joinable()) {
+            if (workerThreads[i].stopped.load(std::memory_order_relaxed)
+                    && workerThreads[i].thread.joinable()) {
                 workerThreads[i].thread.join();
                 numStoppedThreads++;
             } else {
@@ -123,13 +125,13 @@ int SimpleWorkStealingPool<Task>::numThreads() const
 #if defined(WORK_STEALING_STATS)
 
 template<typename Task>
-uint64_t SimpleWorkStealingPool<Task>::getTotalSemaphorePosts()
+uint64_t SimpleWorkStealingPool<Task>::getTotalSemaphorePosts() const
 {
     return totalSemaphorePosts.load(std::memory_order_relaxed);
 }
 
 template<typename Task>
-uint64_t SimpleWorkStealingPool<Task>::getTotalSemaphoreWaits()
+uint64_t SimpleWorkStealingPool<Task>::getTotalSemaphoreWaits() const
 {
     uint64_t ret = 0;
     for (int i = 0; i < workerThreadsSize; i++) {
@@ -139,7 +141,7 @@ uint64_t SimpleWorkStealingPool<Task>::getTotalSemaphoreWaits()
 }
 
 template<typename Task>
-uint64_t SimpleWorkStealingPool<Task>::getTotalTrySteals()
+uint64_t SimpleWorkStealingPool<Task>::getTotalTrySteals() const
 {
     uint64_t ret = 0;
     for (int i = 0; i < workerThreadsSize; i++) {
@@ -149,7 +151,7 @@ uint64_t SimpleWorkStealingPool<Task>::getTotalTrySteals()
 }
 
 template<typename Task>
-uint64_t SimpleWorkStealingPool<Task>::getTotalSteals()
+uint64_t SimpleWorkStealingPool<Task>::getTotalSteals() const
 {
     uint64_t ret = 0;
     for (int i = 0; i < workerThreadsSize; i++) {
@@ -173,8 +175,8 @@ template<typename Task>
 template<typename F>
 void SimpleWorkStealingPool<Task>::submit(F&& f)
 {
-    // We do not care about synchronization too much here: lastPushedThread is generally used to approximately
-    // load-balance the worker threads.
+    // We do not care about synchronization too much here: lastPushedThread is generally used
+    // to approximately load-balance the worker threads.
     int threadToPush = (lastPushedThread.load(std::memory_order_relaxed) + 1) % workerThreadsSize;
     if (!tryToPushTask(f, threadToPush)) {
         // Extremely unlikely: the queue is full, just run the task in the caller.
@@ -182,9 +184,9 @@ void SimpleWorkStealingPool<Task>::submit(F&& f)
         return;
     }
     lastPushedThread.store(threadToPush, std::memory_order_relaxed);
-    // NOTE: There is a non-obvious potential race condition here: if the queue is empty and thread 1 (worker)
-    // is trying to sleep after checking that it is empty and thread 2 is trying to add the new task,
-    // the following can (potentially) happen:
+    // NOTE: There is a non-obvious potential race condition here: if the queue is empty
+    // and thread 1 (worker) is trying to sleep after checking that it is empty and thread 2
+    // is trying to add the new task, the following can potentially happen:
     //  Thread 1:
     //   1. checks that queue is empty (passes)
     //   2. increments numSleepingWorkers (0 -> 1)
@@ -193,17 +195,20 @@ void SimpleWorkStealingPool<Task>::submit(F&& f)
     //   1. adds new item to the queue (queue becomes non-empty)
     //   2. reads numSleepingWorkers
     //
-    // Originally I tried solving this problem by using acq_rel/relaxed when writing/reading numSleepingWorkers
-    // and acq_rel (via atomic::exchange RMW) when updating cell.sequence_ in mpmc_bounded_queue::dequeue. This
-    // has been based on the reasoning that acquire and release match the LoadLoad+LoadStore and
-    // LoadStore+StoreStore barrier correspondingly and acq_rel RMW is, therefore, a total barrier. However, that is
-    // not what part 1.10 of the C++ standard says: discussed in
+    // Original solution to this problem by using acq_rel/relaxed when writing/reading
+    // numSleepingWorkers and acq_rel (via atomic::exchange RMW) when updating cell.sequence_
+    // in mpmc_bounded_queue::dequeue. This has been based on the reasoning that acquire
+    // and release match the LoadLoad+LoadStore and LoadStore+StoreStore barrier correspondingly
+    // and acq_rel RMW is, therefore, a total barrier. However, that is not what part 1.10 of
+    // the C++ standard says as discussed in
     // https://stackoverflow.com/questions/52606524/what-exact-rules-in-the-c-memory-model-prevent-reordering-before-acquire-opera/
     // The easiest fix is simply changing all the related accesses to seq_cst:
     //  * all reads and writes on numSleepingWorkers
     //  * first read in dequeue and last write in enqueue.
-    // The good thing is that the generated code for acq_rel RMW is identical to seq_cst store on the relevant
-    // platforms (x86-64 and aarch64).
+    // The good thing is that the generated code for acq_rel RMW is identical to seq_cst
+    // store on the most relevant platforms (x86-64 and aarch64).
+    // Similar idea has been noted in
+    // http://cbloomrants.blogspot.com/2011/07/07-31-11-example-that-needs-seqcst_31.html
     //
     // Copied from mpmcblockingtaskqueue.h
     if (numSleepingWorkers.load(std::memory_order_seq_cst) > 0) {
@@ -220,11 +225,12 @@ void SimpleWorkStealingPool<Task>::submitRange(F&& f, size_t from, size_t to)
 {
     const size_t kMinGranularity = 16;
 
-    // We do not care about synchronization too much here: lastPushedThread is generally used to approximately
-    // load-balance the worker threads.
+    // We do not care about synchronization too much here: lastPushedThread is generally used
+    // to approximately load-balance the worker threads.
     int threadToPush = lastPushedThread.load(std::memory_order_relaxed);
 
-    // Try to split all work so that there are least worker threads * 4 pieces for proper load balancing.
+    // Try to split all work so that there are least worker threads * 4 pieces
+    // for proper load balancing.
     size_t pushGranularity = std::max((to - from) / (workerThreadsSize * 4), kMinGranularity);
     size_t pushed = 0;
     int pushedTasks = 0;
@@ -298,10 +304,11 @@ void SimpleWorkStealingPool<Task>::workerMain(int threadNum)
         // Sleep until the new task arrives.
         numSleepingWorkers.fetch_add(1, std::memory_order_seq_cst);
 
-        // Recheck that there are still no tasks in the queues. This is used to prevent the race condition,
-        // where the pauses between checking the queue first and incrementing the numSleepingWorkers, while the task
-        // is submitted during this pause.
-        // NOTE: See NOTE in the submit for the details on correctness of the sleep.
+        // Recheck that there are still no tasks in the queue. This is used to prevent
+        // the race condition, where the pauses between checking the queue first
+        // and incrementing the numSleepingWorkers, while the task is submitted during
+        // this pause.
+        // NOTE: See NOTE in the submitImpl for the details on correctness of the sleep.
         //
         // Copied from mpmcblockingtaskqueue.h
 #if defined(WORK_STEALING_STATS)
@@ -327,7 +334,8 @@ void SimpleWorkStealingPool<Task>::workerMain(int threadNum)
     thisThread.stopped.store(true, std::memory_order_relaxed);
 }
 
-// Try to push task from functor f at least to one thread queue, starting with threadToPush. Updates
+// Try to push task from functor f at least to one thread queue, starting with threadToPush.
+// Updates threadToPush.
 template<typename Task>
 template<typename F>
 bool SimpleWorkStealingPool<Task>::tryToPushTask(F&& f, int& threadToPush)
@@ -352,8 +360,8 @@ bool SimpleWorkStealingPool<Task>::tryToPushTask(F&& f, int& threadToPush)
     return false;
 }
 
-// Try to steal a task from any thread, starting with threadToSteal. Updates both task and threadToSteal.
-// Returns true if a task has been successfully stolen, false otherwise.
+// Try to steal a task from any thread, starting with threadToSteal. Updates both task
+// and threadToSteal. Returns true if a task has been successfully stolen, false otherwise.
 template<typename Task>
 bool SimpleWorkStealingPool<Task>::tryToStealTask(Task& task, int& threadToSteal)
 {

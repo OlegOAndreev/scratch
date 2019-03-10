@@ -105,11 +105,12 @@ void testCountWaiter()
 
     // Use reads from atomic var as a way to avoid loop optimizations.
     std::atomic<bool> doNotOptimize{true};
-    // Run two threads: producer and consumer. Both loop for kNumIterations. Consumer sets start[i], producer
-    // waits until startIteration[i] is set. Producer spins a bit, writes to producedValue[i] and then posts
-    // on waiter[i]. Consumer spins a bit, waits on waiter[i] and reads producedValue[i].
-    auto producer = [&doNotOptimize](std::atomic<bool> start[], int producedValue[], CountWaiter* waiter[],
-            uint32_t seed)
+    // Run two threads: producer and consumer. Both loop for kNumIterations. Consumer sets start[i],
+    // producer waits until startIteration[i] is set. Producer spins a bit, writes
+    // to producedValue[i] and then posts on waiter[i]. Consumer spins a bit, waits on waiter[i]
+    // and reads producedValue[i].
+    auto producer = [&doNotOptimize](std::atomic<bool> start[], int producedValue[],
+            CountWaiter* waiter[], uint32_t seed)
     {
         uint32_t randomState[4] = {seed, seed, seed, seed};
         for (int i = 0; i < kNumIterations; i++) {
@@ -123,8 +124,8 @@ void testCountWaiter()
         }
     };
 
-    auto consumer = [&doNotOptimize](std::atomic<bool> start[], int producedValue[], CountWaiter* waiter[],
-            int* totalWaits, uint32_t seed, bool deleteWaiter)
+    auto consumer = [&doNotOptimize](std::atomic<bool> start[], int producedValue[],
+            CountWaiter* waiter[], int* totalWaits, uint32_t seed, bool deleteWaiter)
     {
         // randomState should be different from producer!
         uint32_t randomState[4] = {seed, seed, seed, seed};
@@ -155,14 +156,16 @@ void testCountWaiter()
     }
     int totalWaits1 = 0;
     std::thread producerThread([&] { producer(start1, value1, waiter1, 1234); });
-    std::thread consumerThread([&] { consumer(start1, value1, waiter1, &totalWaits1, 5678, true); });
+    std::thread consumerThread([&] {
+        consumer(start1, value1, waiter1, &totalWaits1, 5678, true);
+    });
     producerThread.join();
     consumerThread.join();
 
     printf("CountWaiter 1-1 tests passed, total waits: %d (of %d)\n", totalWaits1, kNumIterations);
 
-    // Second test: run two producers and two consumers in parallel, write to two different arrays of values but
-    // wait on one waiter.
+    // Second test: run two producers and two consumers in parallel, write to two different arrays
+    // of values but wait on one waiter.
     std::atomic<bool> start2[kNumIterations];
     int value21[kNumIterations];
     int value22[kNumIterations];
@@ -172,16 +175,22 @@ void testCountWaiter()
         start2[i] = false;
         value21[i] = 0;
         value22[i] = 0;
-        // Note the count 2: both producer threads must finish before both consumer threads continue.
+        // Note the count 2: both producer threads must finish before both consumer threads
+        // continue.
         waiter2[i] = new CountWaiter(2);
     }
     int totalWaits21 = 0;
     int totalWaits22 = 0;
     std::thread producerThread1([&] { producer(start2, value21, waiter2, 12); });
     std::thread producerThread2([&] { producer(start2, value22, waiter2, 34); });
-    // We cannot have deleteWaiter == true for any of the consumers, because we do not have sync between them.
-    std::thread consumerThread1([&] { consumer(start2, value21, waiter2, &totalWaits21, 56, false); });
-    std::thread consumerThread2([&] { consumer(start2, value22, waiter2, &totalWaits22, 78, false); });
+    // We cannot have deleteWaiter == true for any of the consumers, because we do not have sync
+    // between them.
+    std::thread consumerThread1([&] {
+        consumer(start2, value21, waiter2, &totalWaits21, 56, false);
+    });
+    std::thread consumerThread2([&] {
+        consumer(start2, value22, waiter2, &totalWaits22, 78, false);
+    });
     producerThread1.join();
     producerThread2.join();
     consumerThread1.join();
@@ -191,7 +200,8 @@ void testCountWaiter()
         delete waiter2[i];
     }
 
-    printf("CountWaiter 2-2 tests passed, total waits: %d, %d (of %d)\n", totalWaits21, totalWaits22, kNumIterations);
+    printf("CountWaiter 2-2 tests passed, total waits: %d, %d (of %d)\n", totalWaits21,
+           totalWaits22, kNumIterations);
 }
 
 struct FiberTestState
@@ -229,8 +239,9 @@ void trivialFiberTestFunc(void* arg)
 void testFiber()
 {
     {
-        // Create two groups of fibers on one thread, each of the groups circularly pointing to the next in-group fiber.
-        // Start the first group, start the second group, see that all fibers have completed.
+        // Create two groups of fibers on one thread, each of the groups circularly pointing
+        // to the next in-group fiber. Start the first group, start the second group, see that
+        // all fibers have completed.
         int const kNumIterations = 10000;
         // kNumFibers must be divisible by 2.
         int const kNumFibers = 8;
@@ -249,7 +260,8 @@ void testFiber()
             state[i].nextFiber = fibers[(i + 2) % kNumFibers];
         }
 
-        // Run one group of fibers on another thread to test if anything breaks when sharing fibers between the threads.
+        // Run one group of fibers on another thread to test if anything breaks when sharing fibers
+        // between the threads.
         std::thread fiberRunnerThread([&] {
             // Run the first group of fibers.
             fibers[0].switchTo();
@@ -300,10 +312,6 @@ void testFiber()
 }
 
 
-using TestSimpleThreadPool = SimpleThreadPool<FixedFunction<void()>, SimpleBlockingTaskQueue>;
-using TestMpMcThreadPool = SimpleThreadPool<FixedFunction<void()>, MpMcBlockingTaskQueue>;
-using TestSimpleWorkStealingPool = SimpleWorkStealingPool<FixedFunction<void()>>;
-
 // Simplest sanity checks for SimpleThreadPool.
 template<typename TP>
 void basicTests(TP& tp)
@@ -349,12 +357,14 @@ double tinyJob(TinyJobInput const& input)
     return ret;
 }
 
-void prepareTinyJobInput(size_t numJobsPerBatch, int numItersPerJob, std::vector<TinyJobInput>* jobInput)
+void prepareTinyJobInput(size_t numJobsPerBatch, int numItersPerJob,
+                         std::vector<TinyJobInput>* jobInput)
 {
     jobInput->resize(numJobsPerBatch);
     for (size_t i = 0; i < numJobsPerBatch; i++) {
         TinyJobInput& in = (*jobInput)[i];
-        // Make the start and the end of the input array have much higher iters count to simulate unbalanced workload.
+        // Make the start and the end of the input array have much higher iters count to simulate
+        // unbalanced workload.
         if (i < numJobsPerBatch / 10 || i > numJobsPerBatch * 9 / 10) {
             in.iters = numItersPerJob * 20;
         } else {
@@ -398,9 +408,11 @@ void printWorkStealingStats(T&)
     // Do nothing for all pools but SimpleWorkStealingPool.
 }
 
-void printWorkStealingStats(TestSimpleWorkStealingPool& tp)
+template<typename T>
+void printWorkStealingStats(SimpleWorkStealingPool<T>& tp)
 {
-    printf("Work-stealing stats: %lld semaphore posts, %lld semaphore waits, %lld try steals, %lld steals\n",
+    printf("Work-stealing stats: %lld semaphore posts, %lld semaphore waits, %lld try steals,"
+           " %lld steals\n",
            (long long)tp.getTotalSemaphorePosts(), (long long)tp.getTotalSemaphoreWaits(),
            (long long)tp.getTotalTrySteals(), (long long)tp.getTotalSteals());
     tp.clearStats();
@@ -428,7 +440,8 @@ void tinyJobsTest(TP& tp, int numItersPerJob)
             baseResults[i] = tinyJob(jobInput[i]);
         }
     }
-    int64_t baseJobsPerSec = timeFreq * (kNumRepeats * kNumJobsPerBatch) / (getTimeTicks() - baseStartTime);
+    int64_t baseJobsPerSec = timeFreq * (kNumRepeats * kNumJobsPerBatch)
+            / (getTimeTicks() - baseStartTime);
 
     // Actually do five tests:
     //  1. for submitFuture and std::based future,
@@ -456,8 +469,8 @@ void tinyJobsTest(TP& tp, int numItersPerJob)
 //            }
 //            jobsPerSec.push_back(timeFreq * kNumJobsPerBatch / (getTimeTicks() - batchStartTime));
 //        });
-//        printTinyJobsStats(jobsPerSec, baseJobsPerSec, results, baseResults, kNumJobsPerBatch, numItersPerJob,
-//                           "submit std::future");
+//        printTinyJobsStats(jobsPerSec, baseJobsPerSec, results, baseResults, kNumJobsPerBatch,
+//                           numItersPerJob, "submit std::future");
 //#if defined(WORK_STEALING_STATS)
 //        printWorkStealingStats(tp);
 //#endif
@@ -482,8 +495,8 @@ void tinyJobsTest(TP& tp, int numItersPerJob)
             countWaiter.wait();
             jobsPerSec.push_back(timeFreq * kNumJobsPerBatch / (getTimeTicks() - batchStartTime));
         });
-        printTinyJobsStats(jobsPerSec, baseJobsPerSec, results, baseResults, kNumJobsPerBatch, numItersPerJob,
-                           "submit CountWaiter");
+        printTinyJobsStats(jobsPerSec, baseJobsPerSec, results, baseResults, kNumJobsPerBatch,
+                           numItersPerJob, "submit CountWaiter");
 #if defined(WORK_STEALING_STATS)
         printWorkStealingStats(tp);
 #endif
@@ -511,8 +524,8 @@ void tinyJobsTest(TP& tp, int numItersPerJob)
             countWaiter.wait();
             jobsPerSec.push_back(timeFreq * kNumJobsPerBatch / (getTimeTicks() - batchStartTime));
         });
-        printTinyJobsStats(jobsPerSec, baseJobsPerSec, results, baseResults, kNumJobsPerBatch, numItersPerJob,
-                           "submitRange CountWaiter");
+        printTinyJobsStats(jobsPerSec, baseJobsPerSec, results, baseResults, kNumJobsPerBatch,
+                           numItersPerJob, "submitRange CountWaiter");
 #if defined(WORK_STEALING_STATS)
         printWorkStealingStats(tp);
 #endif
@@ -546,8 +559,8 @@ void tinyJobsTest(TP& tp, int numItersPerJob)
         for (size_t i = 0; i < kNumJobsPerBatch; i++) {
             finalResults[i] = results[i * kResultsStride];
         }
-        printTinyJobsStats(jobsPerSec, baseJobsPerSec, finalResults, baseResults, kNumJobsPerBatch, numItersPerJob,
-                           "submit CountWaiter with results padding");
+        printTinyJobsStats(jobsPerSec, baseJobsPerSec, finalResults, baseResults, kNumJobsPerBatch,
+                           numItersPerJob, "submit CountWaiter with results padding");
 #if defined(WORK_STEALING_STATS)
         printWorkStealingStats(tp);
 #endif
@@ -584,13 +597,25 @@ void tinyJobsTest(TP& tp, int numItersPerJob)
         for (size_t i = 0; i < kNumJobsPerBatch; i++) {
             finalResults[i] = results[i * kResultsStride];
         }
-        printTinyJobsStats(jobsPerSec, baseJobsPerSec, finalResults, baseResults, kNumJobsPerBatch, numItersPerJob,
-                           "submitRange CountWaiter with results padding");
+        printTinyJobsStats(jobsPerSec, baseJobsPerSec, finalResults, baseResults, kNumJobsPerBatch,
+                           numItersPerJob, "submitRange CountWaiter with results padding");
 #if defined(WORK_STEALING_STATS)
         printWorkStealingStats(tp);
 #endif
     }
 }
+
+using TaskType = FixedFunction<void()>;
+
+// A wrapper for MpMcBlockingQueue, providing the queue size.
+size_t const kMaxTasksInQueue = 32 * 1024;
+struct MpMcFixedBlockingQueue : public MpMcBlockingQueue<TaskType, mpmc_bounded_queue>
+{
+    MpMcFixedBlockingQueue()
+        : MpMcBlockingQueue(kMaxTasksInQueue)
+    {
+    }
+};
 
 void printUsage(const char* argv0)
 {
@@ -637,7 +662,7 @@ int main(int argc, char** argv)
     }
 
     if (poolNames.empty() || setContains(poolNames, "simple")) {
-        TestSimpleThreadPool tp(numThreads);
+        SimpleThreadPool<TaskType, SimpleBlockingTaskQueue<TaskType>> tp(numThreads);
 
         printf("Running simple pool with %d threads\n", tp.numThreads());
 
@@ -649,7 +674,7 @@ int main(int argc, char** argv)
     }
 
     if (poolNames.empty() || setContains(poolNames, "simple-mpmc")) {
-        TestMpMcThreadPool tp(numThreads);
+        SimpleThreadPool<TaskType, MpMcFixedBlockingQueue> tp(numThreads);
 
         printf("Running simple mpmc pool with %d threads\n", tp.numThreads());
 
@@ -661,7 +686,7 @@ int main(int argc, char** argv)
     }
 
     if (poolNames.empty() || setContains(poolNames, "work-stealing")) {
-        TestSimpleWorkStealingPool tp(numThreads);
+        SimpleWorkStealingPool<TaskType> tp(numThreads);
 
         printf("Running work stealing pool with %d threads\n", tp.numThreads());
 

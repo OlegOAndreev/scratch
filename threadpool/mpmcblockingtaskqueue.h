@@ -1,89 +1,93 @@
 #pragma once
 
-#include "mpmc_bounded_queue/mpmc_bounded_queue.h"
-
 #include "common.h"
 
-// Blocking task queue based on mpmc_bounded_queue + semaphore for sleeping when the tasks are absent.
-template<typename Task>
-class MpMcBlockingTaskQueue {
+#include <atomic>
+#include <utility>
+
+// Blocking queue based on non-blocking queue (BaseQueueType). Uses semaphore to sleep
+// when there queue is empty. BaseQueueType must have two methods:
+//  * bool enqueue(T&&)
+//  * bool dequeue(T&)
+template<typename T, template<typename> class BaseQueueType>
+class MpMcBlockingQueue {
 public:
-    bool push(Task&& task)
+    // All the arguments are passed to the BaseQueueType constructor
+    template<typename ...Args>
+    MpMcBlockingQueue(Args&&... args)
+        : baseQueue(std::forward<Args>(args)...)
     {
-        if (!workerQueue.enqueue(std::move(task))) {
+    }
+
+    // Pushes element, returns false if the queue is full and the push failed.
+    bool push(T&& t)
+    {
+        if (!baseQueue.enqueue(std::move(t))) {
             return false;
         }
-        // NOTE: There is a non-obvious potential race condition here: if the queue is empty and thread 1 (worker)
-        // is trying to sleep after checking that it is empty and thread 2 is trying to add the new task,
-        // the following can (potentially) happen:
+        // NOTE: There is a non-obvious potential race condition here: if the queue is empty
+        // and thread 1 (consumer) is trying to sleep after checking that it is empty and thread 2
+        // is trying to add the new element, the following can potentially happen:
         //  Thread 1:
         //   1. checks that queue is empty (passes)
-        //   2. increments numSleepingWorkers (0 -> 1)
+        //   2. increments numSleepingConsumers (0 -> 1)
         //   3. checks that queue is empty
         //  Thread 2:
         //   1. adds new item to the queue (queue becomes non-empty)
-        //   2. reads numSleepingWorkers
+        //   2. reads numSleepingConsumers
         //
-        // Originally I tried solving this problem by using acq_rel/relaxed when writing/reading numSleepingWorkers
-        // and acq_rel (via atomic::exchange RMW) when updating cell.sequence_ in mpmc_bounded_queue::dequeue. This
-        // has been based on the reasoning that acquire and release match the LoadLoad+LoadStore and
-        // LoadStore+StoreStore barrier correspondingly and acq_rel RMW is, therefore, a total barrier. However, that is
-        // not what part 1.10 of the C++ standard says: discussed in
+        // Original solution to this problem by using acq_rel/relaxed when writing/reading
+        // numSleepingConsumers and acq_rel (via atomic::exchange RMW) when updating cell.sequence_
+        // in mpmc_bounded_queue::dequeue. This has been based on the reasoning that acquire
+        // and release match the LoadLoad+LoadStore and LoadStore+StoreStore barrier correspondingly
+        // and acq_rel RMW is, therefore, a total barrier. However, that is not what part 1.10 of
+        // the C++ standard says as discussed in
         // https://stackoverflow.com/questions/52606524/what-exact-rules-in-the-c-memory-model-prevent-reordering-before-acquire-opera/
         // The easiest fix is simply changing all the related accesses to seq_cst:
-        //  * all reads and writes on numSleepingWorkers
+        //  * all reads and writes on numSleepingConsumers
         //  * first read in dequeue and last write in enqueue.
-        // The good thing is that the generated code for acq_rel RMW is identical to seq_cst store on the relevant
-        // platforms (x86-64 and aarch64).
-        if (numSleepingWorkers.load(std::memory_order_seq_cst) > 0) {
+        // The good thing is that the generated code for acq_rel RMW is identical to seq_cst
+        // store on the most relevant platforms (x86-64 and aarch64).
+        // Similar idea has been noted in
+        // http://cbloomrants.blogspot.com/2011/07/07-31-11-example-that-needs-seqcst_31.html
+        if (numSleepingConsumers.load(std::memory_order_seq_cst) > 0) {
             sleepingSemaphore.post();
         }
         return true;
     }
 
-    bool pop(Task& task)
+    // Pops the element, blocking if the queue is empty.
+    void pop(T& t)
     {
-        int const kSpinCount = 1000;
+        int const kSpinCount = 100;
 
         while (true) {
-            if (stopFlag.load(std::memory_order_relaxed)) {
-                return false;
-            }
             // Spin for a few iterations
             for (int i = 0; i < kSpinCount; i++) {
-                if (workerQueue.dequeue(task)) {
-                    return true;
+                if (baseQueue.dequeue(t)) {
+                    return;
                 }
             }
 
-            // Sleep until the new task arrives.
-            numSleepingWorkers.fetch_add(1, std::memory_order_seq_cst);
+            // Sleep until the new element arrives.
+            numSleepingConsumers.fetch_add(1, std::memory_order_seq_cst);
 
-            // Recheck that there are still no tasks in the queue. This is used to prevent the race condition,
-            // where the pauses between checking the queue first and incrementing the numSleepingWorkers, while the task
-            // is submitted during this pause.
-            // NOTE: See NOTE in the submitImpl for the details on correctness of the sleep.
-            if (workerQueue.dequeue(task)) {
-                numSleepingWorkers.fetch_sub(1, std::memory_order_seq_cst);
-                task();
+            // Recheck that there are still no elements in the queue. This is used to prevent
+            // the race condition, where the pauses between checking the queue first
+            // and incrementing the numSleepingConsumers, while the element is pushed during
+            // this pause.
+            if (baseQueue.dequeue(t)) {
+                numSleepingConsumers.fetch_sub(1, std::memory_order_seq_cst);
+                t();
             } else {
                 sleepingSemaphore.wait();
-                numSleepingWorkers.fetch_sub(1, std::memory_order_seq_cst);
+                numSleepingConsumers.fetch_sub(1, std::memory_order_seq_cst);
             }
         }
     }
 
-    void stop()
-    {
-        stopFlag.store(true);
-        sleepingSemaphore.post();
-    }
-
 private:
-    const size_t kMaxTasksInQueue = 32 * 1024;
-
-    mpmc_bounded_queue<Task> workerQueue{kMaxTasksInQueue};
-    std::atomic<int> numSleepingWorkers{0};
+    BaseQueueType<T> baseQueue;
+    std::atomic<int> numSleepingConsumers{0};
     Semaphore sleepingSemaphore;
-    std::atomic<bool> stopFlag{false};
 };

@@ -6,13 +6,14 @@
 
 #if defined(__APPLE__) || defined(__linux__)
 
-// setjmp/longjmp implementation, taken from libco/sjlj.c. This implementation is a real horror movie.
+// setjmp/longjmp implementation, taken from libco/sjlj.c. This implementation is
+// a real horror show.
 
 #include <csignal>
 #include <mutex>
 
-// At least on gcc+glibc the longjmp does the unneeded checks (see e.g. https://bugzilla.redhat.com/show_bug.cgi?id=557316)
-// Disable those checks
+// At least on gcc+glibc the longjmp does the unneeded checks (see e.g.
+// https://bugzilla.redhat.com/show_bug.cgi?id=557316). Disable those checks
 #pragma push_macro("_FORTIFY_SOURCE")
 #pragma push_macro("__USE_FORTIFY_LEVEL")
 #undef _FORTIFY_SOURCE
@@ -38,13 +39,14 @@ static int const kLongJmpVal = 123;
 thread_local FiberId::FiberImpl* tlPassToSignalImpl = nullptr;
 // Currently running fiber.
 thread_local FiberId::FiberImpl* tlRunningImpl = nullptr;
-// Place in the running thread, which calls the first switchTo(). Invariant: if tlRunningImpl is not null, this
-// context contains parent thread context.
+// Place in the running thread, which calls the first switchTo(). Invariant: if tlRunningImpl
+// is not null, this context contains parent thread context.
 thread_local sigjmp_buf tlParentThreadContext = {};
 
 void fiberEntry(int)
 {
-    // Copy thread-local var to stack, otherwise the second call to create() will overwrite the first value.
+    // Copy thread-local var to stack, otherwise the second call to create() will overwrite
+    // the first value.
     FiberId::FiberImpl* impl = tlPassToSignalImpl;
     if (sigsetjmp(impl->context, 0) == kLongJmpVal) {
         try {
@@ -73,8 +75,8 @@ FiberId FiberId::create(size_t stackSize, void (*entry)(void*), void* arg)
     impl->entry = entry;
     impl->arg = arg;
 
-    // Signal manipulations (sigaction, sigaltstack) are process-wide, so make the whole operation thread-safe
-    // with a big mutex.
+    // Signal manipulations (sigaction, sigaltstack) are process-wide, so make the whole operation
+    // thread-safe with a big mutex.
     {
         static std::mutex signalMutex;
         std::unique_lock<std::mutex> signalLock(signalMutex);
@@ -135,8 +137,9 @@ void FiberId::switchTo()
             return;
         }
     }
-    // Please note, that we modify tlRunningImpl before the siglongjmp, not after the sigsetjmp. This prevents
-    // the errors when the compiler caches thread_local variable value and the fiber moves across the threads.
+    // Please note, that we modify tlRunningImpl before the siglongjmp, not after the sigsetjmp.
+    // This prevents the errors when the compiler caches thread_local variable value and
+    // the fiber moves across the threads.
     tlRunningImpl = impl;
     siglongjmp(impl->context, kLongJmpVal);
 }
@@ -164,8 +167,8 @@ struct FiberId::FiberImpl {
 
 namespace {
 
-// Must be set to the return value of ConvertThreadToFiber, used when returning from fiber entry back to "main"
-// thread entry.
+// Must be set to the return value of ConvertThreadToFiber, used when returning from fiber entry
+// back to "main" thread entry.
 thread_local void* tlMainThreadFiber = nullptr;
 // Currently running fiber.
 thread_local FiberId::FiberImpl* tlRunningImpl = nullptr;
