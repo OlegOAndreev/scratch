@@ -63,9 +63,9 @@ private:
     // NOTE: In general this implementation looks a lot more complicated than it should be,
     // maybe we should replace this all with shared_ptr and passing by value?
     static int64_t const kStateNumWaitersMask = 0xFFFFFFFF;
-    static size_t const kStateNumWaitersShift = 0;
+    static int const kStateNumWaitersShift = 0;
     static int64_t const kStateCounterMask = 0xFFFFFFFF00000000LL;
-    static size_t const kStateCounterShift = 32;
+    static int const kStateCounterShift = 32;
 
     std::atomic<int64_t> state;
     // semaphore gets allocated by the first thread trying to access it.
