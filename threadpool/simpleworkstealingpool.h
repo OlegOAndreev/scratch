@@ -55,7 +55,7 @@ private:
         std::atomic<uint64_t> semaphoreWaits{0};
         std::atomic<uint64_t> trySteals{0};
         std::atomic<uint64_t> steals{0};
-        char padding[64];
+        char padding[CACHE_LINE_SIZE];
 #endif
     };
 

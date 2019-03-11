@@ -297,6 +297,14 @@ FORCE_INLINE T* nextAlignedPtr(T* ptr)
     return (T*)((uintptr_t)ptr + remainder);
 }
 
+
+//
+// Cache-line size (very crude!)
+//
+
+#define CACHE_LINE_SIZE 64
+
+
 //
 // Time-related functions.
 //
