@@ -17,8 +17,10 @@ public:
     template<typename ...Args>
     MpMcBlockingQueue(Args&&... args);
 
-    // Pushes element, returns false if the queue is full and the push failed.
-    bool push(T&& t);
+    // Pushes element, returns false if the queue is full and the push failed. Universal reference
+    // is the easiest way to support both T const& and T&& arguments.
+    template<typename U>
+    bool push(U&& u);
 
     // Pops the element, blocking if the queue is empty.
     void pop(T& t);
@@ -38,9 +40,10 @@ MpMcBlockingQueue<T, BaseQueueType>::MpMcBlockingQueue(Args&&... args)
 }
 
 template<typename T, template<typename> class BaseQueueType>
-bool MpMcBlockingQueue<T, BaseQueueType>::push(T&& t)
+template<typename U>
+bool MpMcBlockingQueue<T, BaseQueueType>::push(U&& u)
 {
-    if (!baseQueue.enqueue(std::move(t))) {
+    if (!baseQueue.enqueue(std::forward<U>(u))) {
         return false;
     }
     // NOTE: There is a non-obvious potential race condition here: if the queue is empty
@@ -96,7 +99,7 @@ void MpMcBlockingQueue<T, BaseQueueType>::pop(T& t)
         // this pause.
         if (baseQueue.dequeue(t)) {
             numSleepingConsumers.fetch_sub(1, std::memory_order_seq_cst);
-            t();
+            return;
         } else {
             sleepingSemaphore.wait();
             numSleepingConsumers.fetch_sub(1, std::memory_order_seq_cst);
