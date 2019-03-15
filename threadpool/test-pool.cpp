@@ -107,8 +107,8 @@ void testFixedFunction()
     ASSERT_THAT(crefStringFunc("1234") == "1234abcd");
 
     FixedFunction<void(std::string const&, std::string&)> refStringFunc(
-                [](std::string const& src, std::string& dst) {
-        dst = src + "abcde";
+                [](std::string const& srcs, std::string& dsts) {
+        dsts = srcs + "abcde";
     });
 
     std::string out;
