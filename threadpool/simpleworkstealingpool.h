@@ -43,7 +43,7 @@ public:
 
 private:
     struct PerThread {
-        const size_t kMaxTasksInQueue = 32 * 1024;
+        static size_t const kMaxTasksInQueue = 32 * 1024;
 
         std::thread thread;
         mpmc_bounded_queue<Task> queue{kMaxTasksInQueue};
