@@ -116,6 +116,7 @@ void testFixedFunction()
     ASSERT_THAT(out == "12345abcde");
 
     printf("FixedFunction tests passed\n");
+    printf("=====\n");
 }
 
 void testCountWaiter()
@@ -222,7 +223,149 @@ void testCountWaiter()
 
     printf("CountWaiter 2-2 tests passed, total waits: %d, %d (of %d)\n", totalWaits21,
            totalWaits22, kNumIterations);
+    printf("=====\n");
 }
+
+template<typename Queue>
+void testQueueImpl(Queue& queue, const char* queueName, int numIters)
+{
+    // Run several producer and one consumer thread.
+    auto producer = [](auto& queue, int start, int end, int step) {
+        uint64_t startTime = getTimeTicks();
+        for (int i = start; i < end; i += step) {
+            ASSERT_THAT(queue.push(i));
+        }
+        return elapsedMsec(startTime);
+    };
+
+    auto consumer = [](auto& queue, int n, std::vector<int>* out) {
+        uint64_t startTime = getTimeTicks();
+        out->reserve(n);
+        for (int i = 0; i < n; i++) {
+            int v;
+            queue.pop(v);
+            out->push_back(v);
+        }
+        return elapsedMsec(startTime);
+    };
+
+    auto assertCorrectOut = [](std::vector<int>& out) {
+        std::sort(out.begin(), out.end());
+        for (int i = 0, n = out.size(); i < n; i++) {
+            ASSERT_THAT(out[i] == i);
+        }
+    };
+
+    // Run one producer and one consumer.
+    {
+        int producerTime;
+        std::thread producerThread([&] {
+            producerTime = producer(queue, 0, numIters, 1);
+        });
+        int consumerTime;
+        std::vector<int> out;
+        std::thread consumerThread([&] {
+            consumerTime = consumer(queue, numIters, &out);
+        });
+        producerThread.join();
+        printf("Pushed %d elements in %s in %d msec\n", numIters, queueName, producerTime);
+        consumerThread.join();
+        assertCorrectOut(out);
+        printf("Popped %d elements from %s in %d msec\n", numIters, queueName, consumerTime);
+        printf("-----\n");
+    }
+
+    // Run one producer and one consumer after 500msec.
+    {
+        CountWaiter waiter(1);
+        int producerTime;
+        std::thread producerThread([&] {
+            producerTime = producer(queue, 0, numIters, 1);
+            waiter.post();
+        });
+        int consumerTime;
+        std::vector<int> out;
+        std::thread consumerThread([&] {
+            waiter.wait();
+            consumerTime = consumer(queue, numIters, &out);
+        });
+        producerThread.join();
+        printf("Pushed %d elements in %s in %d msec\n", numIters, queueName, producerTime);
+        consumerThread.join();
+        assertCorrectOut(out);
+        printf("Popped %d elements from %s in %d msec (after delay)\n", numIters, queueName,
+               consumerTime);
+        printf("-----\n");
+    }
+
+    // Run two producers and one consumer.
+    {
+        int producerTime1, producerTime2;
+        std::thread producerThread1([&] {
+            producerTime1 = producer(queue, 1, numIters + 1, 2);
+        });
+        std::thread producerThread2([&] {
+            producerTime2 = producer(queue, 0, numIters, 2);
+        });
+        int consumerTime;
+        std::vector<int> out;
+        std::thread consumerThread([&] {
+            consumerTime = consumer(queue, numIters, &out);
+        });
+        producerThread1.join();
+        producerThread2.join();
+        printf("Pushed %d elements from two threads in %s in %d msec\n", numIters, queueName,
+               std::max(producerTime1, producerTime2));
+        consumerThread.join();
+        assertCorrectOut(out);
+        printf("Popped %d elements from %s in %d msec\n", numIters, queueName,
+               consumerTime);
+        printf("-----\n");
+    }
+
+    // Run two producers and one consumer after 500msec.
+    {
+        CountWaiter waiter(2);
+        int producerTime1, producerTime2;
+        std::thread producerThread1([&] {
+            producerTime1 = producer(queue, 1, numIters + 1, 2);
+            waiter.post();
+        });
+        std::thread producerThread2([&] {
+            producerTime2 = producer(queue, 0, numIters, 2);
+            waiter.post();
+        });
+        int consumerTime;
+        std::vector<int> out;
+        std::thread consumerThread([&] {
+            waiter.wait();
+            consumerTime = consumer(queue, numIters, &out);
+        });
+        producerThread1.join();
+        producerThread2.join();
+        printf("Pushed %d elements from two threads in %s in %d msec\n", numIters, queueName,
+               std::max(producerTime1, producerTime2));
+        consumerThread.join();
+        assertCorrectOut(out);
+        printf("Popped %d elements from %s in %d msec (after delay)\n", numIters, queueName,
+               consumerTime);
+        printf("=====\n");
+    }
+
+}
+
+void testQueues()
+{
+    int const kIters = 10000000;
+    size_t const kQueueSize = 1 << nextLog2(kIters);
+
+    StdBlockingQueue<int> stdBlockingQueue;
+    testQueueImpl(stdBlockingQueue, "StdBlockingQueue", kIters);
+
+    MpMcBlockingQueue<int, mpmc_bounded_queue> mpmcBlockingQueue(kQueueSize);
+    testQueueImpl(mpmcBlockingQueue, "mpmc_bounded_queue", kIters);
+}
+
 
 struct FiberTestState
 {
@@ -329,6 +472,7 @@ void testFiber()
     }
 
     printf("Fiber tests passed. %lld fiber switches per second\n", (long long)switchesPerSecond);
+    printf("=====\n");
 }
 
 
@@ -644,7 +788,9 @@ void printUsage(const char* argv0)
            "\t--num-threads NUM\t\tSet number of threads in a pool (number of cores by default)\n"
            "Pool names:\n"
            "\tsimple\n"
-           "\tsimple-mpmc\n",
+           "\tsimple-mpmc\n"
+           "\twork-stealing\n"
+           "\tfiber\n",
            argv0);
 }
 
@@ -655,6 +801,7 @@ int main(int argc, char** argv)
 
     testFixedFunction();
     testCountWaiter();
+    testQueues();
 
     for (int i = 1; i < argc;) {
         if (strcmp(argv[i], "--num-threads") == 0) {
