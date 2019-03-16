@@ -11,7 +11,8 @@
 template<typename T>
 class StdBlockingQueue {
 public:
-    bool push(T&& t);
+    template<typename U>
+    bool push(U&& u);
 
     void pop(T& t);
 
@@ -23,11 +24,12 @@ private:
 };
 
 template<typename T>
-bool StdBlockingQueue<T>::push(T&& t)
+template<typename U>
+bool StdBlockingQueue<T>::push(U&& u)
 {
     {
         std::lock_guard<std::mutex> l(lock);
-        deque.push_back(std::move(t));
+        deque.push_back(std::forward<U>(u));
     }
     consumerWakeup.notify_one();
     return true;
