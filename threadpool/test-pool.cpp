@@ -227,7 +227,7 @@ void testCountWaiter()
 }
 
 template<typename Queue>
-void testQueueImpl(Queue& queue, const char* queueName, int numIters)
+void testQueueImpl(Queue& testQueue, const char* testQueueName, int numIters)
 {
     // Run several producer and one consumer thread.
     auto producer = [](auto& queue, int start, int end, int step) {
@@ -260,18 +260,18 @@ void testQueueImpl(Queue& queue, const char* queueName, int numIters)
     {
         int producerTime;
         std::thread producerThread([&] {
-            producerTime = producer(queue, 0, numIters, 1);
+            producerTime = producer(testQueue, 0, numIters, 1);
         });
         int consumerTime;
         std::vector<int> out;
         std::thread consumerThread([&] {
-            consumerTime = consumer(queue, numIters, &out);
+            consumerTime = consumer(testQueue, numIters, &out);
         });
         producerThread.join();
-        printf("Pushed %d elements in %s in %d msec\n", numIters, queueName, producerTime);
+        printf("Pushed %d elements in %s in %d msec\n", numIters, testQueueName, producerTime);
         consumerThread.join();
         assertCorrectOut(out);
-        printf("Popped %d elements from %s in %d msec\n", numIters, queueName, consumerTime);
+        printf("Popped %d elements from %s in %d msec\n", numIters, testQueueName, consumerTime);
         printf("-----\n");
     }
 
@@ -280,20 +280,20 @@ void testQueueImpl(Queue& queue, const char* queueName, int numIters)
         CountWaiter waiter(1);
         int producerTime;
         std::thread producerThread([&] {
-            producerTime = producer(queue, 0, numIters, 1);
+            producerTime = producer(testQueue, 0, numIters, 1);
             waiter.post();
         });
         int consumerTime;
         std::vector<int> out;
         std::thread consumerThread([&] {
             waiter.wait();
-            consumerTime = consumer(queue, numIters, &out);
+            consumerTime = consumer(testQueue, numIters, &out);
         });
         producerThread.join();
-        printf("Pushed %d elements in %s in %d msec\n", numIters, queueName, producerTime);
+        printf("Pushed %d elements in %s in %d msec\n", numIters, testQueueName, producerTime);
         consumerThread.join();
         assertCorrectOut(out);
-        printf("Popped %d elements from %s in %d msec (after delay)\n", numIters, queueName,
+        printf("Popped %d elements from %s in %d msec (after delay)\n", numIters, testQueueName,
                consumerTime);
         printf("-----\n");
     }
@@ -302,23 +302,23 @@ void testQueueImpl(Queue& queue, const char* queueName, int numIters)
     {
         int producerTime1, producerTime2;
         std::thread producerThread1([&] {
-            producerTime1 = producer(queue, 1, numIters + 1, 2);
+            producerTime1 = producer(testQueue, 1, numIters + 1, 2);
         });
         std::thread producerThread2([&] {
-            producerTime2 = producer(queue, 0, numIters, 2);
+            producerTime2 = producer(testQueue, 0, numIters, 2);
         });
         int consumerTime;
         std::vector<int> out;
         std::thread consumerThread([&] {
-            consumerTime = consumer(queue, numIters, &out);
+            consumerTime = consumer(testQueue, numIters, &out);
         });
         producerThread1.join();
         producerThread2.join();
-        printf("Pushed %d elements from two threads in %s in %d msec\n", numIters, queueName,
+        printf("Pushed %d elements from two threads in %s in %d msec\n", numIters, testQueueName,
                std::max(producerTime1, producerTime2));
         consumerThread.join();
         assertCorrectOut(out);
-        printf("Popped %d elements from %s in %d msec\n", numIters, queueName,
+        printf("Popped %d elements from %s in %d msec\n", numIters, testQueueName,
                consumerTime);
         printf("-----\n");
     }
@@ -328,26 +328,26 @@ void testQueueImpl(Queue& queue, const char* queueName, int numIters)
         CountWaiter waiter(2);
         int producerTime1, producerTime2;
         std::thread producerThread1([&] {
-            producerTime1 = producer(queue, 1, numIters + 1, 2);
+            producerTime1 = producer(testQueue, 1, numIters + 1, 2);
             waiter.post();
         });
         std::thread producerThread2([&] {
-            producerTime2 = producer(queue, 0, numIters, 2);
+            producerTime2 = producer(testQueue, 0, numIters, 2);
             waiter.post();
         });
         int consumerTime;
         std::vector<int> out;
         std::thread consumerThread([&] {
             waiter.wait();
-            consumerTime = consumer(queue, numIters, &out);
+            consumerTime = consumer(testQueue, numIters, &out);
         });
         producerThread1.join();
         producerThread2.join();
-        printf("Pushed %d elements from two threads in %s in %d msec\n", numIters, queueName,
+        printf("Pushed %d elements from two threads in %s in %d msec\n", numIters, testQueueName,
                std::max(producerTime1, producerTime2));
         consumerThread.join();
         assertCorrectOut(out);
-        printf("Popped %d elements from %s in %d msec (after delay)\n", numIters, queueName,
+        printf("Popped %d elements from %s in %d msec (after delay)\n", numIters, testQueueName,
                consumerTime);
         printf("=====\n");
     }
