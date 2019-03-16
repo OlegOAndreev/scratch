@@ -263,14 +263,14 @@ void testQueueImpl(Queue& testQueue, const char* testQueueName, int numIters)
             producerTime = producer(testQueue, 0, numIters, 1);
         });
         int consumerTime;
-        std::vector<int> out;
+        std::vector<int> testOut;
         std::thread consumerThread([&] {
-            consumerTime = consumer(testQueue, numIters, &out);
+            consumerTime = consumer(testQueue, numIters, &testOut);
         });
         producerThread.join();
         printf("Pushed %d elements in %s in %d msec\n", numIters, testQueueName, producerTime);
         consumerThread.join();
-        assertCorrectOut(out);
+        assertCorrectOut(testOut);
         printf("Popped %d elements from %s in %d msec\n", numIters, testQueueName, consumerTime);
         printf("-----\n");
     }
