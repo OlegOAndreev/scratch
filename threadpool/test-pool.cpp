@@ -3,7 +3,6 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <deque>
 #include <set>
 #include <string>
 #include <thread>
@@ -226,33 +225,34 @@ void testCountWaiter()
     printf("=====\n");
 }
 
-template<typename Queue>
-void testQueueImpl(Queue& testQueue, const char* testQueueName, int numIters)
+// T must have a constructor T(int) and have a comparison operator==(T const&, T const&).
+template<typename T, typename Queue>
+void testQueueImpl(Queue& testQueue, const char* typeName, const char* testQueueName, int numIters)
 {
     // Run several producer and one consumer thread.
     auto producer = [](auto& queue, int start, int end, int step) {
         uint64_t startTime = getTimeTicks();
         for (int i = start; i < end; i += step) {
-            ASSERT_THAT(queue.push(i));
+            ASSERT_THAT(queue.push(T(i)));
         }
         return elapsedMsec(startTime);
     };
 
-    auto consumer = [](auto& queue, int n, std::vector<int>* out) {
+    auto consumer = [](auto& queue, int n, std::vector<T>* out) {
         uint64_t startTime = getTimeTicks();
         out->reserve(n);
         for (int i = 0; i < n; i++) {
-            int v;
+            T v;
             queue.pop(v);
             out->push_back(v);
         }
         return elapsedMsec(startTime);
     };
 
-    auto assertCorrectOut = [](std::vector<int>& out) {
+    auto assertCorrectOut = [](std::vector<T>& out) {
         std::sort(out.begin(), out.end());
         for (int i = 0, n = out.size(); i < n; i++) {
-            ASSERT_THAT(out[i] == i);
+            ASSERT_THAT(out[i] == T(i));
         }
     };
 
@@ -263,15 +263,17 @@ void testQueueImpl(Queue& testQueue, const char* testQueueName, int numIters)
             producerTime = producer(testQueue, 0, numIters, 1);
         });
         int consumerTime;
-        std::vector<int> testOut;
+        std::vector<T> testOut;
         std::thread consumerThread([&] {
             consumerTime = consumer(testQueue, numIters, &testOut);
         });
         producerThread.join();
-        printf("Pushed %d elements in %s in %d msec\n", numIters, testQueueName, producerTime);
+        printf("Pushed %d elements in %s<%s> in %d msec\n", numIters, testQueueName,
+               typeName, producerTime);
         consumerThread.join();
         assertCorrectOut(testOut);
-        printf("Popped %d elements from %s in %d msec\n", numIters, testQueueName, consumerTime);
+        printf("Popped %d elements from %s<%s> in %d msec\n", numIters, testQueueName,
+               typeName, consumerTime);
         printf("-----\n");
     }
 
@@ -284,17 +286,18 @@ void testQueueImpl(Queue& testQueue, const char* testQueueName, int numIters)
             waiter.post();
         });
         int consumerTime;
-        std::vector<int> testOut;
+        std::vector<T> testOut;
         std::thread consumerThread([&] {
             waiter.wait();
             consumerTime = consumer(testQueue, numIters, &testOut);
         });
         producerThread.join();
-        printf("Pushed %d elements in %s in %d msec\n", numIters, testQueueName, producerTime);
+        printf("Pushed %d elements in %s<%s> in %d msec\n", numIters, testQueueName,
+               typeName, producerTime);
         consumerThread.join();
         assertCorrectOut(testOut);
-        printf("Popped %d elements from %s in %d msec (after delay)\n", numIters, testQueueName,
-               consumerTime);
+        printf("Popped %d elements from %s<%s> in %d msec (after delay)\n", numIters,
+               testQueueName, typeName, consumerTime);
         printf("-----\n");
     }
 
@@ -308,18 +311,18 @@ void testQueueImpl(Queue& testQueue, const char* testQueueName, int numIters)
             producerTime2 = producer(testQueue, 0, numIters, 2);
         });
         int consumerTime;
-        std::vector<int> testOut;
+        std::vector<T> testOut;
         std::thread consumerThread([&] {
             consumerTime = consumer(testQueue, numIters, &testOut);
         });
         producerThread1.join();
         producerThread2.join();
-        printf("Pushed %d elements from two threads in %s in %d msec\n", numIters, testQueueName,
-               std::max(producerTime1, producerTime2));
+        printf("Pushed %d elements from two threads in %s<%s> in %d msec\n", numIters,
+               testQueueName, typeName, std::max(producerTime1, producerTime2));
         consumerThread.join();
         assertCorrectOut(testOut);
-        printf("Popped %d elements from %s in %d msec\n", numIters, testQueueName,
-               consumerTime);
+        printf("Popped %d elements from %s<%s> in %d msec\n", numIters, testQueueName,
+               typeName, consumerTime);
         printf("-----\n");
     }
 
@@ -336,34 +339,75 @@ void testQueueImpl(Queue& testQueue, const char* testQueueName, int numIters)
             waiter.post();
         });
         int consumerTime;
-        std::vector<int> testOut;
+        std::vector<T> testOut;
         std::thread consumerThread([&] {
             waiter.wait();
             consumerTime = consumer(testQueue, numIters, &testOut);
         });
         producerThread1.join();
         producerThread2.join();
-        printf("Pushed %d elements from two threads in %s in %d msec\n", numIters, testQueueName,
-               std::max(producerTime1, producerTime2));
+        printf("Pushed %d elements from two threads in %s<%s> in %d msec\n", numIters,
+               testQueueName, typeName, std::max(producerTime1, producerTime2));
         consumerThread.join();
         assertCorrectOut(testOut);
-        printf("Popped %d elements from %s in %d msec (after delay)\n", numIters, testQueueName,
-               consumerTime);
+        printf("Popped %d elements from %s<%s> in %d msec (after delay)\n", numIters,
+               testQueueName, typeName, consumerTime);
         printf("=====\n");
     }
 
 }
+
+// Large item used for
+struct FatQueueItem {
+    static const size_t kNumInts = 16;
+    int data[kNumInts];
+
+    FatQueueItem()
+    {
+    }
+
+    FatQueueItem(int v)
+    {
+        for (size_t i = 0; i < kNumInts; i++) {
+            data[i] = v;
+        }
+    }
+
+    bool operator==(FatQueueItem const& other) const
+    {
+        return std::memcmp(data, other.data, sizeof(data)) == 0;
+    }
+
+    bool operator<(FatQueueItem const& other) const
+    {
+        for (size_t i = 0; i < kNumInts; i++) {
+            if (data[i] < other.data[i]) {
+                return true;
+            } else if (data[i] > other.data[i]) {
+                return false;
+            }
+        }
+        return false;
+    }
+};
 
 void testQueues()
 {
     int const kIters = 10000000;
     size_t const kQueueSize = 1 << nextLog2(kIters);
 
-    StdBlockingQueue<int> stdBlockingQueue;
-    testQueueImpl(stdBlockingQueue, "StdBlockingQueue", kIters);
+    StdBlockingQueue<int> stdBlockingQueueInt;
+    testQueueImpl<int>(stdBlockingQueueInt, "int", "StdBlockingQueue", kIters);
 
-    MpMcBlockingQueue<int, mpmc_bounded_queue> mpmcBlockingQueue(kQueueSize);
-    testQueueImpl(mpmcBlockingQueue, "mpmc_bounded_queue", kIters);
+    MpMcBlockingQueue<int, mpmc_bounded_queue> mpmcBlockingQueueInt(kQueueSize);
+    testQueueImpl<int>(mpmcBlockingQueueInt, "int", "mpmc_bounded_queue", kIters);
+
+    StdBlockingQueue<FatQueueItem> stdBlockingQueueFat;
+    testQueueImpl<FatQueueItem>(stdBlockingQueueFat, "FatQueueItem", "StdBlockingQueue", kIters);
+
+    MpMcBlockingQueue<FatQueueItem, mpmc_bounded_queue> mpmcBlockingQueueFat(kQueueSize);
+    testQueueImpl<FatQueueItem>(mpmcBlockingQueueFat, "FatQueueItem", "mpmc_bounded_queue", kIters);
+
 }
 
 
