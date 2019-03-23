@@ -149,30 +149,30 @@ void FiberWorkStealingPool<Task>::submitRange(F&& f, size_t from, size_t to)
     int threadToPush = lastPushedThread.load(std::memory_order_relaxed);
 
     // Try to split all work so that there are least worker threads * 4 pieces for proper load balancing.
-    size_t pushGranularity = std::max((to - from) / (workerThreadsSize * 4), kMinGranularity);
-    size_t pushed = 0;
-    int pushedTasks = 0;
-    for (pushed = from; pushed < to; pushed += pushGranularity) {
+    size_t submitGranularity = std::max((to - from) / (workerThreadsSize * 4), kMinGranularity);
+    size_t submitted = 0;
+    int submittedTasks = 0;
+    for (submitted = from; submitted < to; submitted += submitGranularity) {
         threadToPush++;
         if (threadToPush >= workerThreadsSize) {
             threadToPush = 0;
         }
-        size_t n = std::min(to - pushed, pushGranularity);
-        if (!tryToPushTask([f, pushed, n] { f(pushed, pushed + n); }, threadToPush)) {
+        size_t n = std::min(to - submitted, submitGranularity);
+        if (!tryToPushTask([f, submitted, n] { f(submitted, submitted + n); }, threadToPush)) {
             break;
         }
-        pushedTasks++;
+        submittedTasks++;
     }
-    if (pushed < to) {
+    if (submitted < to) {
         // Extremely unlikely: the queue is full, just run the task in the caller.
-        f(pushed, to);
+        f(submitted, to);
     }
     lastPushedThread.store(threadToPush, std::memory_order_relaxed);
 
     // NOTE: See submit() for description of synchronization here.
     int sleeping = numSleepingWorkers.load(std::memory_order_seq_cst);
     if (sleeping > 0) {
-        int toWake = std::min(sleeping, pushedTasks);
+        int toWake = std::min(sleeping, submittedTasks);
         for (int i = 0; i < toWake; i++) {
             sleepingSemaphore.post();
         }

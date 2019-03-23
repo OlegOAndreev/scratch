@@ -8,8 +8,8 @@
 
 // A simple thread pool with a central blocking queue, no task dependencies and no futures.
 // Queue should have methods:
-//   bool push(Task&& task)
-//   bool pop(Task&) (blocking)
+//   bool enqueue(Task&& task)
+//   bool dequeue(Task&) (blocking)
 // Task should have a void operator()().
 template<typename Task, typename Queue>
 class SimpleThreadPool {
@@ -65,7 +65,7 @@ SimpleThreadPool<Task, Queue>::~SimpleThreadPool()
     static auto emptyTask = [](){};
     while (numStoppedThreads.load(std::memory_order_relaxed) != waitUntilStopped) {
         // Submit empty tasks until all threads are woken up.
-        queue.push(emptyTask);
+        queue.enqueue(emptyTask);
     }
 
     for (std::thread& t : workerThreads) {
@@ -83,7 +83,7 @@ template<typename Task, typename Queue>
 template<typename F>
 void SimpleThreadPool<Task, Queue>::submit(F&& f)
 {
-    if (!queue.push(Task(std::forward<F>(f)))) {
+    if (!queue.enqueue(Task(std::forward<F>(f)))) {
         // Queue is full, run the task in the caller thread.
         f();
     }
@@ -97,17 +97,17 @@ void SimpleThreadPool<Task, Queue>::submitRange(F&& f, size_t from, size_t to)
 
     // Try to split all work so that there are least worker threads * 4 pieces for proper
     // load balancing.
-    size_t pushGranularity = std::max((to - from) / (workerThreads.size() * 4), kMinGranularity);
-    size_t pushed = 0;
-    for (pushed = from; pushed < to; pushed += pushGranularity) {
-        size_t n = std::min(to - pushed, pushGranularity);
-        if (!queue.push([f, pushed, n] { f(pushed, pushed + n); })) {
+    size_t submitGranularity = std::max((to - from) / (workerThreads.size() * 4), kMinGranularity);
+    size_t submitted = 0;
+    for (submitted = from; submitted < to; submitted += submitGranularity) {
+        size_t n = std::min(to - submitted, submitGranularity);
+        if (!queue.enqueue([f, submitted, n] { f(submitted, submitted + n); })) {
             break;
         }
     }
-    if (pushed < to) {
+    if (submitted < to) {
         // Extremely unlikely: the queue is full, just run the task in the caller.
-        f(pushed, to);
+        f(submitted, to);
     }
 }
 
@@ -116,7 +116,7 @@ void SimpleThreadPool<Task, Queue>::workerMain()
 {
     while (!workersShouldQuit.load(std::memory_order_relaxed)) {
         Task task;
-        queue.pop(task);
+        queue.dequeue(task);
         task();
     }
     numStoppedThreads.fetch_add(1, std::memory_order_relaxed);

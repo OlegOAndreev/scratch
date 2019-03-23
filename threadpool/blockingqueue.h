@@ -11,19 +11,19 @@
 //  * bool enqueue(T&&)
 //  * bool dequeue(T&)
 template<typename T, template<typename> class BaseQueueType>
-class MpMcBlockingQueue {
+class BlockingQueue {
 public:
     // All the arguments are passed to the BaseQueueType constructor
     template<typename ...Args>
-    MpMcBlockingQueue(Args&&... args);
+    BlockingQueue(Args&&... args);
 
-    // Pushes element, returns false if the queue is full and the push failed. Universal reference
-    // is the easiest way to support both T const& and T&& arguments.
+    // Enqueues element, returns false if the queue is full and the enqueue failed. Universal
+    // reference is the easiest way to support both T const& and T&& arguments.
     template<typename U>
-    bool push(U&& u);
+    bool enqueue(U&& u);
 
-    // Pops the element, blocking if the queue is empty.
-    void pop(T& t);
+    // Dequeues the element, blocking if the queue is empty.
+    void dequeue(T& t);
 
 private:
     BaseQueueType<T> baseQueue;
@@ -34,14 +34,14 @@ private:
 
 template<typename T, template<typename> class BaseQueueType>
 template<typename ...Args>
-MpMcBlockingQueue<T, BaseQueueType>::MpMcBlockingQueue(Args&&... args)
+BlockingQueue<T, BaseQueueType>::BlockingQueue(Args&&... args)
     : baseQueue(std::forward<Args>(args)...)
 {
 }
 
 template<typename T, template<typename> class BaseQueueType>
 template<typename U>
-bool MpMcBlockingQueue<T, BaseQueueType>::push(U&& u)
+bool BlockingQueue<T, BaseQueueType>::enqueue(U&& u)
 {
     if (!baseQueue.enqueue(std::forward<U>(u))) {
         return false;
@@ -78,8 +78,12 @@ bool MpMcBlockingQueue<T, BaseQueueType>::push(U&& u)
 }
 
 template<typename T, template<typename> class BaseQueueType>
-void MpMcBlockingQueue<T, BaseQueueType>::pop(T& t)
+void BlockingQueue<T, BaseQueueType>::dequeue(T& t)
 {
+    if (baseQueue.dequeue(t)) {
+        return;
+    }
+
     int const kSpinCount = 100;
 
     while (true) {
@@ -95,7 +99,7 @@ void MpMcBlockingQueue<T, BaseQueueType>::pop(T& t)
 
         // Recheck that there are still no elements in the queue. This is used to prevent
         // the race condition, where the pauses between checking the queue first
-        // and incrementing the numSleepingConsumers, while the element is pushed during
+        // and incrementing the numSleepingConsumers, while the element is enqueued during
         // this pause.
         if (baseQueue.dequeue(t)) {
             numSleepingConsumers.fetch_sub(1, std::memory_order_seq_cst);

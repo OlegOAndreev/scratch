@@ -14,7 +14,7 @@
 #include "fiberworkstealingpool.h"
 #include "fixedfunction.h"
 #include "futureutils.h"
-#include "mpmcblockingqueue.h"
+#include "blockingqueue.h"
 #include "mpscunboundedqueue.h"
 #include "simplethreadpool.h"
 #include "simpleworkstealingpool.h"
@@ -235,7 +235,7 @@ void testQueueImpl(Queue& testQueue, const char* typeName, const char* testQueue
     auto producer = [](auto& queue, int start, int end, int step) {
         uint64_t startTime = getTimeTicks();
         for (int i = start; i < end; i += step) {
-            ASSERT_THAT(queue.push(T(i)));
+            ASSERT_THAT(queue.enqueue(T(i)));
         }
         return elapsedMsec(startTime);
     };
@@ -245,7 +245,7 @@ void testQueueImpl(Queue& testQueue, const char* typeName, const char* testQueue
         out->reserve(n);
         for (int i = 0; i < n; i++) {
             T v;
-            queue.pop(v);
+            queue.dequeue(v);
             out->push_back(v);
         }
         return elapsedMsec(startTime);
@@ -452,7 +452,7 @@ void testQueues()
         testQueueImpl<int>(stdBlockingQueueInt, "int", "StdBlockingQueue", kIters,
                            nullptr, baselineSpeedInt);
 
-        MpMcBlockingQueue<int, mpmc_bounded_queue> mpmcBlockingQueueInt(kQueueSize);
+        BlockingQueue<int, mpmc_bounded_queue> mpmcBlockingQueueInt(kQueueSize);
         testQueueImpl<int>(mpmcBlockingQueueInt, "int", "mpmc_bounded_queue", kIters,
                            baselineSpeedInt, nullptr);
 
@@ -468,7 +468,7 @@ void testQueues()
         testQueueImpl<FatQueueItem>(stdBlockingQueueFat, "FatQueueItem", "StdBlockingQueue", kIters,
                                     nullptr, baselineSpeedFat);
 
-        MpMcBlockingQueue<FatQueueItem, mpmc_bounded_queue> mpmcBlockingQueueFat(kQueueSize);
+        BlockingQueue<FatQueueItem, mpmc_bounded_queue> mpmcBlockingQueueFat(kQueueSize);
         testQueueImpl<FatQueueItem>(mpmcBlockingQueueFat, "FatQueueItem", "mpmc_bounded_queue",
                                     kIters, baselineSpeedFat, nullptr);
 
@@ -883,10 +883,10 @@ using TaskType = FixedFunction<void()>;
 
 // A wrapper for MpMcBlockingQueue, providing the queue size.
 size_t const kMaxTasksInQueue = 32 * 1024;
-struct MpMcFixedBlockingQueue : public MpMcBlockingQueue<TaskType, mpmc_bounded_queue>
+struct MpMcFixedBlockingQueue : public BlockingQueue<TaskType, mpmc_bounded_queue>
 {
     MpMcFixedBlockingQueue()
-        : MpMcBlockingQueue(kMaxTasksInQueue)
+        : BlockingQueue(kMaxTasksInQueue)
     {
     }
 };
