@@ -71,7 +71,7 @@ public:
         pos = enqueue_pos_.load(std::memory_order_relaxed);
     }
     // MODIFIED: Switched to forwarding to support move-only data.
-    cell->data_ = std::forward<T>(data);
+    cell->data_ = std::forward<U>(data);
     // MODIFIED: Use seq_cst instead of release as a way to prevent reordering of memory accesses
     // before it (see mpmcblockingtaskqueue.h for more details).
     cell->sequence_.store(pos + 1, std::memory_order_seq_cst);
