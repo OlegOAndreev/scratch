@@ -210,7 +210,7 @@ void SimpleWorkStealingPool<Task>::submit(F&& f)
     // Similar idea has been noted in
     // http://cbloomrants.blogspot.com/2011/07/07-31-11-example-that-needs-seqcst_31.html
     //
-    // Copied from mpmcblockingtaskqueue.h
+    // Copied from blockingtaskqueue.h
     if (numSleepingWorkers.load(std::memory_order_seq_cst) > 0) {
 #if defined(WORK_STEALING_STATS)
         totalSemaphorePosts.fetch_add(1, std::memory_order_relaxed);
@@ -310,7 +310,7 @@ void SimpleWorkStealingPool<Task>::workerMain(int threadNum)
         // this pause.
         // NOTE: See NOTE in the submitImpl for the details on correctness of the sleep.
         //
-        // Copied from mpmcblockingtaskqueue.h
+        // Copied from blockingtaskqueue.h
 #if defined(WORK_STEALING_STATS)
         thisThread.trySteals.fetch_add(1, std::memory_order_relaxed);
 #endif

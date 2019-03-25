@@ -132,7 +132,7 @@ void FiberWorkStealingPool<Task>::submit(F&& f)
     // The good thing is that the generated code for acq_rel RMW is identical to seq_cst store on the relevant
     // platforms (x86-64 and aarch64).
     //
-    // Copied from mpmcblockingtaskqueue.h
+    // Copied from blockingtaskqueue.h
     if (numSleepingWorkers.load(std::memory_order_seq_cst) > 0) {
         sleepingSemaphore.post();
     }
@@ -216,7 +216,7 @@ void FiberWorkStealingPool<Task>::workerMain(int threadNum)
         // is submitted during this pause.
         // NOTE: See NOTE in the submit for the details on correctness of the sleep.
         //
-        // Copied from mpmcblockingtaskqueue.h
+        // Copied from blockingtaskqueue.h
         if (tryToStealTask(task, threadToSteal)) {
             numSleepingWorkers.fetch_sub(1, std::memory_order_seq_cst);
             task();
