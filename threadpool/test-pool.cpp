@@ -284,7 +284,7 @@ void testQueueImpl(Queue& testQueue, const char* typeName, const char* testQueue
             consumerTime = consumer(testQueue, numIters, &testOut);
         });
         producerThread.join();
-        int64_t pushPerSec = numIters * 1000 / producerTime;
+        int64_t pushPerSec = (int64_t)numIters * 1000 / producerTime;
         printf("Pushed %lld/sec elements in %s<%s>", (long long)pushPerSec, testQueueName,
                typeName);
         computeAndPrintRatio(0, pushPerSec);
@@ -292,7 +292,7 @@ void testQueueImpl(Queue& testQueue, const char* typeName, const char* testQueue
 
         consumerThread.join();
         assertCorrectOut(testOut);
-        int64_t popPerSec = numIters * 1000 / consumerTime;
+        int64_t popPerSec = (int64_t)numIters * 1000 / consumerTime;
         printf("Popped %lld/sec elements from %s<%s>", (long long)popPerSec, testQueueName,
                typeName);
         computeAndPrintRatio(1, popPerSec);
@@ -301,7 +301,7 @@ void testQueueImpl(Queue& testQueue, const char* typeName, const char* testQueue
         printf("-----\n");
     }
 
-    // Run one producer and one consumer after 500msec.
+    // Run one producer and one consumer after the producer finished.
     {
         CountWaiter waiter(1);
         int producerTime;
@@ -316,7 +316,7 @@ void testQueueImpl(Queue& testQueue, const char* typeName, const char* testQueue
             consumerTime = consumer(testQueue, numIters, &testOut);
         });
         producerThread.join();
-        int64_t pushPerSec = numIters * 1000 / producerTime;
+        int64_t pushPerSec = (int64_t)numIters * 1000 / producerTime;
         printf("Pushed %lld/sec elements in %s<%s>", (long long)pushPerSec, testQueueName,
                typeName);
         computeAndPrintRatio(2, pushPerSec);
@@ -324,7 +324,7 @@ void testQueueImpl(Queue& testQueue, const char* typeName, const char* testQueue
 
         consumerThread.join();
         assertCorrectOut(testOut);
-        int64_t popPerSec = numIters * 1000 / consumerTime;
+        int64_t popPerSec = (int64_t)numIters * 1000 / consumerTime;
         printf("Popped %lld/sec elements from %s<%s> (after delay)", (long long)popPerSec,
                testQueueName, typeName);
         computeAndPrintRatio(3, popPerSec);
@@ -349,7 +349,7 @@ void testQueueImpl(Queue& testQueue, const char* typeName, const char* testQueue
         });
         producerThread1.join();
         producerThread2.join();
-        int64_t pushPerSec = numIters * 1000 / std::max(producerTime1, producerTime2);
+        int64_t pushPerSec = (int64_t)numIters * 1000 / std::max(producerTime1, producerTime2);
         printf("Pushed %lld/sec elements from two threads in %s<%s>", (long long)pushPerSec,
                testQueueName, typeName);
         computeAndPrintRatio(4, pushPerSec);
@@ -357,7 +357,7 @@ void testQueueImpl(Queue& testQueue, const char* typeName, const char* testQueue
 
         consumerThread.join();
         assertCorrectOut(testOut);
-        int64_t popPerSec = numIters * 1000 / consumerTime;
+        int64_t popPerSec = (int64_t)numIters * 1000 / consumerTime;
         printf("Popped %lld/sec elements from %s<%s>", (long long)popPerSec, testQueueName,
                typeName);
         computeAndPrintRatio(5, popPerSec);
@@ -366,7 +366,7 @@ void testQueueImpl(Queue& testQueue, const char* typeName, const char* testQueue
         printf("-----\n");
     }
 
-    // Run two producers and one consumer after 500msec.
+    // Run two producers and one consumer after the producers finished.
     {
         CountWaiter waiter(2);
         int producerTime1, producerTime2;
@@ -386,7 +386,7 @@ void testQueueImpl(Queue& testQueue, const char* typeName, const char* testQueue
         });
         producerThread1.join();
         producerThread2.join();
-        int64_t pushPerSec = numIters * 1000 / std::max(producerTime1, producerTime2);
+        int64_t pushPerSec = (int64_t)numIters * 1000 / std::max(producerTime1, producerTime2);
         printf("Pushed %lld/sec elements from two threads in %s<%s>", (long long)pushPerSec,
                testQueueName, typeName);
         computeAndPrintRatio(6, pushPerSec);
@@ -394,7 +394,7 @@ void testQueueImpl(Queue& testQueue, const char* typeName, const char* testQueue
 
         consumerThread.join();
         assertCorrectOut(testOut);
-        int64_t popPerSec = numIters * 1000 / consumerTime;
+        int64_t popPerSec = (int64_t)numIters * 1000 / consumerTime;
         printf("Popped %lld/sec elements from %s<%s> (after delay)", (long long)popPerSec,
                testQueueName, typeName);
         computeAndPrintRatio(7, popPerSec);
@@ -456,6 +456,10 @@ void testQueues()
         testQueueImpl<int>(mpmcBlockingQueueInt, "int", "mpmc_bounded_queue", kIters,
                            baselineSpeedInt, nullptr);
 
+        BlockingQueue<int, MpScUnboundedQueue> mpscBlockingQueueInt;
+        testQueueImpl<int>(mpscBlockingQueueInt, "int", "MpScUnboundedQueue", kIters,
+                           baselineSpeedInt, nullptr);
+
         printf("=====\n");
     }
 
@@ -470,6 +474,10 @@ void testQueues()
 
         BlockingQueue<FatQueueItem, mpmc_bounded_queue> mpmcBlockingQueueFat(kQueueSize);
         testQueueImpl<FatQueueItem>(mpmcBlockingQueueFat, "FatQueueItem", "mpmc_bounded_queue",
+                                    kIters, baselineSpeedFat, nullptr);
+
+        BlockingQueue<FatQueueItem, MpScUnboundedQueue> mpscBlockingQueueFat;
+        testQueueImpl<FatQueueItem>(mpscBlockingQueueFat, "FatQueueItem", "MpScUnboundedQueue",
                                     kIters, baselineSpeedFat, nullptr);
 
         printf("=====\n");
