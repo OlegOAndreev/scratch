@@ -917,10 +917,6 @@ int main(int argc, char** argv)
     int numThreads = std::thread::hardware_concurrency();
     std::set<std::string> poolNames;
 
-    testFixedFunction();
-    testCountWaiter();
-    testQueues();
-
     for (int i = 1; i < argc;) {
         if (strcmp(argv[i], "--num-threads") == 0) {
             if (i == argc - 1) {
@@ -944,6 +940,18 @@ int main(int argc, char** argv)
             poolNames.insert(argv[i]);
             i++;
         }
+    }
+
+    if (poolNames.empty() || setContains(poolNames, "fixed-function")) {
+        testFixedFunction();
+    }
+
+    if (poolNames.empty() || setContains(poolNames, "count-waiter")) {
+        testCountWaiter();
+    }
+
+    if (poolNames.empty() || setContains(poolNames, "queues")) {
+        testQueues();
     }
 
     if (poolNames.empty() || setContains(poolNames, "simple")) {
