@@ -8,11 +8,15 @@
 
 // Blocking queue based on non-blocking queue (BaseQueueType). Uses semaphore to sleep
 // when there queue is empty. BaseQueueType must have two methods:
-//  * bool enqueue(T&&)
+//  * bool enqueue(U&&)
 //  * bool dequeue(T&)
-template<typename T, template<typename> class BaseQueueType>
+// and have one typedef:
+//  * ElementType (alias to T)
+template<typename BaseQueueType>
 class BlockingQueue {
 public:
+    using T = typename BaseQueueType::ElementType;
+
     // All the arguments are passed to the BaseQueueType constructor
     template<typename ...Args>
     BlockingQueue(Args&&... args);
@@ -26,22 +30,22 @@ public:
     void dequeue(T& t);
 
 private:
-    BaseQueueType<T> baseQueue;
+    BaseQueueType baseQueue;
     std::atomic<int> numSleepingConsumers{0};
     Semaphore sleepingSemaphore;
 };
 
 
-template<typename T, template<typename> class BaseQueueType>
+template<typename BaseQueueType>
 template<typename ...Args>
-BlockingQueue<T, BaseQueueType>::BlockingQueue(Args&&... args)
+BlockingQueue<BaseQueueType>::BlockingQueue(Args&&... args)
     : baseQueue(std::forward<Args>(args)...)
 {
 }
 
-template<typename T, template<typename> class BaseQueueType>
+template<typename BaseQueueType>
 template<typename U>
-bool BlockingQueue<T, BaseQueueType>::enqueue(U&& u)
+bool BlockingQueue<BaseQueueType>::enqueue(U&& u)
 {
     if (!baseQueue.enqueue(std::forward<U>(u))) {
         return false;
@@ -77,8 +81,8 @@ bool BlockingQueue<T, BaseQueueType>::enqueue(U&& u)
     return true;
 }
 
-template<typename T, template<typename> class BaseQueueType>
-void BlockingQueue<T, BaseQueueType>::dequeue(T& t)
+template<typename BaseQueueType>
+void BlockingQueue<BaseQueueType>::dequeue(T& t)
 {
     if (baseQueue.dequeue(t)) {
         return;

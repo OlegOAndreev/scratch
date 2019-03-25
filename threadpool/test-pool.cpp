@@ -452,13 +452,17 @@ void testQueues()
         testQueueImpl<int>(stdBlockingQueueInt, "int", "StdBlockingQueue", kIters,
                            nullptr, baselineSpeedInt);
 
-        BlockingQueue<int, mpmc_bounded_queue> mpmcBlockingQueueInt(kQueueSize);
+        BlockingQueue<mpmc_bounded_queue<int>> mpmcBlockingQueueInt(kQueueSize);
         testQueueImpl<int>(mpmcBlockingQueueInt, "int", "mpmc_bounded_queue", kIters,
                            baselineSpeedInt, nullptr);
 
-        BlockingQueue<int, MpScUnboundedQueue> mpscBlockingQueueInt;
+        BlockingQueue<MpScUnboundedQueue<int>> mpscBlockingQueueInt;
         testQueueImpl<int>(mpscBlockingQueueInt, "int", "MpScUnboundedQueue", kIters,
                            baselineSpeedInt, nullptr);
+
+        BlockingQueue<MpScUnboundedQueue<int, SimpleAlloc>> mpscBlockingQueueIntAlloc;
+        testQueueImpl<int>(mpscBlockingQueueIntAlloc, "int", "MpScUnboundedQueue+SimpleAlloc",
+                           kIters, baselineSpeedInt, nullptr);
 
         printf("=====\n");
     }
@@ -472,13 +476,18 @@ void testQueues()
         testQueueImpl<FatQueueItem>(stdBlockingQueueFat, "FatQueueItem", "StdBlockingQueue", kIters,
                                     nullptr, baselineSpeedFat);
 
-        BlockingQueue<FatQueueItem, mpmc_bounded_queue> mpmcBlockingQueueFat(kQueueSize);
+        BlockingQueue<mpmc_bounded_queue<FatQueueItem>> mpmcBlockingQueueFat(kQueueSize);
         testQueueImpl<FatQueueItem>(mpmcBlockingQueueFat, "FatQueueItem", "mpmc_bounded_queue",
                                     kIters, baselineSpeedFat, nullptr);
 
-        BlockingQueue<FatQueueItem, MpScUnboundedQueue> mpscBlockingQueueFat;
+        BlockingQueue<MpScUnboundedQueue<FatQueueItem>> mpscBlockingQueueFat;
         testQueueImpl<FatQueueItem>(mpscBlockingQueueFat, "FatQueueItem", "MpScUnboundedQueue",
                                     kIters, baselineSpeedFat, nullptr);
+
+        BlockingQueue<MpScUnboundedQueue<FatQueueItem, SimpleAlloc>> mpscBlockingQueueFatAlloc;
+        testQueueImpl<FatQueueItem>(mpscBlockingQueueFatAlloc, "FatQueueItem",
+                                    "MpScUnboundedQueue+SimpleAlloc", kIters, baselineSpeedFat,
+                                    nullptr);
 
         printf("=====\n");
     }
@@ -891,7 +900,7 @@ using TaskType = FixedFunction<void()>;
 
 // A wrapper for MpMcBlockingQueue, providing the queue size.
 size_t const kMaxTasksInQueue = 32 * 1024;
-struct MpMcFixedBlockingQueue : public BlockingQueue<TaskType, mpmc_bounded_queue>
+struct MpMcFixedBlockingQueue : public BlockingQueue<mpmc_bounded_queue<TaskType>>
 {
     MpMcFixedBlockingQueue()
         : BlockingQueue(kMaxTasksInQueue)

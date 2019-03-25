@@ -30,6 +30,9 @@ template<typename T>
 class mpmc_bounded_queue
 {
 public:
+  // MODIFIED: Added typedef for BlockingQueue.
+  using ElementType = T;
+
   mpmc_bounded_queue(size_t buffer_size)
     : buffer_(new cell_t [buffer_size])
     , buffer_mask_(buffer_size - 1)
@@ -73,7 +76,7 @@ public:
     // MODIFIED: Switched to forwarding to support move-only data.
     cell->data_ = std::forward<U>(data);
     // MODIFIED: Use seq_cst instead of release as a way to prevent reordering of memory accesses
-    // before it (see mpmcblockingtaskqueue.h for more details).
+    // before it (see blockingtaskqueue.h for more details).
     cell->sequence_.store(pos + 1, std::memory_order_seq_cst);
     return true;
   }
@@ -86,7 +89,7 @@ public:
     {
       cell = &buffer_[pos & buffer_mask_];
       // MODIFIED: Use seq_cst instead of acquire as a way to prevent reordering of the memory
-      // accesses around it (see mpmcblockingtaskqueue.h for more details).
+      // accesses around it (see blockingtaskqueue.h for more details).
       size_t seq =
         cell->sequence_.load(std::memory_order_seq_cst);
       intptr_t dif = (intptr_t)seq - (intptr_t)(pos + 1);
