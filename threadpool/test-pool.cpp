@@ -21,53 +21,45 @@
 #include "stdblockingqueue.h"
 
 
-#define ASSERT_THAT(expr) \
-    do { \
-        if (!(expr)) { \
-            fprintf(stderr, "FAILED: %s:%d: %s\n", __FILE__, __LINE__, #expr); \
-            abort(); \
-        } \
-    } while (0)
-
 void testFixedFunction()
 {
     int src, dst;
     // Should have capture with sizeof == 2 * sizeof(int*).
     FixedFunction<void()> proc([&src, &dst] { dst = src; });
-    ASSERT_THAT(!proc.empty());
+    ENSURE(!proc.empty(), "");
     src = 1;
     proc();
-    ASSERT_THAT(dst == 1);
+    ENSURE(dst == 1, "");
     src = 123;
     proc();
-    ASSERT_THAT(dst == 123);
+    ENSURE(dst == 123, "");
 
     FixedFunction<void()> movedProc(std::move(proc));
-    ASSERT_THAT(!movedProc.empty());
-    ASSERT_THAT(proc.empty());
+    ENSURE(!movedProc.empty(), "");
+    ENSURE(proc.empty(), "");
     src = 456;
     movedProc();
-    ASSERT_THAT(dst == 456);
+    ENSURE(dst == 456, "");
 
     FixedFunction<void()> moveAssignedProc;
-    ASSERT_THAT(moveAssignedProc.empty());
+    ENSURE(moveAssignedProc.empty(), "");
     moveAssignedProc = std::move(movedProc);
-    ASSERT_THAT(!moveAssignedProc.empty());
-    ASSERT_THAT(movedProc.empty());
+    ENSURE(!moveAssignedProc.empty(), "");
+    ENSURE(movedProc.empty(), "");
     src = 789;
     moveAssignedProc();
-    ASSERT_THAT(dst == 789);
+    ENSURE(dst == 789, "");
 
     double coeff = 1.0;
     FixedFunction<double(double)> computeFunc1([&coeff] (double x) { return sqrt(x) * coeff; });
-    ASSERT_THAT(computeFunc1(1.0) == 1.0);
-    ASSERT_THAT(computeFunc1(4.0) == 2.0);
+    ENSURE(computeFunc1(1.0) == 1.0, "");
+    ENSURE(computeFunc1(4.0) == 2.0, "");
     coeff = 3.0;
-    ASSERT_THAT(computeFunc1(1.0) == 3.0);
+    ENSURE(computeFunc1(1.0) == 3.0, "");
 
     FixedFunction<double(double)> computeFunc2(sqrt);
-    ASSERT_THAT(computeFunc2(1.0) == 1.0);
-    ASSERT_THAT(computeFunc2(4.0) == 2.0);
+    ENSURE(computeFunc2(1.0) == 1.0, "");
+    ENSURE(computeFunc2(4.0) == 2.0, "");
 
     struct RatherBigStruct {
         double d1 = 1.0;
@@ -80,31 +72,31 @@ void testFixedFunction()
     };
 
     FixedFunction<double(double)> smallAndBigFunc1([](double param) { return param + 1.0; });
-    ASSERT_THAT(smallAndBigFunc1(0.0) == 1.0);
-    ASSERT_THAT(smallAndBigFunc1(1.0) == 2.0);
+    ENSURE(smallAndBigFunc1(0.0) == 1.0, "");
+    ENSURE(smallAndBigFunc1(1.0) == 2.0, "");
 
     RatherBigStruct rbs;
     FixedFunction<double(double)> smallAndBigFunc2([=](double param) {
         return rbs.d1 + rbs.d2 + rbs.d3 + rbs.d4 + rbs.d5 + rbs.d6 + rbs.d7 + param;
     });
-    ASSERT_THAT(smallAndBigFunc2(0.0) == 28.0);
+    ENSURE(smallAndBigFunc2(0.0) == 28.0, "");
 
     FixedFunction<double(double)> smallAndBigFunc3;
     smallAndBigFunc3 = std::move(smallAndBigFunc2);
     smallAndBigFunc2 = std::move(smallAndBigFunc1);
-    ASSERT_THAT(smallAndBigFunc2(0.0) == 1.0);
-    ASSERT_THAT(smallAndBigFunc3(0.0) == 28.0);
+    ENSURE(smallAndBigFunc2(0.0) == 1.0, "");
+    ENSURE(smallAndBigFunc3(0.0) == 28.0, "");
 
     FixedFunction<std::string(std::string)> copyStringFunc([](std::string s) {
         return s + "abc";
     });
-    ASSERT_THAT(copyStringFunc("123") == "123abc");
+    ENSURE(copyStringFunc("123") == "123abc", "");
 
     FixedFunction<std::string(std::string const&)> crefStringFunc([](std::string const& s) {
         return s + "abcd";
     });
 
-    ASSERT_THAT(crefStringFunc("1234") == "1234abcd");
+    ENSURE(crefStringFunc("1234") == "1234abcd", "");
 
     FixedFunction<void(std::string const&, std::string&)> refStringFunc(
                 [](std::string const& srcs, std::string& dsts) {
@@ -113,7 +105,7 @@ void testFixedFunction()
 
     std::string out;
     refStringFunc("12345", out);
-    ASSERT_THAT(out == "12345abcde");
+    ENSURE(out == "12345abcde", "");
 
     printf("FixedFunction tests passed\n");
     printf("=====\n");
@@ -163,7 +155,7 @@ void testCountWaiter()
             if (deleteWaiter) {
                 delete waiter[i];
             }
-            ASSERT_THAT(i * i == producedValue[i]);
+            ENSURE(i * i == producedValue[i], "");
         }
     };
 
@@ -235,7 +227,7 @@ void testQueueImpl(Queue& testQueue, const char* typeName, const char* testQueue
     auto producer = [](auto& queue, int start, int end, int step) {
         uint64_t startTime = getTimeTicks();
         for (int i = start; i < end; i += step) {
-            ASSERT_THAT(queue.enqueue(T(i)));
+            ENSURE(queue.enqueue(T(i)), "");
         }
         return elapsedMsec(startTime);
     };
@@ -254,7 +246,7 @@ void testQueueImpl(Queue& testQueue, const char* typeName, const char* testQueue
     auto assertCorrectOut = [](std::vector<T>& out) {
         std::sort(out.begin(), out.end());
         for (int i = 0, n = out.size(); i < n; i++) {
-            ASSERT_THAT(out[i] == T(i));
+            ENSURE(out[i] == T(i), "");
         }
     };
 
@@ -563,7 +555,7 @@ void testFiber()
         for (int j = 0; j < kNumFibers; j++) {
             double startOutput = j;
             for (int i = 0; i < kNumIterations; i++) {
-                ASSERT_THAT(output[j * kNumIterations + i] == startOutput * i);
+                ENSURE(output[j * kNumIterations + i] == startOutput * i, "");
             }
         }
 
@@ -608,7 +600,7 @@ template<typename TP>
 void basicTests(TP& tp)
 {
     auto future1 = submitFuture(tp, [] { return 1; });
-    ASSERT_THAT(future1.get() == 1);
+    ENSURE(future1.get() == 1, "");
 
     auto lambda2 = [](int i) { return i * i; };
     std::vector<std::future<int>> futures2;
@@ -616,11 +608,11 @@ void basicTests(TP& tp)
         futures2.push_back(submitFuture(tp, lambda2, i));
     }
     for (int i = 0; i < 10000; i++) {
-        ASSERT_THAT(futures2[i].get() == i * i);
+        ENSURE(futures2[i].get() == i * i, "");
     }
 
     auto future3 = submitFuture(tp, (double(*)(double))sqrt, 1.0);
-    ASSERT_THAT(future3.get() == 1.0);
+    ENSURE(future3.get() == 1.0, "");
 
     int result4 = 0;
     CountWaiter waiter4(1);
@@ -629,7 +621,7 @@ void basicTests(TP& tp)
         waiter4.post();
     });
     waiter4.wait();
-    ASSERT_THAT(result4 == 123);
+    ENSURE(result4 == 123, "");
 
     printf("Basic tests passed\n");
 }
@@ -675,7 +667,7 @@ void printTinyJobsStats(std::vector<int64_t>& jobsPerSec, int64_t baseJobsPerSec
     int64_t maxJobsPerSec = jobsPerSec.back();
     double accel = avgJobsPerSec * 100.0  / baseJobsPerSec;
     for (size_t i = 0; i < numJobsPerBatch; i++) {
-        ASSERT_THAT(baseResults[i] == results[i]);
+        ENSURE(baseResults[i] == results[i], "");
     }
     printf("Tiny job test with %d-iter-job for pool (%s): avg %lld, median %lld,"
            " max %lld jobs per sec, perf vs single core: %.1f%%\n", numItersPerJob, description,
