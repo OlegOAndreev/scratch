@@ -285,6 +285,11 @@ FORCE_INLINE long long byteSwap(long long v)
     return (long long)byteSwap((unsigned long long)v);
 }
 
+
+//
+// Pointer alignment.
+//
+
 // Returns the first pointer after ptr, which is aligned according to alignment.
 template<size_t alignment, typename T>
 FORCE_INLINE T* nextAlignedPtr(T* ptr)
