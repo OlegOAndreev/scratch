@@ -347,6 +347,34 @@ inline int elapsedMsec(uint64_t startTime)
     return (getTimeTicks() - startTime) * 1000LL / getTimeFreq();
 }
 
+// Sleep for the given number of milliseconds. See enableFinegrainedSleep() for precision details.
+inline void sleepMsec(int msec)
+{
+#if defined(__APPLE__) || defined(__linux__)
+    struct timespec ts;
+    ts.tv_sec = msec / 1000;
+    ts.tv_nsec = (msec - ts.tv_sec * 1000) * 1000000;
+    nanosleep(&ts, nullptr);
+#elif defined(_WIN32)
+    Sleep(msec);
+#else
+#error "Unsupported OS"
+#endif
+}
+
+// Macos has ~10usec sleep granularity. Linux has ~50usec sleep granularity by default (can be
+// configured via prctl(PR_SET_TIMERSLACK) down to ~10usec). Windows by default has a very coarse
+// granularity of 15msec. The granularity for the current process can be lowered down to 1msec
+// by calling this function once before calling the sleepMsec().
+//
+// NOTE: Finer granularities (~100nsec) can be achieved by sleeping + spinning for
+// the last microseconds.
+inline void enableFinegrainedSleep()
+{
+#if defined(_WIN32)
+    timeBeginPeriod(1);
+#endif
+}
 
 //
 // Semaphore: an OS semaphore class with two methods: post() and wait().
