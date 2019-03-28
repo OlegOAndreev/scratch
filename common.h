@@ -536,20 +536,20 @@ inline auto simpleAverage(C const& container)
 }
 
 // Returns true if set-like container contains value, false if not.
-template<typename C, typename V>
-inline bool setContains(C const& container, V const& value)
+template<typename S, typename V>
+inline bool setContains(S const& setContainer, V const& value)
 {
-    return container.find(value) != container.end();
+    return setContainer.find(value) != setContainer.end();
 }
 
 // Removes the elements satisfying the predicate from the vector-like container (container
 // must have methods begin(), end() and erase(fromIt, toIt)). Preserves the order of the elements
 // in the original container.
-template<typename C, typename P>
-inline void removeIf(C& container, P const& predicate)
+template<typename V, typename P>
+inline void removeIf(V& vecContainer, P const& predicate)
 {
-    auto it = container.begin();
-    auto endIt = container.end();
+    auto it = vecContainer.begin();
+    auto endIt = vecContainer.end();
     // Optimization: do not call std::move until we actually encounter an element to remove.
     while (it != endIt && !predicate(*it)) {
         ++it;
@@ -567,5 +567,5 @@ inline void removeIf(C& container, P const& predicate)
         *insertIt = std::move(*it);
         ++insertIt;
     }
-    container.erase(insertIt, endIt);
+    vecContainer.erase(insertIt, endIt);
 }
