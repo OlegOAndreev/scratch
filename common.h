@@ -9,6 +9,7 @@
 #include <sys/time.h>
 #elif defined(__linux__)
 #include <time.h>
+#include <sys/prctl.h>
 #elif defined(_WIN32)
 #include <windows.h>
 #else
@@ -367,16 +368,18 @@ inline void sleepMsec(int msec)
 #endif
 }
 
-// Macos has ~10usec sleep granularity. Linux has ~50usec sleep granularity by default (can be
+// Macos has ~10usec sleep granularity. Linux has ~50-100usec sleep granularity by default (can be
 // configured via prctl(PR_SET_TIMERSLACK) down to ~10usec). Windows by default has a very coarse
-// granularity of 15msec. The granularity for the current process can be lowered down to 1msec
-// by calling this function once before calling the sleepMsec().
+// granularity of 15msec. The granularity for the current process on Win32 can be lowered down
+// to 1msec by calling this function once before calling the sleepMsec().
 //
 // NOTE: Finer granularities (~100nsec) can be achieved by sleeping + spinning for
 // the last microseconds.
 inline void enableFinegrainedSleep()
 {
-#if defined(_WIN32)
+#if defined(__linux__)
+    prctl(PR_SET_TIMERSLACK, 1, 0, 0, 0);
+#elif defined(_WIN32)
     timeBeginPeriod(1);
 #endif
 }
