@@ -208,6 +208,10 @@ void testLoadStores()
         uint64_t u4 = 0xABCDEFF00FFEDCAB;
         store_u64(loadStoreBuffer + offset, u4);
         ENSURE(load_u64(loadStoreBuffer + offset) == u4, "");
+
+        int aptr;
+        store_ptr(loadStoreBuffer + offset, &aptr);
+        ENSURE(load_ptr(loadStoreBuffer + offset) == &aptr, "");
     }
 
     printf("testLoadStores passed\n");

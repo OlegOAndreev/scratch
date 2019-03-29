@@ -187,6 +187,7 @@ DEFINE_LOAD_STORE(int32_t, i32)
 DEFINE_LOAD_STORE(uint32_t, u32)
 DEFINE_LOAD_STORE(int64_t, i64)
 DEFINE_LOAD_STORE(uint64_t, u64)
+DEFINE_LOAD_STORE(void*, ptr)
 
 #if defined(__x86_64__) || defined(_M_X64)
 #define CPU_IS_X86_64
