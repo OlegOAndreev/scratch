@@ -311,7 +311,6 @@ void testRandomRange()
     state[0] = 1; state[1] = 2; state[2] = 3; state[3] = 4;
     for (int i = 0; i < 10000; i++) {
         uint32_t v = randomRange(state, 0, 2);
-        ENSURE(v >= 0, "");
         ENSURE(v < 2, "");
     }
     for (int i = 0; i < 10000; i++) {
@@ -379,13 +378,13 @@ void testRemoveIf()
 {
     std::vector<int> v{1, 2, 3, 4, 5};
 
-    removeIf(v, [](int v) { return v < 0; });
+    removeIf(v, [](int i) { return i < 0; });
     ENSURE((v == std::vector<int>{1, 2, 3, 4, 5}), "");
 
-    removeIf(v, [](int v) { return v % 2 == 0; });
+    removeIf(v, [](int i) { return i % 2 == 0; });
     ENSURE((v == std::vector<int>{1, 3, 5}), "");
 
-    removeIf(v, [](int v) { return v >= 1; });
+    removeIf(v, [](int i) { return i >= 1; });
     ENSURE(v.empty(), "");
 
     printf("testRemoveIf passed\n");

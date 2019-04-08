@@ -2,6 +2,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <memory>
 #include <unordered_map>
 #include <vector>
 #include <errno.h>
