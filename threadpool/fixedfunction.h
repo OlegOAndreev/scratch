@@ -17,7 +17,7 @@ public:
     template<typename Functor>
     FixedFunction(Functor&& functor);
     // Initializes a function from a function ptr.
-    FixedFunction(R (*func)(Args... args));
+    FixedFunction(R (&func)(Args... args));
 
     // FixedFunction is move-only. The other function becomes uninitialized.
     FixedFunction(FixedFunction&& other);
@@ -116,14 +116,9 @@ FixedFunction<R(Args...), MaxSize, AllocOnOverflow>::FixedFunction(Functor&& fun
 }
 
 template<typename R, size_t MaxSize, bool AllocOnOverflow, typename ...Args>
-FixedFunction<R(Args...), MaxSize, AllocOnOverflow>::FixedFunction(R (*func)(Args... args))
+FixedFunction<R(Args...), MaxSize, AllocOnOverflow>::FixedFunction(R (&func)(Args... args))
+    : FixedFunction(&func)
 {
-    using FuncType = R(*)(Args...);
-    static_assert(sizeof(FuncType) <= sizeof(storage), "MaxSize should be at least the size"
-                                                       " of function pointer");
-    funcPtr = detail::funcPtrFromPtr<R, Args...>;
-    movePtr = detail::movePtrFromPtr<R, Args...>;
-    new(storage) FuncType(func);
 }
 
 template<typename R, size_t MaxSize, bool AllocOnOverflow, typename ...Args>
