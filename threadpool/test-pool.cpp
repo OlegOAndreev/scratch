@@ -452,9 +452,9 @@ void testQueues()
         testQueueImpl<int>(mpscBlockingQueueInt, "int", "MpScUnboundedQueue", kIters,
                            baselineSpeedInt, nullptr);
 
-        BlockingQueue<MpScUnboundedQueue<int, SimpleAlloc>> mpscBlockingQueueIntAlloc;
-        testQueueImpl<int>(mpscBlockingQueueIntAlloc, "int", "MpScUnboundedQueue+SimpleAlloc",
-                           kIters, baselineSpeedInt, nullptr);
+//        BlockingQueue<MpScUnboundedQueue<int, SimpleAlloc>> mpscBlockingQueueIntAlloc;
+//        testQueueImpl<int>(mpscBlockingQueueIntAlloc, "int", "MpScUnboundedQueue+SimpleAlloc",
+//                           kIters, baselineSpeedInt, nullptr);
 
         printf("=====\n");
     }
@@ -476,13 +476,19 @@ void testQueues()
         testQueueImpl<FatQueueItem>(mpscBlockingQueueFat, "FatQueueItem", "MpScUnboundedQueue",
                                     kIters, baselineSpeedFat, nullptr);
 
-        BlockingQueue<MpScUnboundedQueue<FatQueueItem, SimpleAlloc>> mpscBlockingQueueFatAlloc;
-        testQueueImpl<FatQueueItem>(mpscBlockingQueueFatAlloc, "FatQueueItem",
-                                    "MpScUnboundedQueue+SimpleAlloc", kIters, baselineSpeedFat,
-                                    nullptr);
+//        BlockingQueue<MpScUnboundedQueue<FatQueueItem, SimpleAlloc>> mpscBlockingQueueFatAlloc;
+//        testQueueImpl<FatQueueItem>(mpscBlockingQueueFatAlloc, "FatQueueItem",
+//                                    "MpScUnboundedQueue+SimpleAlloc", kIters, baselineSpeedFat,
+//                                    nullptr);
 
         printf("=====\n");
     }
+}
+
+
+void testAlloc()
+{
+    SimplestAlloc simplestAlloc;
 }
 
 
@@ -953,6 +959,10 @@ int main(int argc, char** argv)
 
     if (poolNames.empty() || setContains(poolNames, "queues")) {
         testQueues();
+    }
+
+    if (poolNames.empty() || setContains(poolNames, "alloc")) {
+        testAlloc();
     }
 
     if (poolNames.empty() || setContains(poolNames, "simple")) {
