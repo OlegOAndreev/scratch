@@ -13,7 +13,7 @@ public:
     using ElementType = T;
 
     MpScUnboundedQueue();
-    MpScUnboundedQueue(Alloc& alloc);
+    MpScUnboundedQueue(Alloc& alloc_);
     ~MpScUnboundedQueue();
 
     template<typename U>
@@ -52,8 +52,8 @@ MpScUnboundedQueue<T, Alloc>::MpScUnboundedQueue()
 }
 
 template<typename T, typename Alloc>
-MpScUnboundedQueue<T, Alloc>::MpScUnboundedQueue(Alloc& alloc)
-    : alloc(alloc)
+MpScUnboundedQueue<T, Alloc>::MpScUnboundedQueue(Alloc& alloc_)
+    : alloc(alloc_)
 {
     head.store(&stub, std::memory_order_relaxed);
     tail = &stub;
