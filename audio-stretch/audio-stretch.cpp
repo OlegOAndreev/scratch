@@ -48,6 +48,8 @@ size_t getSampleSize(SampleFormat format)
         return 2;
     case SampleFormat::Float:
         return 4;
+    default:
+        ENSURE(false, "Not supported format");
     }
 }
 
@@ -71,10 +73,10 @@ struct Span2d {
     size_t rows;
     size_t columns;
 
-    Span2d(T* begin, size_t rows, size_t columns)
-        : begin(begin)
-        , rows(rows)
-        , columns(columns)
+    Span2d(T* begin_, size_t rows_, size_t columns_)
+        : begin(begin_)
+        , rows(rows_)
+        , columns(columns_)
     {
     }
 
@@ -319,8 +321,8 @@ struct LinearResampleState {
     // This value is used if the nextSrcIntPos == SIZE_MAX.
     std::vector<ST> lastSample;
 
-    LinearResampleState(int numChannels)
-        : numChannels(numChannels)
+    LinearResampleState(int numChannels_)
+        : numChannels(numChannels_)
     {
         lastSample.resize(numChannels);
     }
@@ -464,10 +466,10 @@ struct StftState {
     std::vector<kiss_fft_cpx> dstFreqBuf;
     std::vector<kiss_fft_scalar> dstBuf;
 
-    StftState(size_t fftSize, size_t offset, int numChannels)
-        : fftSize(fftSize)
-        , offset(offset)
-        , numChannels(numChannels)
+    StftState(size_t fftSize_, size_t offset_, int numChannels_)
+        : fftSize(fftSize_)
+        , offset(offset_)
+        , numChannels(numChannels_)
     {
         window.resize(fftSize);
         fftCfg = kiss_fftr_alloc(fftSize, 0, nullptr, nullptr);
@@ -1007,6 +1009,8 @@ size_t doStretchSound(const T* src, size_t numSamples, int numChannels, StretchM
         return simpleStretchSoundSamples(src, numSamples, numChannels, params, dst, dstNumSamples);
     case StretchMethod::Stft:
         return stftStretchSoundSamples(src, numSamples, numChannels, params, dst, dstNumSamples);
+    default:
+        ENSURE(false, "Not supported format");
     }
 }
 
@@ -1080,6 +1084,8 @@ SoundData stretchSound(const SoundData& src, StretchMethod method, const Stretch
         dstWritten = doStretchSound((float*)src.samples.data(), src.numSamples, src.numChannels,
                                     method, params, (float*)dst.samples.data(), dst.numSamples);
         break;
+    default:
+        ENSURE(false, "Not supported format");
     }
 
     // Sanity check.
