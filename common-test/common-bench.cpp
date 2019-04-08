@@ -51,6 +51,52 @@ void benchRandom()
            itersPerSec(kNumIterations, startTime), (int)(r % 10));
 }
 
+void benchGetTime()
+{
+    int const kNumIterations = 10000000;
+    uint64_t r = 0;
+
+    uint64_t startTime = getTimeTicks();
+    for (int i = 0; i < kNumIterations; i++) {
+        r += getTimeTicks();
+    }
+
+    // Print r to prevent optimizing the calls out.
+    printf("%lld getTimeTicks/sec (ignore this: %d)\n",
+           itersPerSec(kNumIterations, startTime), (int)(r % 10));
+}
+
+void benchSimpleHashImpl(size_t size)
+{
+    int numIterations = 1000000000 / size;
+    size_t r = 0;
+
+    uint32_t xsState[4] = {0, 1, 2, 3};
+    std::unique_ptr<char[]> buf{new char[size]};
+    for (size_t i = 0; i < size; i++) {
+        buf[i] = xorshift128(xsState) & 0xFF;
+    }
+
+    uint64_t startTime = getTimeTicks();
+    for (int i = 0; i < numIterations; i++) {
+        r += simpleHash(buf.get(), size);
+    }
+
+    // Print r to prevent optimizing the calls out.
+    int mbPerSec = (int)(numIterations * size * getTimeFreq()
+            / ((getTimeTicks() - startTime) * 1024 * 1024));
+    printf("simpleHash(%d): %dMb/sec (ignore this: %d)\n", (int)size, mbPerSec,
+           (int)(r % 10));
+}
+
+void benchSimpleHash()
+{
+    benchSimpleHashImpl(10);
+    benchSimpleHashImpl(100);
+    benchSimpleHashImpl(1000);
+    benchSimpleHashImpl(1000000);
+}
+
 int main(int argc, char** argv)
 {
     std::unordered_set<std::string> benchNames;
@@ -64,5 +110,13 @@ int main(int argc, char** argv)
 
     if (benchNames.empty() || setContains(benchNames, "random")) {
         benchRandom();
+    }
+
+    if (benchNames.empty() || setContains(benchNames, "getTimeTicks")) {
+        benchGetTime();
+    }
+
+    if (benchNames.empty() || setContains(benchNames, "simpleHash")) {
+        benchSimpleHash();
     }
 }
