@@ -488,7 +488,7 @@ void testQueues()
 
 void testAlloc()
 {
-    SimplestAlloc simplestAlloc;
+//    SimplestAlloc simplestAlloc;
 }
 
 
