@@ -17,7 +17,7 @@ class BlockingQueue {
 public:
     using T = typename BaseQueueType::ElementType;
 
-    // All the arguments are passed to the BaseQueueType constructor
+    // All the arguments are passed to the BaseQueueType constructor.
     template<typename ...Args>
     BlockingQueue(Args&&... args);
 
@@ -91,7 +91,7 @@ void BlockingQueue<BaseQueueType>::dequeue(T& t)
     int const kSpinCount = 100;
 
     while (true) {
-        // Spin for a few iterations
+        // Spin for a few iterations.
         for (int i = 0; i < kSpinCount; i++) {
             if (baseQueue.dequeue(t)) {
                 return;

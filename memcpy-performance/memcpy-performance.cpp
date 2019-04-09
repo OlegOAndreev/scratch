@@ -199,7 +199,7 @@ bool testMemcpyFuncIter(MemcpyFuncType memcpyFunc, char* dst, char* src, size_t 
     // Computes the input hash to check later that the input has not been modified.
     size_t srcHash = simpleHash(src, size + REDZONE);
 
-    // Fills the space after the dst with different values to check it has not been checked.
+    // Fills the space after the dst with different values to check it has not been modified.
     for (size_t i = size; i < size + REDZONE; i++) {
         dst[i] = src[i] ^ 255;
     }
@@ -358,7 +358,7 @@ size_t memcpyBuffer(MemcpyFuncType memcpyFunc, char* buffer, size_t bufferSize,
     // in bounds.
     size_t halfBlocks = numBlocks / 2;
     // Completely randomly selected state.
-    uint32_t xorstate[4] = { 1, 2, 3, 4 };
+    uint32_t xorstate[4] = {1, 2, 3, 4};
     size_t total = 0;
     for (size_t i = 0; i < halfBlocks; i++) {
         size_t from;

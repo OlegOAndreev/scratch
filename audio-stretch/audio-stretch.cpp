@@ -18,9 +18,9 @@
 //
 // Basic phase vocoder implementation: http://downloads.dspdimension.com/smbPitchShift.cpp
 //
-// Desription of phase gradient approach to improve the phase vocoder: Phase Vocoder Done Right,
-// Zdeneˇk Pru ̊ša and Nicki Holighaus, Acoustics Research Institute, Austrian Academy
-// of Sciences Vienna, Austria
+// Desription of the phase gradient approach to improve the phase vocoder:
+// Phase Vocoder Done Right, Zdeneˇk Pru ̊ša and Nicki Holighaus, Acoustics Research Institute,
+// Austrian Academy of Sciences Vienna, Austria
 
 enum class SampleFormat {
     Sint16,
@@ -80,13 +80,13 @@ struct Span2d {
     {
     }
 
-    // Returns pointer to the row n.
+    // Returns the pointer to the row n.
     FORCE_INLINE T* row(size_t n)
     {
         return begin + n * columns;
     }
 
-    // Returns reference to the element at the position (row, column).
+    // Returns the reference to the element at the position (row, column).
     FORCE_INLINE T& operator()(size_t row, size_t column)
     {
         return begin[row * columns + column];
@@ -306,16 +306,16 @@ DT castAndClamp(ST v)
     return std::min(std::max(v, dstMin), dstMax);
 }
 
-// Struct, holding the necessary values to resample audio chunk by chunk. The main use-case for
-// this struct solves is passing the last position (and, potentially, last value) from resample
+// Struct, holding the necessary state to resample audio chunk by chunk. The main use-case for
+// the struct is passing the last position (and, potentially, last value) from resample
 // for the previous chunk to resample for the next chunk.
 template<typename ST>
 struct LinearResampleState {
     int numChannels;
 
-    // Iterator position, stored for continuing resampling the next block. Positions and deltas
-    // are encoded as int+float pair. If nextSrcIntPos == SIZE_MAX, lastSample must be used
-    // as a first element before processing next src block.
+    // Iterator position, stored to continue the resampling for the next block. Positions
+    // and deltas are encoded as int+float pair. If nextSrcIntPos == SIZE_MAX,
+    // lastSample must be used as a first element before processing next src block.
     size_t nextSrcIntPos = 0;
     double nextSrcFloatPos = 0.0;
     // This value is used if the nextSrcIntPos == SIZE_MAX.
@@ -360,8 +360,8 @@ size_t resampleChunk(LinearResampleState<ST>* state, const ST* src, size_t srcSa
         size_t dstPos = 0;
         size_t srcIntPos = state->nextSrcIntPos;
         double srcFloatPos = state->nextSrcFloatPos;
-        // Process src positions between the last sample from previous block and first sample
-        // from current block.
+        // Process src positions between the last sample from the previous block and first sample
+        // from the current block.
         if (srcIntPos == SIZE_MAX) {
             while (true) {
                 // Sanity check that dst is allocated correctly.
@@ -380,14 +380,14 @@ size_t resampleChunk(LinearResampleState<ST>* state, const ST* src, size_t srcSa
                     srcIntPos++;
                     srcFloatPos -= 1.0;
                 }
-                // Use defined overflow for size_t. NOTE: The would certainly be cleaner
+                // Use defined overflow for size_t. NOTE: This would certainly be cleaner
                 // if ssize_t has been used for srcIntPos and lastSrcIntPos.
                 if (srcIntPos != SIZE_MAX) {
                     break;
                 }
             }
         }
-        // Main loop for processing sample from src.
+        // Main loop for processing samples from src.
         while (true) {
             if (srcIntPos >= srcSamples - 1) {
                 break;
@@ -498,7 +498,7 @@ struct StftState {
     }
 };
 
-// Helper struct, containing data for simple phase vocoder.
+// Helper struct, containing state for the simple phase vocoder.
 struct SimpleVocoderState {
     size_t freqSize;
     // Phases from analysis from previous frame.
@@ -555,8 +555,8 @@ kiss_fft_scalar normalizePhase(kiss_fft_scalar phaseDiff)
 #endif
 }
 
-// Standard simple phase vocoder impl: take stft->freq and compute stft->dstFreq for given channel
-// with given pitchShift.
+// Standard simple phase vocoder implementation: takes stft->freq and computes stft->dstFreq
+// for given channel with given pitchShift.
 void stretchFreqSimple(StftState* stft, SimpleVocoderState* vocoder, double pitchShift, int channel)
 {
     size_t freqSize = stft->fftSize / 2 + 1;
@@ -567,8 +567,8 @@ void stretchFreqSimple(StftState* stft, SimpleVocoderState* vocoder, double pitc
     kiss_fft_scalar* synMagnitudes = vocoder->synMagnitudes.data();
 
     size_t overlap = stft->fftSize / stft->offset;
-    // Overlaps must be powers of two, so use it to optimize performance: replacing the k % overlap
-    // with k & overlapMask. You can always replace k * origPhaseMult with
+    // Overlap must be power-of-two, so use this fact for optimization:
+    // replace the k % overlap with k & overlapMask. You can always replace k * origPhaseMult with
     // (k % overlap) * origPhaseMult.
     size_t overlapMask = overlap - 1;
     if ((overlapMask & overlap) != 0) {
@@ -596,7 +596,7 @@ void stretchFreqSimple(StftState* stft, SimpleVocoderState* vocoder, double pitc
         bool largeMagn = (magn > synMagnitudes[newk]);
         synMagnitudes[newk] += magn;
         kiss_fft_scalar phase = std::atan2(freq[k].i, freq[k].r);
-        // If multiple old phase bins stretch into one new phase bin (if pitchShift < 1.0),
+        // If multiple old phase bins stretch into one new phase bin (when pitchShift < 1.0),
         // we add their magnitudes but want to want to choose only one phase (summing up phases
         // from multiple bins make no sense). Therefore, we separately compute newPhaseDiffs
         // and then add them to prevNewPhases in the end when finally computing dstFreq. Ideally
@@ -606,12 +606,12 @@ void stretchFreqSimple(StftState* stft, SimpleVocoderState* vocoder, double pitc
             // the frequency bin k at the end of the previous block) and the actual phase
             // for the frequency bin k at the start of the new block. This phase diff is then
             // applied to the stretched frequencies. The final formula is simplified version of
-            // the one from smbPitchShift.cpp Modulo overlapMask is important here, because
-            // otherwise the origPhaseMult * k can be very largenn  and normalizePhase does
-            // not expect it.
+            // the one from smbPitchShift.cpp. Modulo overlapMask is important here, because
+            // otherwise the origPhaseMult * k can be very large, while the normalizePhase
+            // assumes the parameter value to be near 0.
             kiss_fft_scalar anaPhaseDiff = normalizePhase(phase - prevAnaPhases[k]
                                                           - origPhaseMult * (k & overlapMask));
-            // The following two lines are basically equivalent to
+            // The following two lines are equivalent to
             //   synPhaseDiffs[newk] = pitchShift * (anaPhaseDiff + origPhaseMult * k).
             // The main difference is that the synPhaseDiffs is much closer to zero, so that
             // normalizePhase would take less time later.
@@ -624,8 +624,8 @@ void stretchFreqSimple(StftState* stft, SimpleVocoderState* vocoder, double pitc
 
     kiss_fft_cpx* dstFreq = stft->dstFreqBuf.data();
     for (size_t k = 0; k < freqSize; k++) {
-        // Do the normalize here so that the newPhases does not become too large to limit the
-        // the floating point errors stay bounded.
+        // Do the normalizePhase here so that the newPhases do not become too large, reducing the
+        // the floating point error.
         prevSynPhases[k] = normalizePhase(prevSynPhases[k] + synPhaseDiffs[k]);
         dstFreq[k].r = synMagnitudes[k] * std::cos(prevSynPhases[k]);
         dstFreq[k].i = synMagnitudes[k] * std::sin(prevSynPhases[k]);
@@ -633,14 +633,14 @@ void stretchFreqSimple(StftState* stft, SimpleVocoderState* vocoder, double pitc
 }
 
 
-// Helper struct, containing data for phase vocoder with phase gradient method.
+// Helper struct, containing the state for the phase vocoder with phase gradient method.
 struct PhaseGradientVocoderState {
     struct HeapElem {
         // Frequency bin.
         size_t freqIdx;
         // Magnitude for the frequency.
         kiss_fft_scalar magn;
-        // True if the element is from the previous STFT frame, false if from the current.
+        // True if the element is from the previous STFT frame, false if from the current frame.
         bool prevFrame;
 
         bool operator<(HeapElem const& other) const {
@@ -692,12 +692,12 @@ struct PhaseGradientVocoderState {
     }
 };
 
-// Phase vocoder with phase gradient impl: take stft->freq and compute stft->dstFreq for given
+// Phase vocoder with the phase gradient impl: takes stft->freq and compute sstft->dstFreq for given
 // channel with given pitchShift.
 void stretchFreqPhaseGradient(StftState* stft, PhaseGradientVocoderState* vocoder,
                               double pitchShift, int channel)
 {
-    // Ignore frequencies with magnitude < (max magnitude * kMaxMagnitudeTolerance).
+    // Ignore the frequencies with magnitude < (max magnitude * kMaxMagnitudeTolerance).
     static const float kMinMagnitudeTolerance = 1e-3;
 
     size_t freqSize = stft->fftSize / 2 + 1;
@@ -713,9 +713,9 @@ void stretchFreqPhaseGradient(StftState* stft, PhaseGradientVocoderState* vocode
     uint8_t* phaseAssigned = vocoder->phaseAssigned.data();
 
     size_t overlap = stft->fftSize / stft->offset;
-    // Overlaps must be powers of two, so use it to optimize performance: replacing
-    // the k % overlap with k & overlapMask. You can always replace k * origPhaseMult
-    // with (k % overlap) * origPhaseMult.
+    // Overlap must be power-of-two, so use this fact for optimization:
+    // replace the k % overlap with k & overlapMask. You can always replace k * origPhaseMult with
+    // (k % overlap) * origPhaseMult.
     size_t overlapMask = overlap - 1;
     if ((overlapMask & overlap) != 0) {
         printf("Overlap must be pow-of-2\n");
@@ -731,7 +731,7 @@ void stretchFreqPhaseGradient(StftState* stft, PhaseGradientVocoderState* vocode
     }
     kiss_fft_scalar minMagn = maxMagn * kMinMagnitudeTolerance;
 
-    // std::priroity_queue has no clear()...
+    // std::priroity_queue has no clear().
     while (!maxHeap.empty()) {
         maxHeap.pop();
     }
@@ -748,7 +748,7 @@ void stretchFreqPhaseGradient(StftState* stft, PhaseGradientVocoderState* vocode
 
         kiss_fft_scalar magn = anaMagnitudes[k];
         // If pitchShift < 1.0, several analysis frequency bins may correspond to one synthesis bin,
-        // therefore, add, not replace.
+        // therefore, add, not assign.
         synMagnitudes[newk] += magn;
 
         // Optimization: do not compute phase for frequencies below the minMagn threshold.
@@ -788,7 +788,7 @@ void stretchFreqPhaseGradient(StftState* stft, PhaseGradientVocoderState* vocode
                     // diff is then applied to the stretched frequencies. The final formula
                     // is simplified a bit from the one from smbPitchShift.cpp
                     // Modulo overlapMask is important here, because otherwise the origPhaseMult * k
-                    // can be very large and normalizePhase does not expect it.
+                    // can be very large and normalizePhase expects values close to 0.
                     kiss_fft_scalar anaPhaseDiff = normalizePhase(
                                 anaPhases[k] - prevAnaPhases[k]
                                 - origPhaseMult * (k & overlapMask));
@@ -830,8 +830,8 @@ void stretchFreqPhaseGradient(StftState* stft, PhaseGradientVocoderState* vocode
 
     kiss_fft_cpx* dstFreq = stft->dstFreqBuf.data();
     for (size_t k = 0; k < freqSize; k++) {
-        // Do the normalize here so that the prevNewPhases does not become too large to limit the
-        // floating point errors.
+        // Do the normalizePhase here so that the prevNewPhases does not become too large,
+        // reducing the the floating point error.
         prevSynPhases[k] = normalizePhase(synPhases[k]);
         dstFreq[k].r = synMagnitudes[k] * std::cos(prevSynPhases[k]);
         dstFreq[k].i = synMagnitudes[k] * std::sin(prevSynPhases[k]);
@@ -841,8 +841,7 @@ void stretchFreqPhaseGradient(StftState* stft, PhaseGradientVocoderState* vocode
     std::copy(anaPhases, anaPhases + freqSize, prevAnaPhases);
 }
 
-// Takes stft->srcBuf, does STFT, changes pitch by pitchShift via frequencies and does inverse
-// STFT to stft->dstBuf.
+// Takes stft->srcBuf, does STFT, changes pitch by pitchShift and does inverse STFT to stft->dstBuf.
 void doStftPitchChange(StftState* stft, SimpleVocoderState* simpleVocoder,
                        PhaseGradientVocoderState* gradientVocoder,
                        double pitchShift, bool phaseGradient)
@@ -860,8 +859,8 @@ void doStftPitchChange(StftState* stft, SimpleVocoderState* simpleVocoder,
     }
 }
 
-// The simples STFT pitch shifter: first change frequency (shift frequencies for each individual
-// STFT block separately) and then basically do the linear interpolation like the simple stretch.
+// The simple STFT pitch shifter: changes frequencies (shifts frequencies for each individual
+// STFT block separately) and then basically does the linear interpolation like the simple stretch.
 // The algorithm is described in http://blogs.zynaptiq.com/bernsee/pitch-shifting-using-the-ft/
 template<typename T>
 size_t stftStretchSoundSamples(const T* src, size_t numSamples, int numChannels,
@@ -873,11 +872,11 @@ size_t stftStretchSoundSamples(const T* src, size_t numSamples, int numChannels,
         exit(1);
     }
 
-    // Offset of next block from to the previous one must always be fftSize / (n * 2) so that
+    // Offset of next block to the previous one must always be fftSize / (n * 2) so that
     // sum of offset hann windows is always constant.
     size_t fftSize = params.fftSize;
     size_t offset = fftSize / params.overlap;
-    // If we are time stretching, we have to compensate with pitch shift.
+    // If we are time stretching, we have to compensate with corresponding pitch shift.
     double finalPitchShift = params.pitchShift * params.timeStretch;
 
     Span2d<const T> srcV(src, numSamples, numChannels);
@@ -895,9 +894,10 @@ size_t stftStretchSoundSamples(const T* src, size_t numSamples, int numChannels,
 
     // One window will be used both for analysis and synthesis (i.e. forward and inverse
     // transforms). This idea is taken from smbPitchShift.cpp and is based on the fact that
-    // for overlaps >= 4 the sum of square hann window is constant.
+    // for overlaps >= 4 the sum of squared hann window is constant.
     // The explanation why having windows both for forward and inverse transform is more optimal
     // (instead of just forward transform) is given here: https://gauss256.github.io/blog/cola.html:
+    //
     // > As mentioned above, it is most common to choose a = 1. The reason is that in the case
     // > where we did modify the STFT, there may not be a time-domain signal whose STFT matches
     // > our modified version. Choosing a = 1 gives the Griffin-Lim
@@ -909,8 +909,8 @@ size_t stftStretchSoundSamples(const T* src, size_t numSamples, int numChannels,
 
     LinearResampleState<kiss_fft_scalar> resampleState(numChannels);
     // Start with negative block offset, because each element must be overlapped by all possible
-    // offsets windows. Real block offset is block - fftSize, but we do not want ot mess with
-    // unsigned integers here.
+    // offsets windows. Real block offset is block - fftSize, but we do not want to use
+    // signed integers here.
     for (size_t block = offset; block < fftSize; block += offset) {
         size_t prefix = fftSize - block;
         // read != fftSize-prefix holds only when the numSamples < fftSize-offset.

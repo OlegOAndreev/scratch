@@ -46,7 +46,7 @@ public:
             printf("Could not open file %s\n", filename);
             exit(1);
         }
-        // Disable buffering because we will be buffering ourselves.
+        // Disable buffering because we will do the buffering ourselves.
         setvbuf(f, nullptr, _IONBF, 0);
         buf.reset(new char[bufferCapacity]);
         bufCapacity = bufferCapacity;
@@ -54,7 +54,7 @@ public:
         bufRead = 0;
     }
 
-    // We need this because of the noexcept requirement in vector.
+    // We need this because of the noexcept requirement in std::vector.
     FileLineReader(FileLineReader&& other) noexcept
         : f(other.f)
         , buf(std::move(other.buf))
@@ -72,13 +72,13 @@ public:
         }
     }
 
-    // Reads next line and returns true and writes to str if the EOF has not been reached, returns
-    // false otherwise.
+    // Reads the next line, returns true and writes to str if the EOF has not been reached,
+    // returns false otherwise.
     bool readLine(std::string* str)
     {
         str->clear();
         char* bufp = buf.get();
-        // Reads until either the line separator or end of file is reached.
+        // Reads until either the line separator or the end of file is reached.
         while (true) {
             char* eol = (char*)memchr(bufp + bufRead, kLineSeparator, bufSize - bufRead);
             if (eol != nullptr) {
@@ -162,7 +162,7 @@ public:
         bufRemaining = 0;
     }
 
-    // We need this because of the noexcept requirement in vector.
+    // We need this because of the noexcept requirement in std::vector.
     ChunkFileReader(ChunkFileReader&& other) noexcept
         : fd(other.fd)
         , buf(std::move(other.buf))
@@ -180,7 +180,8 @@ public:
         }
     }
 
-    // Reads new chunk and splits it into lines. Returns true if at least one line has been read.
+    // Reads the new chunk and splits it into lines. Returns true if at least one line
+    // has been read.
     size_t readAndSplit(std::vector<StringView>* lines)
     {
         bool eof = fillBuf();

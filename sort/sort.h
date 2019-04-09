@@ -416,8 +416,8 @@ void quickSortAltImpl(It first, It last, size_t cutoff, size_t remainingDepth,
         It left = first + 1;
         It right = last;
         while (true) {
-            // NOTE: Unlike the quickSortImpl, this version requires that pivot is median of 3
-            // or more elements for the following two while loops to not go outside of bounds:
+            // NOTE: Unlike the quickSortImpl, this version requires that pivot is a median of 3
+            // or more elements for the following two while loops to not get out of bounds:
             //  1) it guarantees that there is at least one element less or equal to pivot and
             //     at least one or two elements greater or equal to pivot, so both loops will
             //     terminate in the first iteration of the while (true) loop;
@@ -733,7 +733,7 @@ void quickSortDualPivotAltImpl(It first, It last, size_t cutoff, size_t remainin
         ++left2;
 
         // Final partition is [first, left1), [left1 + 1, left2 - 1) and [left2, last).
-        // NOTE: Interesting enough, including this tail-call optimization mis-optimizes the loop
+        // NOTE: Unexpectedly, including this tail-call optimization mis-optimizes the loop
         // on clang -O2, but not -O3 or gcc, clang version Apple LLVM version 8.1.0
         // (clang-802.0.42).
         size_t l1 = left1 - first;
@@ -957,7 +957,7 @@ void mergeSortImpl(It first, It last, size_t chunkLen)
     using V = typename std::remove_reference<decltype(*first)>::type;
     // Add space to fix the alignment.
     size_t requiredBufferSize = (last - first) * sizeof(V) + alignof(V) - 1;
-    // Either use stack buffer or allocate on the heap.
+    // Either use a buffer on the stack or allocate on the heap.
     char stackBuffer[detail::kMaxStackBufferSize];
     char* heapBuffer = nullptr;
     char* buffer;

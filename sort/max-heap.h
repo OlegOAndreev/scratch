@@ -25,8 +25,8 @@ template<typename It>
 void siftDown(It first, size_t size, size_t idx)
 {
 #if 1
-    // No fast-exit here, it is a un-optimization both on gcc and clang for int, string
-    // and stringview in my experience.
+    // No fast-exit here, it is a pessimization both on gcc and clang for int, string
+    // and stringview in my tests.
     auto newValue = std::move(*(first + idx));
     // if idx < halfSize, there are both children available, the case of parent with only one child
     // is processed separately after the main loop.
@@ -64,8 +64,8 @@ void siftDown(It first, size_t size, size_t idx)
         *(first + idx) = std::move(newValue);
     }
 #else
-    // No fast-exit here, it is a un-optimization both on gcc and clang for int, string
-    // and stringview in my experience.
+    // No fast-exit here, it is a pessimization both on gcc and clang for int, string
+    // and stringview in my tests.
     auto newValue = std::move(*(first + idx));
     // If idx >= halfSize, we are in a leaf.
     size_t halfSize = size / 2;
@@ -89,14 +89,14 @@ void siftDown(It first, size_t size, size_t idx)
 
 // An optimization from libstdc++: start with moving the value into the leaf and the do a siftUp.
 // This is an optimization because the new value has a very large probability of being a leaf value
-// (or near-leaf), so we skip a lot of useless value compares. Ideally, alt version should be used
+// (or near-leaf), so we skip a lot of value compares. Ideally, alt version should be used
 // for int/float-type values.
 template<typename It>
 void siftDownAlt(It first, size_t size, size_t idx)
 {
     size_t startIdx = idx;
-    // No fast-exit here, it is a un-optimization both on gcc and clang for int, string
-    // and stringview in my experience.
+    // No fast-exit here, it is a pessimization both on gcc and clang for int, string
+    // and stringview in my tests.
     auto newValue = std::move(*(first + idx));
     // if idx < halfSize, there are both children available, the case of parent with only one child
     // is processed separately after the main loop.

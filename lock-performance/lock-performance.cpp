@@ -455,7 +455,7 @@ struct LockFreeWorkData {
     bool popInput(unsigned& param, size_t& index, uint64_t& /*retryCount*/)
     {
         size_t curIndex = inputIndex.v.fetch_sub(1, std::memory_order_relaxed);
-        // The index can become underflow. This loop is generally a bad code, but we want
+        // The index can underflow. This loop is generally a bad code, but we want
         // to simulate the popping from the back of input vector that LockingWorkData does.
         if (curIndex > 0 && curIndex <= input.size()) {
             index = curIndex - 1;
@@ -473,7 +473,7 @@ struct LockFreeWorkData {
     }
 };
 
-// Use unsigned for work, so that we do not get UB on overflows.
+// Use unsigned for work input, so that we do not get UB on overflows.
 void generateWork(int inputSize, int workAmount, std::vector<unsigned>& input)
 {
     int minWork = (workAmount > 1) ? workAmount - 1 : 1;
@@ -552,9 +552,9 @@ void workerThread(WorkData& data, PerThreadStats& stats)
 
 struct PerRunStats {
     uint64_t timeMs;
-    // The average run lengths of all the threads.
+    // The average run lengths of all threads.
     float avgRunLength;
-    // The total retry count of all the threads.
+    // The total retry count of all threads.
     uint64_t totalRetryCount;
 
     PerRunStats()

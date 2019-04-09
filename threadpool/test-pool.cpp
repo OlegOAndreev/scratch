@@ -188,8 +188,6 @@ void testCountWaiter()
         start2[i] = false;
         value21[i] = 0;
         value22[i] = 0;
-        // Note the count 2: both producer threads must finish before both consumer threads
-        // continue.
         waiter2[i] = new CountWaiter(2);
     }
     int totalWaits21 = 0;

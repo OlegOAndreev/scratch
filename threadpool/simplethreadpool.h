@@ -6,7 +6,7 @@
 #include <thread>
 #include <vector>
 
-// A simple thread pool with a central blocking queue, no task dependencies and no futures.
+// A simple thread pool with a shared blocking queue, no task dependencies and no futures.
 // Queue should have methods:
 //   bool enqueue(Task&& task)
 //   bool dequeue(Task&) (blocking)

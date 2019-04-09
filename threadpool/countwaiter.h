@@ -128,7 +128,7 @@ void CountWaiter::wait()
     }
 
     Semaphore* semaphore = getOrAllocSemaphore();
-    // Always wait on the semaphore before checking the counter. See comments for state
+    // Always wait on the semaphore before checking the counter. See the comments for state
     // for explanation of the race condition this is solving.
     semaphore->wait();
 

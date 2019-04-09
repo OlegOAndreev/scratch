@@ -175,8 +175,8 @@ template<typename Task>
 template<typename F>
 void SimpleWorkStealingPool<Task>::submit(F&& f)
 {
-    // We do not care about synchronization too much here: lastPushedThread is generally used
-    // to approximately load-balance the worker threads.
+    // We do not care about synchronization too much here: lastPushedThread is used
+    // to approximate load-balancing the worker threads.
     int threadToPush = (lastPushedThread.load(std::memory_order_relaxed) + 1) % workerThreadsSize;
     if (!tryToPushTask(f, threadToPush)) {
         // Extremely unlikely: the queue is full, just run the task in the caller.
@@ -225,8 +225,8 @@ void SimpleWorkStealingPool<Task>::submitRange(F&& f, size_t from, size_t to)
 {
     const size_t kMinGranularity = 16;
 
-    // We do not care about synchronization too much here: lastPushedThread is generally used
-    // to approximately load-balance the worker threads.
+    // We do not care about synchronization too much here: lastPushedThread is used
+    // to approximate load-balancing the worker threads.
     int threadToPush = lastPushedThread.load(std::memory_order_relaxed);
 
     // Try to split all work so that there are least worker threads * 4 pieces

@@ -20,25 +20,19 @@ size_t compareStrCount = 0;
 size_t const kDefaultMaxMemory = 1024 * 1024 * 1024LL;
 
 // Global state is bad, but passing a ton of not-really related parameters through functions
-// is not good either.
+// is not pretty either.
 size_t maxMemory = kDefaultMaxMemory;
 bool leaveChunks = false;
 bool preallocate = true;
 
 
-// List of chunk files with total size of the original file.
+// List of chunk files with the total size the same as that of the original file.
 struct ChunkFiles {
     std::vector<std::string> filenames;
-    off_t totalSize;
-
-    // Support gcc 4.6 :-(
-    ChunkFiles()
-        : totalSize(0)
-    {
-    }
+    off_t totalSize = 0;
 };
 
-// A simple pair: line from chunk and num of the chunk it has been read from.
+// Line from chunk and num of the chunk it has been read from.
 struct LineWithNum {
     size_t chunkNum;
     std::string line;
@@ -56,7 +50,7 @@ struct LineWithNum {
     }
 };
 
-// A simple pair: line from chunk and num of the chunk it has been read from.
+// Line from chunk and num of the chunk it has been read from.
 struct StringViewWithNum {
     size_t chunkNum;
     StringView line;
@@ -129,8 +123,8 @@ std::string getNextChunkFile(char const* dstFile, size_t numChunks)
     return buf;
 }
 
-// Sorts chunk, writes into new chunk file (with name based on dstFile) and appends the new name
-// to chunkFiles. Updates totalSortTimeMs and totalWriteTimeMs.
+// Sorts the chunk, writes into the new chunk file (with name based on dstFile) and appends
+// the new name to chunkFiles. Updates totalSortTimeMs and totalWriteTimeMs.
 void sortAndWriteChunk(char const* dstFile, std::vector<std::string>* chunk,
                        std::vector<std::string>* filenames,
                        int* totalSortTimeMs, int* totalWriteTimeMs)

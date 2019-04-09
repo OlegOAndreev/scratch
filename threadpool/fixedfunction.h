@@ -40,7 +40,7 @@ private:
     using FuncPtr = R(*)(char*, Args... args);
     // Either calls a move-constructor or a destructor. depending on the first parameter.
     // Must always be non-null, which removes a couple of branches `if (movePtr)`.
-    // Making one pointer instead of two reduces the class size while not affecting the perf
+    // Making one function pointer of two reduces the class size while not affecting the perf
     // too much on modern CPUs with good branch predictors.
     using MovePtr = void(*)(char*, char*);
 

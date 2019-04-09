@@ -4,7 +4,7 @@
 #include <future>
 
 
-// Helper function, submits f(args) task to the pool (which must have pool::submit() method),
+// Helper function, submits f(args) task to the pool (which must have a submit() method),
 // returns corresponding future.
 template<typename Pool, typename F, typename ...Args>
 auto submitFuture(Pool& pool, F&& f, Args&&... args) -> std::future<decltype(f(args...))>

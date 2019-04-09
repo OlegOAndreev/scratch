@@ -383,9 +383,12 @@ void compareSort(ToStdout const& toStdout, char const* sortMethod1, char const* 
     }
 }
 
-// Preparers test data and runs sorting method on the data, using std::sort to validate the results.
-// Generator objects must have T operator(size_t value), which generates a new value from size_t.
-// ToStdout objects must have void operator(T const& value), which writes the value to stdout.
+// Prepares the test data and runs sorting method on the data, using std::sort to validate
+// the results.
+// Generator objects must have a T operator(size_t value), which should generate a new value
+// from size_t.
+// ToStdout objects must have a void operator(T const& value), which should write the value
+// to the stdout.
 template<typename T, typename Generator, typename ToStdout>
 void testSortImpl(char const* typeName, Generator const& generator, ToStdout const& toStdout,
                   char const* sortMethod1, char const* sortMethod2, size_t minSize, size_t maxSize)

@@ -8,9 +8,6 @@
 
 using BaseT = int;
 
-// This is larger than cache line,
-const size_t kCacheLineSize = 256;
-
 std::atomic<uint32_t> totalSum{0};
 
 template<typename Value, typename Adder>
@@ -117,13 +114,13 @@ int main(int argc, char** argv)
     printf("Running add %lld times with %d threads\n", (long long)times, (int)numThreads);
 
     // Enough stride (multiplied by sizeof(BaseT)) to put values in different cache lines.
-    size_t const kStride = kCacheLineSize;
+    size_t const kStride = CACHE_LINE_SIZE;
     std::unique_ptr<BaseT[]> simpleValues;
     simpleValues.reset(new BaseT[(numThreads + 1) * kStride]);
-    BaseT* simpleValuesPtr = nextAlignedPtr<kCacheLineSize>(simpleValues.get());
+    BaseT* simpleValuesPtr = nextAlignedPtr<CACHE_LINE_SIZE>(simpleValues.get());
     std::unique_ptr<std::atomic<BaseT>[]> atomicValues;
     atomicValues.reset(new std::atomic<BaseT>[(numThreads + 1) * kStride]);
-    std::atomic<BaseT>* atomicValuesPtr = nextAlignedPtr<kCacheLineSize>(atomicValues.get());
+    std::atomic<BaseT>* atomicValuesPtr = nextAlignedPtr<CACHE_LINE_SIZE>(atomicValues.get());
 
     auto simpleAdder = [](BaseT* value, BaseT const* nextValue, bool add) {
         size_t v = *nextValue;

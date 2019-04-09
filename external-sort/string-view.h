@@ -9,7 +9,7 @@
 // first few bytes before calling memcmp.
 #define USE_SMALL_COMPARE
 
-// Your minimalist string view.
+// The minimal string_view.
 struct StringView {
     char const* begin;
     size_t length;

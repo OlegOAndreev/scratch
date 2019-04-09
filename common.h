@@ -52,13 +52,13 @@
 #error "Unsupported SIZE_MAX"
 #endif
 
-// Validates that the platform is "sane".
+// Validates that the platform is sane.
 static_assert(sizeof(size_t) == sizeof(ptrdiff_t), "Very strange platform");
 static_assert(sizeof(size_t) == sizeof(intptr_t), "Very strange platform");
 static_assert(sizeof(size_t) == sizeof(uintptr_t), "Very strange platform");
 
 //
-// Defines FORCE_INLINE
+// Defines FORCE_INLINE/NO_INLINE
 //
 #if defined(__clang__) || defined(__GNUC__)
 #define FORCE_INLINE __attribute__((always_inline)) inline
@@ -149,8 +149,10 @@ FORCE_INLINE int nextLog2(size_t v)
 // Loading and storing values without aliasing violations.
 //
 #if defined(__clang__) || defined(__GNUC__)
-// Macros, useful for defining a pair of functions type load_postfix(const char* p) and void store_postfix(char* p, type v),
-// e.g. load_i8/store_i8 for loading/storing int8_t.
+// Macro defines a pair of functions:
+//  * type load_postfix(const char* p)
+//  * void store_postfix(char* p, type v),
+// e.g. load_i8/store_i8 for int8_t.
 #define DEFINE_LOAD_STORE(type, postfix) \
 FORCE_INLINE type load_##postfix(void const* p) \
 { \
@@ -178,7 +180,9 @@ FORCE_INLINE void store_##postfix(void* p, type v) \
 #error "Unsupported compiler"
 #endif
 
-// Defines load_i8, load_u8, load_i16, load_u16, load_i32, load_u32, load_i64, load_u64
+// Defines load_i8, store_i8, load_u8, store_u8, load_i16, store_i16, load_u16, store_u16,
+// load_i32, store_i32, load_u32, store_u32, load_i64, store_i64, load_u64, store_u64,
+// load_ptr, store_ptr
 DEFINE_LOAD_STORE(int8_t, i8)
 DEFINE_LOAD_STORE(uint8_t, u8)
 DEFINE_LOAD_STORE(int16_t, i16)
@@ -196,7 +200,7 @@ DEFINE_LOAD_STORE(void*, ptr)
 #endif
 
 //
-// Endianess.
+// Endianess
 //
 #if defined(__clang__) || defined(__GNUC__)
 #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
@@ -265,11 +269,13 @@ FORCE_INLINE unsigned __int64 byteSwap(unsigned __int64 v)
     return _byteswap_uint64(v);
 }
 #else
-// We could provide the default implementations here, but it takes too much space.
+// We could provide the default implementations here, but they are rather long
+// and we do not support anything but MSVC/GCC/Clang anyway.
 #error "Unsupported compiler"
 #endif
 
-// Signed versions of byteSwap(), the unsigned -> signed conversions are implementation-defined.
+// Signed versions of byteSwap(), the unsigned -> signed conversions are implementation-defined
+// in the correct way on all three compilers.
 FORCE_INLINE short byteSwap(short v)
 {
     return (short)byteSwap((unsigned short)v);
@@ -289,10 +295,11 @@ FORCE_INLINE long long byteSwap(long long v)
 
 
 //
-// Pointer alignment.
+// Pointer alignment
 //
 
-// Returns the first pointer after ptr, which is aligned according to alignment.
+// Returns the first pointer after ptr, which is aligned according to alignment. Returns ptr
+// if it is already aligned.
 template<size_t alignment, typename T>
 FORCE_INLINE T* nextAlignedPtr(T* ptr)
 {
@@ -302,7 +309,7 @@ FORCE_INLINE T* nextAlignedPtr(T* ptr)
 
 
 //
-// Cache-line size (very crude!)
+// Cache-line size (very crude approximation!)
 //
 
 #define CACHE_LINE_SIZE 64
@@ -312,7 +319,7 @@ FORCE_INLINE T* nextAlignedPtr(T* ptr)
 // Time-related functions.
 //
 
-// Returns current time counter in ticks, frequency specified by getTimeFreq.
+// Returns current time counter in ticks, tick frequency specified by getTimeFreq.
 inline int64_t getTimeTicks()
 {
 #if defined(__APPLE__)
@@ -332,7 +339,7 @@ inline int64_t getTimeTicks()
 #endif
 }
 
-// Returns timer frequency.
+// Returns time counter frequency (see also getTimeTicks).
 inline int64_t getTimeFreq()
 {
 #if defined(__APPLE__)
@@ -354,7 +361,8 @@ inline int elapsedMsec(uint64_t startTime)
     return (getTimeTicks() - startTime) * 1000LL / getTimeFreq();
 }
 
-// Sleep for the given number of milliseconds. See enableFinegrainedSleep() for precision details.
+// Sleep for the given number of milliseconds. See enableFinegrainedSleep() for details
+// on sleep precision.
 inline void sleepMsec(int msec)
 {
 #if defined(__APPLE__) || defined(__linux__)
@@ -369,10 +377,10 @@ inline void sleepMsec(int msec)
 #endif
 }
 
-// Macos has ~10usec sleep granularity. Linux has ~50-100usec sleep granularity by default (can be
-// configured via prctl(PR_SET_TIMERSLACK) down to ~10usec). Windows by default has a very coarse
-// granularity of 15msec. The granularity for the current process on Win32 can be lowered down
-// to 1msec by calling this function once before calling the sleepMsec().
+// MacOS has ~10usec sleep granularity. Linux has ~50-100usec sleep granularity by default (can be
+// configured via prctl(PR_SET_TIMERSLACK) down to ~10usec). Windows has a very coarse
+// granularity of 15msec by default. The granularity for the current process on Win32
+// can be lowered down to 1msec by calling this function once before calling the sleepMsec().
 //
 // NOTE: Finer granularities (~100nsec) can be achieved by sleeping + spinning for
 // the last microseconds.
@@ -386,7 +394,7 @@ inline void enableFinegrainedSleep()
 }
 
 //
-// Semaphore: an OS semaphore class with two methods: post() and wait().
+// Semaphore: an OS semaphore class with two methods: post() and wait()
 //
 
 #if defined(__linux__)
@@ -431,9 +439,10 @@ struct Semaphore {
 
 
 //
-// Random number generation.
+// Random number generation
 //
 
+// Returns the random number, generated from state and updates the state.
 // Copied from https://en.wikipedia.org/wiki/Xorshift
 inline uint32_t xorshift128(uint32_t state[4])
 {
@@ -448,14 +457,14 @@ inline uint32_t xorshift128(uint32_t state[4])
     return t;
 }
 
-// Reduces x to range [0, N), an alternative to x % N.
+// Reduces x to range [0, N), a much faster alternative to x % N.
 // Taken from https://lemire.me/blog/2016/06/27/a-fast-alternative-to-the-modulo-reduction/
 inline uint32_t reduceRange(uint32_t x, uint32_t N)
 {
     return ((uint64_t) x * (uint64_t) N) >> 32;
 }
 
-// Returns random values in range [from, to) with xorshift128 state.
+// Returns a random value in range [from, to) with xorshift128 state.
 inline uint32_t randomRange(uint32_t state[4], uint32_t from, uint32_t to)
 {
     return from + reduceRange(xorshift128(state), to - from);
@@ -466,7 +475,7 @@ inline uint32_t randomRange(uint32_t state[4], uint32_t from, uint32_t to)
 // Containers
 //
 
-// Returns statically determined size of an array.
+// Returns the size of the array.
 template <typename T, size_t N>
 size_t arraySize(const T(&)[N])
 {
@@ -504,7 +513,7 @@ struct RemoveCRef<T const&&> {
     using Type = T;
 };
 
-// Computes a very simple hash, see: http://www.eecs.harvard.edu/margo/papers/usenix91/paper.ps
+// Computes a very simple hash (from http://www.eecs.harvard.edu/margo/papers/usenix91/paper.ps)
 inline size_t simpleHash(char const* s, size_t size)
 {
     size_t hash = 0;
@@ -513,9 +522,9 @@ inline size_t simpleHash(char const* s, size_t size)
     return hash;
 }
 
-// Returns the average of the elements. NOTE: ASSUMES THAT YOU CAN CALCULATE SUM OF ALL
-// VALUES WITHOUT OVERFLOW. Should work almost the same
-// as std::accumulate(begin, end, {}) / (end - begin).
+// Returns the average of the elements.
+// NOTE: ASSUMES THAT YOU CAN CALCULATE SUM OF ALL VALUES WITHOUT OVERFLOW.
+// Should work almost the same as std::accumulate(begin, end, {}) / (end - begin).
 template<typename It>
 inline auto simpleAverage(It begin, It end) -> typename RemoveCRef<decltype(*begin)>::Type
 {
@@ -530,8 +539,8 @@ inline auto simpleAverage(It begin, It end) -> typename RemoveCRef<decltype(*beg
     }
 }
 
-// Returns average of the container elements. See simpleAverage(It begin, It end)
-// for NOTE on the assumptions.
+// Returns the average of the container elements. See NOTE in simpleAverage(It begin, It end)
+// for the correctness preconditions.
 template<typename C>
 inline auto simpleAverage(C const& container)
     -> typename RemoveCRef<decltype(*container.begin())>::Type
@@ -539,7 +548,8 @@ inline auto simpleAverage(C const& container)
     return simpleAverage(container.begin(), container.end());
 }
 
-// Returns true if set-like container contains value, false if not.
+// Returns true if the set-like container contains value (container must have methods find(value)
+// and end()), false if not.
 template<typename S, typename V>
 inline bool setContains(S const& setContainer, V const& value)
 {
