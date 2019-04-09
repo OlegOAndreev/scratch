@@ -4,6 +4,23 @@
 #include <string>
 #include <unordered_set>
 
+// Use the following if the compiler optimizes out the inner loop.
+#if defined(__clang__) || defined(__GNUC__)
+#define OPTIMIZATION_BARRIER __asm__ __volatile__("" : : : "memory")
+#else
+#define OPTIMIZATION_BARRIER
+#endif
+
+template<typename I>
+const char* uselessInt(I v)
+{
+    if (v % 2 == 0) {
+        return "";
+    } else {
+        return " ";
+    }
+}
+
 long long itersPerSec(uint64_t iters, uint64_t startTime)
 {
     return iters * getTimeFreq() / (getTimeTicks() - startTime);
@@ -33,8 +50,8 @@ void benchNextLog2()
     }
 
     // Print r to prevent optimizing the calls out.
-    printf("%lld nextLog2/sec (ignore this: %d)\n",
-           itersPerSec(kNumIterations, startTime), (int)(r % 10));
+    printf("%lld nextLog2/sec %s\n",
+           itersPerSec(kNumIterations, startTime), uselessInt(r));
 }
 
 void benchRandom()
@@ -48,8 +65,8 @@ void benchRandom()
         r += randomRange(state, 0, 1000);
     }
     // Print r to prevent optimizing the calls out.
-    printf("%lld randomRanges/sec (ignore this: %d)\n",
-           itersPerSec(kNumIterations, startTime), (int)(r % 10));
+    printf("%lld randomRanges/sec %s\n",
+           itersPerSec(kNumIterations, startTime), uselessInt(r));
 }
 
 void benchGetTime()
@@ -63,8 +80,8 @@ void benchGetTime()
     }
 
     // Print r to prevent optimizing the calls out.
-    printf("%lld getTimeTicks/sec (ignore this: %d)\n",
-           itersPerSec(kNumIterations, startTime), (int)(r % 10));
+    printf("%lld getTimeTicks/sec %s\n",
+           itersPerSec(kNumIterations, startTime), uselessInt(r));
 }
 
 void benchSimpleHashImpl(size_t size)
@@ -81,13 +98,13 @@ void benchSimpleHashImpl(size_t size)
     uint64_t startTime = getTimeTicks();
     for (int i = 0; i < numIterations; i++) {
         r += simpleHash(buf.get(), size);
+        OPTIMIZATION_BARRIER;
     }
 
     // Print r to prevent optimizing the calls out.
-    int mbPerSec = (int)(numIterations * size * getTimeFreq()
-            / ((getTimeTicks() - startTime) * 1024 * 1024));
-    printf("simpleHash(%d): %dMb/sec (ignore this: %d)\n", (int)size, mbPerSec,
-           (int)(r % 10));
+    int mbPerSec = (int)((numIterations * size * getTimeFreq()
+            / ((getTimeTicks() - startTime) * 1024 * 1024)));
+    printf("simpleHash(%d): %dMb/sec %s\n", (int)size, mbPerSec, uselessInt(r));
 }
 
 void benchSimpleHash()
