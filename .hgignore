@@ -6,6 +6,7 @@ build/
 build-debug/
 build-android/
 build-linux/
+build-gcc/
 .idea
 .vscode
 .cquery
