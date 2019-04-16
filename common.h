@@ -526,7 +526,7 @@ inline size_t simpleHash(char const* s, size_t size)
 // NOTE: ASSUMES THAT YOU CAN CALCULATE SUM OF ALL VALUES WITHOUT OVERFLOW.
 // Should work almost the same as std::accumulate(begin, end, {}) / (end - begin).
 template<typename It>
-inline auto simpleAverage(It begin, It end) -> typename RemoveCRef<decltype(*begin)>::Type
+auto simpleAverage(It begin, It end) -> typename RemoveCRef<decltype(*begin)>::Type
 {
     typename RemoveCRef<decltype(*begin)>::Type sum{};
     if (begin == end) {
@@ -542,8 +542,7 @@ inline auto simpleAverage(It begin, It end) -> typename RemoveCRef<decltype(*beg
 // Returns the average of the container elements. See NOTE in simpleAverage(It begin, It end)
 // for the correctness preconditions.
 template<typename C>
-inline auto simpleAverage(C const& container)
-    -> typename RemoveCRef<decltype(*container.begin())>::Type
+auto simpleAverage(C const& container) -> typename RemoveCRef<decltype(*container.begin())>::Type
 {
     return simpleAverage(container.begin(), container.end());
 }
@@ -551,7 +550,7 @@ inline auto simpleAverage(C const& container)
 // Returns true if the set-like container contains value (container must have methods find(value)
 // and end()), false if not.
 template<typename S, typename V>
-inline bool setContains(S const& setContainer, V const& value)
+bool setContains(S const& setContainer, V const& value)
 {
     return setContainer.find(value) != setContainer.end();
 }
@@ -560,7 +559,7 @@ inline bool setContains(S const& setContainer, V const& value)
 // must have methods begin(), end() and erase(fromIt, toIt)). Preserves the order of the elements
 // in the original container.
 template<typename V, typename P>
-inline void removeIf(V& vecContainer, P const& predicate)
+void removeIf(V& vecContainer, P const& predicate)
 {
     auto it = vecContainer.begin();
     auto endIt = vecContainer.end();
