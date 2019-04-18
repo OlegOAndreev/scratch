@@ -1,5 +1,7 @@
 #include "common.h"
 
+#include <algorithm>
+#include <cstring>
 #include <thread>
 #include <vector>
 

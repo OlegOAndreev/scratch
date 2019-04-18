@@ -1,5 +1,6 @@
 #include "common.h"
 
+#include <cstring>
 #include <thread>
 #include <vector>
 
