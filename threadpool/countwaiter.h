@@ -80,17 +80,17 @@ private:
     static int64_t stateFromNumWaiters(int32_t numWaiters);
 };
 
-CountWaiter::CountWaiter(int32_t targetCount)
+inline CountWaiter::CountWaiter(int32_t targetCount)
     : state(stateFromCounter(targetCount))
 {
 }
 
-CountWaiter::~CountWaiter()
+inline CountWaiter::~CountWaiter()
 {
     delete semaphorePtr.load(std::memory_order_seq_cst);
 }
 
-bool CountWaiter::post(int32_t count)
+inline bool CountWaiter::post(int32_t count)
 {
     int64_t stateDiff = stateFromCounter(count);
     int64_t oldState = state.fetch_sub(stateDiff, std::memory_order_seq_cst);
@@ -109,7 +109,7 @@ bool CountWaiter::post(int32_t count)
     return true;
 }
 
-void CountWaiter::wait()
+inline void CountWaiter::wait()
 {
     // Try to see if the target value has already been reached before trying to do any writes.
     int32_t counter = counterFromState(state.load(std::memory_order_seq_cst));
@@ -142,12 +142,12 @@ void CountWaiter::wait()
     return;
 }
 
-int32_t CountWaiter::count() const
+inline int32_t CountWaiter::count() const
 {
     return counterFromState(state.load(std::memory_order_seq_cst));
 }
 
-Semaphore* CountWaiter::getOrAllocSemaphore()
+inline Semaphore* CountWaiter::getOrAllocSemaphore()
 {
     Semaphore* semaphore = semaphorePtr.load(std::memory_order_seq_cst);
     if (semaphore != nullptr) {
@@ -176,22 +176,22 @@ Semaphore* CountWaiter::getOrAllocSemaphore()
     }
 }
 
-int32_t CountWaiter::counterFromState(int64_t state)
+inline int32_t CountWaiter::counterFromState(int64_t state)
 {
     return (state & kStateCounterMask) >> kStateCounterShift;
 }
 
-int32_t CountWaiter::numWaitersFromState(int64_t state)
+inline int32_t CountWaiter::numWaitersFromState(int64_t state)
 {
     return (state & kStateNumWaitersMask) >> kStateNumWaitersShift;
 }
 
-int64_t CountWaiter::stateFromCounter(int32_t counter)
+inline int64_t CountWaiter::stateFromCounter(int32_t counter)
 {
     return ((int64_t)counter) << kStateCounterShift;
 }
 
-int64_t CountWaiter::stateFromNumWaiters(int32_t numWaiters)
+inline int64_t CountWaiter::stateFromNumWaiters(int32_t numWaiters)
 {
     return ((int64_t)numWaiters) << kStateNumWaitersShift;
 }

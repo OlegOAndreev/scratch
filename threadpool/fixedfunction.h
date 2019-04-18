@@ -217,7 +217,7 @@ void movePtrFromPtr(char* dstStorage, char* srcStorage)
     }
 }
 
-void defaultMovePtr(char*, char*)
+inline void defaultMovePtr(char*, char*)
 {
 }
 
