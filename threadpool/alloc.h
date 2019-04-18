@@ -8,7 +8,7 @@
 // Alloc is a simple general-purpose allocator interface with sized delete:
 // class Alloc {
 //   void* allocate(size_t size);
-//   void deallocate(void* p, size_t size);
+//   void deallocate(void* ptr, size_t size);
 // };
 
 // Helper methods for doing new/delete with allocator.
@@ -29,10 +29,10 @@ inline void allocDelete(Alloc& alloc, T* t)
 }
 
 
-// The basic Alloc proxying to new/delete.
+// The basic Alloc implementation proxying to new/delete.
 struct DefaultAlloc {
     void* allocate(size_t size);
-    void deallocate(void* p, size_t size);
+    void deallocate(void* ptr, size_t size);
 };
 
 inline void* DefaultAlloc::allocate(size_t size)
@@ -40,14 +40,14 @@ inline void* DefaultAlloc::allocate(size_t size)
     return operator new(size);
 }
 
-inline void DefaultAlloc::deallocate(void* p, size_t /*size*/)
+inline void DefaultAlloc::deallocate(void* ptr, size_t /*size*/)
 {
-    operator delete(p);
+    operator delete(ptr);
 }
 
 
 // A simple Alloc implementation.
 struct SimpleAlloc {
     void* allocate(size_t size);
-    void deallocate(void* p, size_t size);
+    void deallocate(void* ptr, size_t size);
 };
