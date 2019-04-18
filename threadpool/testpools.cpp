@@ -1,5 +1,6 @@
 #include "common.h"
 
+#include <algorithm>
 #include <cmath>
 #include <thread>
 #include <vector>
