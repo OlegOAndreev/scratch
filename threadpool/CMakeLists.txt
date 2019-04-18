@@ -3,7 +3,13 @@ cmake_minimum_required(VERSION 2.8)
 
 add_executable(${PROJECT_NAME}
     fiber.cpp
-    test-pool.cpp)
+    test-pool.cpp
+    testcountwaiter.cpp
+    testfiber.cpp
+    testfixedfunction.cpp
+    testpools.cpp
+    testqueues.cpp
+    testsizedpoolalloc.cpp)
 
 target_include_directories(${PROJECT_NAME} PRIVATE ..)
 
