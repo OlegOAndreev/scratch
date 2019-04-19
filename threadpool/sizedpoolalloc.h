@@ -153,7 +153,7 @@ FORCE_INLINE uint64_t SizedPoolAlloc::updateTopHandle(uint64_t top, uint32_t new
 
 inline bool SizedPoolAlloc::tryPopTop(uint32_t* handle)
 {
-    uint64_t top = freeListTop.load(std::memory_order_seq_cst);
+    uint64_t top = freeListTop.load(std::memory_order_relaxed);
     uint32_t topHandle = topToHandle(top);
     if (topHandle == 0) {
         return false;
@@ -172,7 +172,7 @@ inline bool SizedPoolAlloc::tryPopTop(uint32_t* handle)
 inline void SizedPoolAlloc::pushTop(uint32_t handle)
 {
     void* ptr = at(handle);
-    uint64_t top = freeListTop.load(std::memory_order_seq_cst);
+    uint64_t top = freeListTop.load(std::memory_order_relaxed);
     while (true) {
         uint32_t topHandle = topToHandle(top);
         store_u32(ptr, topHandle);
