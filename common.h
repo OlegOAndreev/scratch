@@ -328,6 +328,12 @@ FORCE_INLINE size_t nextAlignedSize(size_t size)
     return ((size + alignment - 1) / alignment) * alignment;
 }
 
+// Non-template version of nextAlignedSize.
+FORCE_INLINE size_t nextAlignedSize(size_t size, size_t alignment)
+{
+    return ((size + alignment - 1) / alignment) * alignment;
+}
+
 //
 // Cache-line size (very crude approximation!)
 //
