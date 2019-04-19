@@ -90,6 +90,9 @@ private:
     FORCE_INLINE static uint32_t topToHandle(uint64_t top);
     FORCE_INLINE static uint64_t updateTopHandle(uint64_t top, uint32_t newHandle);
 
+    FORCE_INLINE uint32_t loadNextHandle(void* ptr);
+    FORCE_INLINE void storeNextHandle(void* ptr, uint32_t nextHandle);
+
     FORCE_INLINE bool tryPopTop(uint32_t* handle);
     FORCE_INLINE void pushTop(uint32_t handle);
 
@@ -211,6 +214,27 @@ FORCE_INLINE uint64_t SizedPoolAlloc::updateTopHandle(uint64_t top, uint32_t new
     return newHandle | ((uint64_t)abaCounter << kAbaCounterShift);
 }
 
+inline uint32_t SizedPoolAlloc::loadNextHandle(void* ptr)
+{
+#if defined(SIZED_POOL_ALLOC_NO_UB)
+    char const* nextPtr = (char const*)ptr + objectSize - sizeof(uint32_t);
+    return std::atomic_load_explicit((std::atomic<uint32_t>*)nextPtr, std::memory_order_relaxed);
+#else
+    return load_u32(ptr);
+#endif
+}
+
+inline void SizedPoolAlloc::storeNextHandle(void* ptr, uint32_t nextHandle)
+{
+#if defined(SIZED_POOL_ALLOC_NO_UB)
+    char* nextPtr = (char*)ptr + objectSize - sizeof(uint32_t);
+    std::atomic_store_explicit((std::atomic<uint32_t>*)nextPtr, nextHandle,
+                               std::memory_order_relaxed);
+#else
+    store_u32(ptr, nextHandle);
+#endif
+}
+
 inline bool SizedPoolAlloc::tryPopTop(uint32_t* handle)
 {
     uint64_t top = freeListTop.load(std::memory_order_relaxed);
@@ -219,12 +243,7 @@ inline bool SizedPoolAlloc::tryPopTop(uint32_t* handle)
         return false;
     }
     // Try to pop the next freelist item.
-#if defined(SIZED_POOL_ALLOC_NO_UB)
-    char const* ptr = (char const*)at(topHandle);
-    uint32_t nextHandle = load_u32(ptr + objectSize - sizeof(uint32_t));
-#else
-    uint32_t nextHandle = load_u32(at(topHandle));
-#endif
+    uint32_t nextHandle = loadNextHandle(at(topHandle));
     uint64_t nextTop = updateTopHandle(top, nextHandle);
     if (!freeListTop.compare_exchange_weak(top, nextTop, std::memory_order_seq_cst)) {
         // The pop failed, should retry the allocation.
@@ -240,11 +259,7 @@ inline void SizedPoolAlloc::pushTop(uint32_t handle)
     uint64_t top = freeListTop.load(std::memory_order_relaxed);
     while (true) {
         uint32_t topHandle = topToHandle(top);
-#if defined(SIZED_POOL_ALLOC_NO_UB)
-        store_u32((char*)ptr + objectSize - sizeof(uint32_t), topHandle);
-#else
-        store_u32(ptr, topHandle);
-#endif
+        storeNextHandle(ptr, topHandle);
         uint64_t nextTop = updateTopHandle(top, handle);
         if (freeListTop.compare_exchange_weak(top, nextTop, std::memory_order_seq_cst)) {
             break;
