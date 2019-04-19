@@ -12,12 +12,6 @@
 // at the cost of higher memory consumption. See NOTE for SizedPoolAlloc::allocate().
 #define SIZED_POOL_ALLOC_NO_UB
 
-#if defined(SIZED_POOL_ALLOC_NO_UB)
-#define SIZED_POOL_ALLOC_NO_THREAD_SANITIZER
-#else
-#define SIZED_POOL_ALLOC_NO_THREAD_SANITIZER NO_THREAD_SANITIZER
-#endif
-
 // SizedPoolAlloc allocates objects of fixed size.
 //  * Each allocated object is identified by a 32-bit handle (uint32_t), at most 2^32 - 1
 //    objects can be allocated.
@@ -84,15 +78,16 @@ private:
     // Returns the real allocated object size after alignment.
     static size_t getAllocObjectSize(size_t objectSize_, size_t objectAlignment);
 
-    // Utilities for converting the object handle to/from bucket index + in-bucket offset.
+    // Utility funcs for converting the object handle to/from bucket index + in-bucket offset.
     FORCE_INLINE static uint32_t handleToBucketIdx(uint32_t handle);
     FORCE_INLINE static uint32_t handleToBucketOffset(uint32_t handle, uint32_t bucketIdx);
     FORCE_INLINE static uint32_t bucketToHandle(uint32_t bucketIdx, uint32_t offset);
 
-    // Utilities for getting handle from freelist top and updating the top.
+    // Utility funcs for getting handle from freelist top and updating the top.
     FORCE_INLINE static uint32_t topToHandle(uint64_t top);
     FORCE_INLINE static uint64_t updateTopHandle(uint64_t top, uint32_t newHandle);
 
+    // Utility funcs for storing/loading next handle from object.
     FORCE_INLINE uint32_t loadNextHandle(void* ptr);
     FORCE_INLINE void storeNextHandle(void* ptr, uint32_t nextHandle);
 
@@ -117,7 +112,7 @@ inline SizedPoolAlloc::SizedPoolAlloc(size_t objectSize_, size_t objectAlignment
     allocateBucket(0);
 }
 
-// NOTE: Disabling thread sanitizer: tryPopTop uses unsynchronized load_u32 to get the next
+// NOTE: Disabling thread sanitizer: tryPopTop() uses unsynchronized load_u32() to get the next
 // freelist handle and the following can happen:
 //  1. the first allocating thread reads the freeListTop, extracts top handle and sleeps
 //  2. the second allocating thread read the freeListTop, pops the top element and passes
@@ -129,7 +124,11 @@ inline SizedPoolAlloc::SizedPoolAlloc(size_t objectSize_, size_t objectAlignment
 // location. From the POV of the current CPUs this is fine: even if we get the torn read (which
 // we will not, because the read is at least 4-byte aligned), the tryPopTop will discard the read
 // value when the compare_exchange will fail.
-SIZED_POOL_ALLOC_NO_THREAD_SANITIZER inline uint32_t SizedPoolAlloc::allocate()
+
+#if !defined(SIZED_POOL_ALLOC_NO_UB)
+NO_THREAD_SANITIZER
+#endif
+inline uint32_t SizedPoolAlloc::allocate()
 {
     while (true) {
         uint32_t ret;
@@ -181,9 +180,10 @@ inline size_t SizedPoolAlloc::getAllocObjectSize(size_t objectSize_, size_t obje
         // uint32_t-aligned.
         objectAlignment = sizeof(uint32_t);
     }
-    // If SIZED_POOL_ALLOC_NO_UB is enabled, store the freelist next handle after the object itself
-    // and use atomic ops when reading it, otherwise store the freelist next handle in the first
-    // bytes of the object itself. See loadNextHandle/storeNextHandle.
+    // If SIZED_POOL_ALLOC_NO_UB is enabled, store the freelist next handle right after the object
+    // and use atomic ops when reading/writing to it, otherwise store the freelist next handle
+    // in the first bytes of the object itself and use regular load/store.
+    // See also loadNextHandle/storeNextHandle.
 #if defined(SIZED_POOL_ALLOC_NO_UB)
     return nextAlignedSize(objectSize_, objectAlignment) + sizeof(uint32_t);
 #else
