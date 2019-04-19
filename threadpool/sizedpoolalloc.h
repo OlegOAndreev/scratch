@@ -8,14 +8,26 @@
 
 #include "common.h"
 
+// Enabling the following define enables the "no undefined behavior" mode of SizedPoolAlloc
+// at the cost of higher memory consumption. See NOTE for SizedPoolAlloc::allocate().
+#define SIZED_POOL_ALLOC_NO_UB
+
+#if defined(SIZED_POOL_ALLOC_NO_UB)
+#define SIZED_POOL_ALLOC_NO_THREAD_SANITIZER
+#else
+#define SIZED_POOL_ALLOC_NO_THREAD_SANITIZER NO_THREAD_SANITIZER
+#endif
+
 // SizedPoolAlloc allocates objects of fixed size.
 //  * Each allocated object is identified by a 32-bit handle (uint32_t), at most 2^32 - 1
 //    objects can be allocated.
 //  * Handle 0 is a nullptr equivalent.
 class SizedPoolAlloc {
 public:
-    // Initializes a new SizedPoolAlloc with given object size.
+    // Initializes a new SizedPoolAlloc with given object size and default object alignment.
     SizedPoolAlloc(size_t objectSize_);
+    // Initializes a new SizedPoolAlloc with given object size and required object alignment.
+    SizedPoolAlloc(size_t objectSize_, size_t alignment);
     SizedPoolAlloc(SizedPoolAlloc const&) = delete;
 
     // Allocates a new object and returns its handle.
@@ -31,8 +43,6 @@ public:
     size_t getObjectSize() const;
 
 private:
-    // Freelist "next" index is 32-bit, so the minimal required object size is 4 bytes.
-    static size_t const kMinObjectSize = 4;
     size_t const requestedObjectSize;
     size_t const objectSize;
 
@@ -65,6 +75,12 @@ private:
     // Index of the last used bucket (must have non-empty free space).
     std::atomic<uint32_t> curBucketIndex{0};
 
+    // Returns the default object alignment for the size.
+    static size_t defaultObjectAlignment(size_t objectSize_);
+
+    // Returns the real allocated object size after alignment.
+    static size_t getAllocObjectSize(size_t objectSize_, size_t objectAlignment);
+
     // Utilities for converting the object handle to/from bucket index + in-bucket offset.
     FORCE_INLINE static uint32_t handleToBucketIdx(uint32_t handle);
     FORCE_INLINE static uint32_t handleToBucketOffset(uint32_t handle, uint32_t bucketIdx);
@@ -83,16 +99,31 @@ private:
 };
 
 inline SizedPoolAlloc::SizedPoolAlloc(size_t objectSize_)
+    : SizedPoolAlloc(objectSize_, defaultObjectAlignment(objectSize_))
+{
+}
+
+inline SizedPoolAlloc::SizedPoolAlloc(size_t objectSize_, size_t objectAlignment)
     : requestedObjectSize(objectSize_)
-    , objectSize(objectSize_ > kMinObjectSize
-                 ? objectSize_
-                 : kMinObjectSize)
+    , objectSize(getAllocObjectSize(objectSize_, objectAlignment))
     , buckets(new Bucket[32])
 {
     allocateBucket(0);
 }
 
-inline uint32_t SizedPoolAlloc::allocate()
+// NOTE: Disabling thread sanitizer: tryPopTop uses unsynchronized load_u32 to get the next
+// freelist index and the following can happen:
+//  1. the first allocating thread reads the freeListTop, extracts top index and sleeps
+//  2. the second allocating thread read the freeListTop, pops the top element and passes
+//     it to the client code, which starts writing something into the memory location
+//     of the object, corresponding to the top index.
+//  3. the first thread wakes up and tries to read the next index from the same memory location
+//     as the second thread started writing to.
+// From the POV of the C++ standard this is UB: two unsynchronized accesses to the same memory
+// location. From the POV of the current CPUs this is fine: even if we get the torn read (which
+// we will not, because the read is at least 4-byte aligned), the tryPopTop will discard the read
+// value when the compare_exchange will fail.
+SIZED_POOL_ALLOC_NO_THREAD_SANITIZER inline uint32_t SizedPoolAlloc::allocate()
 {
     while (true) {
         uint32_t ret;
@@ -119,9 +150,37 @@ inline void* SizedPoolAlloc::at(uint32_t handle)
     return (char*)buckets[bucketIdx].basePtr + offset * objectSize;
 }
 
-size_t SizedPoolAlloc::getObjectSize() const
+inline size_t SizedPoolAlloc::getObjectSize() const
 {
     return requestedObjectSize;
+}
+
+inline size_t SizedPoolAlloc::defaultObjectAlignment(size_t objectSize_)
+{
+    if (objectSize_ <= 4) {
+        // We store freelist next indices in the freed object memory, so objects must be at least
+        // uint32_t-aligned.
+        return 4;
+    } else if (objectSize_ <= 8) {
+        return 8;
+    } else {
+        // This is a default alignment for many mallocs, let's align to it.
+        return 16;
+    }
+}
+
+inline size_t SizedPoolAlloc::getAllocObjectSize(size_t objectSize_, size_t objectAlignment)
+{
+    if (objectAlignment < 4) {
+        // We store freelist next indices in the freed object memory, so objects must be at least
+        // uint32_t-aligned.
+        objectAlignment = 4;
+    }
+#if defined(SIZED_POOL_ALLOC_NO_UB)
+    return nextAlignedSize(objectSize_, objectAlignment) + sizeof(uint32_t);
+#else
+    return nextAlignedSize(objectSize_, objectAlignment);
+#endif
 }
 
 FORCE_INLINE uint32_t SizedPoolAlloc::handleToBucketIdx(uint32_t handle)
@@ -129,7 +188,8 @@ FORCE_INLINE uint32_t SizedPoolAlloc::handleToBucketIdx(uint32_t handle)
     return nextLog2(handle) - 1;
 }
 
-inline uint32_t SizedPoolAlloc::handleToBucketOffset(uint32_t handle, uint32_t bucketIdx)
+FORCE_INLINE uint32_t SizedPoolAlloc::handleToBucketOffset(uint32_t handle,
+                                                                  uint32_t bucketIdx)
 {
     return handle - (1 << bucketIdx);
 }
@@ -159,7 +219,12 @@ inline bool SizedPoolAlloc::tryPopTop(uint32_t* handle)
         return false;
     }
     // Try to pop the next freelist item.
+#if defined(SIZED_POOL_ALLOC_NO_UB)
+    char const* ptr = (char const*)at(topHandle);
+    uint32_t nextHandle = load_u32(ptr + objectSize - sizeof(uint32_t));
+#else
     uint32_t nextHandle = load_u32(at(topHandle));
+#endif
     uint64_t nextTop = updateTopHandle(top, nextHandle);
     if (!freeListTop.compare_exchange_weak(top, nextTop, std::memory_order_seq_cst)) {
         // The pop failed, should retry the allocation.
@@ -175,7 +240,11 @@ inline void SizedPoolAlloc::pushTop(uint32_t handle)
     uint64_t top = freeListTop.load(std::memory_order_relaxed);
     while (true) {
         uint32_t topHandle = topToHandle(top);
+#if defined(SIZED_POOL_ALLOC_NO_UB)
+        store_u32((char*)ptr + objectSize - sizeof(uint32_t), topHandle);
+#else
         store_u32(ptr, topHandle);
+#endif
         uint64_t nextTop = updateTopHandle(top, handle);
         if (freeListTop.compare_exchange_weak(top, nextTop, std::memory_order_seq_cst)) {
             break;
@@ -205,7 +274,7 @@ inline bool SizedPoolAlloc::tryGetFromBucket(uint32_t* handle)
     return false;
 }
 
-void SizedPoolAlloc::allocateBucket(uint32_t bucketIdx)
+inline void SizedPoolAlloc::allocateBucket(uint32_t bucketIdx)
 {
     Bucket& bucket = buckets[bucketIdx];
     std::lock_guard<std::mutex> lock(bucket.allocMutex);
@@ -221,7 +290,7 @@ void SizedPoolAlloc::allocateBucket(uint32_t bucketIdx)
     ENSURE(bucketIdx == 0 || oldCurBucketIdx == bucketIdx - 1, "Incorrect curBucketIndex");
 }
 
-SizedPoolAlloc::Bucket::~Bucket()
+inline SizedPoolAlloc::Bucket::~Bucket()
 {
     operator delete(basePtr);
 }
