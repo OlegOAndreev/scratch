@@ -43,6 +43,9 @@ public:
     size_t getObjectSize() const;
 
 private:
+    // This is a default alignment for many malloc implementations, let's align to it.
+    static size_t const kMaxObjectAlignment = 16;
+
     size_t const requestedObjectSize;
     size_t const objectSize;
 
@@ -115,12 +118,12 @@ inline SizedPoolAlloc::SizedPoolAlloc(size_t objectSize_, size_t objectAlignment
 }
 
 // NOTE: Disabling thread sanitizer: tryPopTop uses unsynchronized load_u32 to get the next
-// freelist index and the following can happen:
-//  1. the first allocating thread reads the freeListTop, extracts top index and sleeps
+// freelist handle and the following can happen:
+//  1. the first allocating thread reads the freeListTop, extracts top handle and sleeps
 //  2. the second allocating thread read the freeListTop, pops the top element and passes
 //     it to the client code, which starts writing something into the memory location
-//     of the object, corresponding to the top index.
-//  3. the first thread wakes up and tries to read the next index from the same memory location
+//     of the object, corresponding to the top handle.
+//  3. the first thread wakes up and tries to read the next handle from the same memory location
 //     as the second thread started writing to.
 // From the POV of the C++ standard this is UB: two unsynchronized accesses to the same memory
 // location. From the POV of the current CPUs this is fine: even if we get the torn read (which
@@ -160,25 +163,27 @@ inline size_t SizedPoolAlloc::getObjectSize() const
 
 inline size_t SizedPoolAlloc::defaultObjectAlignment(size_t objectSize_)
 {
-    if (objectSize_ <= 4) {
+    if (objectSize_ <= sizeof(uint32_t)) {
         // We store freelist next indices in the freed object memory, so objects must be at least
         // uint32_t-aligned.
-        return 4;
-    } else if (objectSize_ <= 8) {
-        return 8;
+        return sizeof(uint32_t);
+    } else if (objectSize_ <= sizeof(double)) {
+        return sizeof(double);
     } else {
-        // This is a default alignment for many mallocs, let's align to it.
-        return 16;
+        return kMaxObjectAlignment;
     }
 }
 
 inline size_t SizedPoolAlloc::getAllocObjectSize(size_t objectSize_, size_t objectAlignment)
 {
-    if (objectAlignment < 4) {
+    if (objectAlignment < sizeof(uint32_t)) {
         // We store freelist next indices in the freed object memory, so objects must be at least
         // uint32_t-aligned.
-        objectAlignment = 4;
+        objectAlignment = sizeof(uint32_t);
     }
+    // If SIZED_POOL_ALLOC_NO_UB is enabled, store the freelist next handle after the object itself
+    // and use atomic ops when reading it, otherwise store the freelist next handle in the first
+    // bytes of the object itself. See loadNextHandle/storeNextHandle.
 #if defined(SIZED_POOL_ALLOC_NO_UB)
     return nextAlignedSize(objectSize_, objectAlignment) + sizeof(uint32_t);
 #else
@@ -191,8 +196,7 @@ FORCE_INLINE uint32_t SizedPoolAlloc::handleToBucketIdx(uint32_t handle)
     return nextLog2(handle) - 1;
 }
 
-FORCE_INLINE uint32_t SizedPoolAlloc::handleToBucketOffset(uint32_t handle,
-                                                                  uint32_t bucketIdx)
+FORCE_INLINE uint32_t SizedPoolAlloc::handleToBucketOffset(uint32_t handle, uint32_t bucketIdx)
 {
     return handle - (1 << bucketIdx);
 }
@@ -217,7 +221,7 @@ FORCE_INLINE uint64_t SizedPoolAlloc::updateTopHandle(uint64_t top, uint32_t new
 inline uint32_t SizedPoolAlloc::loadNextHandle(void* ptr)
 {
 #if defined(SIZED_POOL_ALLOC_NO_UB)
-    char const* nextPtr = (char const*)ptr + objectSize - sizeof(uint32_t);
+    void const* nextPtr = (char const*)ptr + objectSize - sizeof(uint32_t);
     return std::atomic_load_explicit((std::atomic<uint32_t>*)nextPtr, std::memory_order_relaxed);
 #else
     return load_u32(ptr);
@@ -227,7 +231,7 @@ inline uint32_t SizedPoolAlloc::loadNextHandle(void* ptr)
 inline void SizedPoolAlloc::storeNextHandle(void* ptr, uint32_t nextHandle)
 {
 #if defined(SIZED_POOL_ALLOC_NO_UB)
-    char* nextPtr = (char*)ptr + objectSize - sizeof(uint32_t);
+    void* nextPtr = (char*)ptr + objectSize - sizeof(uint32_t);
     std::atomic_store_explicit((std::atomic<uint32_t>*)nextPtr, nextHandle,
                                std::memory_order_relaxed);
 #else
