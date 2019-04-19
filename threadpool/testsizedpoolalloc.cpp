@@ -211,7 +211,8 @@ void testSizedPoolAllocImpl(size_t objectSize, int numThreads)
 
     if (numThreads > 1) {
         // Randomly allocate-deallocate objects from fixed number of slots, which is shared
-        // among threads and is small (to have high thread contention).
+        // among threads and is small (to have high thread contention). This tries to simulate
+        // using the pool for the mpmc queue.
         size_t const kNumSlots = 1 << 6;
         uint64_t const kNumIterations = 10000000 / numThreads;
         SizedPoolAlloc sizedPoolAlloc(objectSize);
