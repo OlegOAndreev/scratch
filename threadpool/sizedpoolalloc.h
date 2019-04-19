@@ -30,7 +30,7 @@ public:
     // Deallocates previously allocated object.
     void deallocate(uint32_t handle);
 
-    // Returns the pointer to the object with given handle.
+    // Returns the pointer to the object with the given handle.
     void* at(uint32_t handle);
 
     // Returns the object size for this pool.
@@ -61,6 +61,13 @@ private:
     static size_t const kNumBuckets = 32;
     std::unique_ptr<Bucket[]> const buckets;
 
+#if defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-private-field"
+#endif
+
+    char padding1[CACHE_LINE_SIZE - sizeof(buckets)];
+
     // freeListTop is the freelist top handle tagged with aba counter.
     static int const kAbaCounterShift = 32;
     static uint64_t const kAbaCounterMask = 0xFFFFFFFF00000000;
@@ -69,8 +76,16 @@ private:
     // Freelist is a lock-free stack.
     std::atomic<uint64_t> freeListTop{0};
 
+    char padding2[CACHE_LINE_SIZE - sizeof(freeListTop)];
+
     // Index of the last used bucket (must have non-empty free space).
     std::atomic<uint32_t> curBucketIndex{0};
+
+    char padding3[CACHE_LINE_SIZE - sizeof(curBucketIndex)];
+
+#if defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
 
     // Returns the default object alignment for the size.
     static size_t defaultObjectAlignment(size_t objectSize_);
@@ -107,7 +122,7 @@ inline SizedPoolAlloc::SizedPoolAlloc(size_t objectSize_)
 inline SizedPoolAlloc::SizedPoolAlloc(size_t objectSize_, size_t objectAlignment)
     : requestedObjectSize(objectSize_)
     , objectSize(getAllocObjectSize(objectSize_, objectAlignment))
-    , buckets(new Bucket[32])
+    , buckets(new Bucket[kNumBuckets])
 {
     allocateBucket(0);
 }
