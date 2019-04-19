@@ -74,14 +74,19 @@ static_assert(sizeof(size_t) == sizeof(uintptr_t), "Very strange platform");
 //
 // Defines NO_ADDRESS_SANITIZER and NO_THREAD_SANITIZER.
 //
-#if defined(__has_feature) && __has_feature(address_sanitizer)
+#if defined(__has_feature)
+#if __has_feature(address_sanitizer)
 #define NO_ADDRESS_SANITIZER __attribute__((no_sanitize("address")))
 #else
 #define NO_ADDRESS_SANITIZER
 #endif
-#if defined(__has_feature) && __has_feature(thread_sanitizer)
+#if __has_feature(thread_sanitizer)
 #define NO_THREAD_SANITIZER __attribute__((no_sanitize("thread")))
 #else
+#define NO_THREAD_SANITIZER
+#endif
+#else
+#define NO_ADDRESS_SANITIZER
 #define NO_THREAD_SANITIZER
 #endif
 
