@@ -72,6 +72,20 @@ static_assert(sizeof(size_t) == sizeof(uintptr_t), "Very strange platform");
 #endif
 
 //
+// Defines NO_ADDRESS_SANITIZER and NO_THREAD_SANITIZER.
+//
+#if defined(__has_feature) && __has_feature(address_sanitizer)
+#define NO_ADDRESS_SANITIZER __attribute__((no_sanitize("address")))
+#else
+#define NO_ADDRESS_SANITIZER
+#endif
+#if defined(__has_feature) && __has_feature(thread_sanitizer)
+#define NO_THREAD_SANITIZER __attribute__((no_sanitize("thread")))
+#else
+#define NO_THREAD_SANITIZER
+#endif
+
+//
 // Error reporting
 //
 
@@ -295,7 +309,7 @@ FORCE_INLINE long long byteSwap(long long v)
 
 
 //
-// Pointer alignment
+// Pointer and size alignment
 //
 
 // Returns the first pointer after ptr, which is aligned according to alignment. Returns ptr
@@ -307,6 +321,12 @@ FORCE_INLINE T* nextAlignedPtr(T* ptr)
     return (T*)((uintptr_t)ptr + remainder);
 }
 
+// Returns next size which is multiple of alignment (or size if it is already aligned).
+template<size_t alignment>
+FORCE_INLINE size_t nextAlignedSize(size_t size)
+{
+    return ((size + alignment - 1) / alignment) * alignment;
+}
 
 //
 // Cache-line size (very crude approximation!)

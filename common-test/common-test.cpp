@@ -259,6 +259,31 @@ void testNextAlignedPtr()
     printf("testNextAlignedPtr passed\n");
 }
 
+void testNextAlignedSize()
+{
+    ENSURE(nextAlignedSize<1>(1) == 1, "");
+    ENSURE(nextAlignedSize<2>(1) == 2, "");
+    ENSURE(nextAlignedSize<4>(1) == 4, "");
+
+    ENSURE(nextAlignedSize<1>(2) == 2, "");
+    ENSURE(nextAlignedSize<2>(2) == 2, "");
+    ENSURE(nextAlignedSize<4>(2) == 4, "");
+
+    ENSURE(nextAlignedSize<1>(4) == 4, "");
+    ENSURE(nextAlignedSize<2>(4) == 4, "");
+    ENSURE(nextAlignedSize<4>(4) == 4, "");
+
+    ENSURE(nextAlignedSize<1>(3) == 3, "");
+    ENSURE(nextAlignedSize<2>(3) == 4, "");
+    ENSURE(nextAlignedSize<4>(3) == 4, "");
+
+    ENSURE(nextAlignedSize<1>(8) == 8, "");
+    ENSURE(nextAlignedSize<2>(8) == 8, "");
+    ENSURE(nextAlignedSize<4>(8) == 8, "");
+
+    printf("testNextAlignedSize passed\n");
+}
+
 void testElapsedMsec()
 {
     enableFinegrainedSleep();
@@ -418,6 +443,7 @@ int main()
     testLoadStores();
     testByteSwap();
     testNextAlignedPtr();
+    testNextAlignedSize();
     testElapsedMsec();
     testSemaphore();
     testRandomRange();
