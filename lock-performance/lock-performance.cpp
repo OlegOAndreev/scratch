@@ -180,6 +180,7 @@ struct SemaphoreLock {
 };
 
 // The idea taken from http://preshing.com/20150316/semaphores-are-surprisingly-versatile/
+template<int kSpins = 10000>
 struct PaddedBenaphoreLock {
     std::atomic<size_t> count;
     char padding1[CACHE_LINE_WIDTH - sizeof(size_t)];
@@ -193,16 +194,17 @@ struct PaddedBenaphoreLock {
 
     int lock()
     {
-        for (int spins = 0; spins < 1000; spins++) {
+        for (int spins = 0; spins < kSpins; spins++) {
             size_t expected = 0;
-            if (count.compare_exchange_weak(expected, 1, std::memory_order_acq_rel)) {
+            if (count.load(std::memory_order_relaxed) == expected
+                    && count.compare_exchange_weak(expected, 1, std::memory_order_acq_rel)) {
                 return spins;
             }
         }
         if (count.fetch_add(1, std::memory_order_acq_rel) > 0) {
             semaphore.wait();
         }
-        return 1000;
+        return kSpins;
     }
 
     void unlock()
@@ -213,6 +215,7 @@ struct PaddedBenaphoreLock {
     }
 };
 
+template<int kSpins = 10000>
 struct BenaphoreLock {
     std::atomic<size_t> count;
     Semaphore semaphore;
@@ -224,16 +227,17 @@ struct BenaphoreLock {
 
     int lock()
     {
-        for (int spins = 0; spins < 1000; spins++) {
+        for (int spins = 0; spins < kSpins; spins++) {
             size_t expected = 0;
-            if (count.compare_exchange_weak(expected, 1, std::memory_order_acq_rel)) {
+            if (count.load(std::memory_order_relaxed) == expected
+                    && count.compare_exchange_weak(expected, 1, std::memory_order_acq_rel)) {
                 return spins;
             }
         }
         if (count.fetch_add(1, std::memory_order_acq_rel) > 0) {
             semaphore.wait();
         }
-        return 1000;
+        return kSpins;
     }
 
     void unlock()
@@ -701,10 +705,14 @@ int main(int argc, char** argv)
                 "ticketlock", method, numThreads, inputSize, workAmount);
     run<LockingWorkData<TicketLock<EmptyBackoff, sizeof(size_t)>>>(
                 "ticketlock,unaligned", method, numThreads, inputSize, workAmount);
-    run<LockingWorkData<PaddedBenaphoreLock>>(
-                "benaphore", method, numThreads, inputSize, workAmount);
-    run<LockingWorkData<BenaphoreLock>>(
-                "benaphore,unaligned", method, numThreads, inputSize, workAmount);
+    run<LockingWorkData<PaddedBenaphoreLock<1000>>>(
+                "benaphore-1000", method, numThreads, inputSize, workAmount);
+    run<LockingWorkData<BenaphoreLock<1000>>>(
+                "benaphore-1000,unaligned", method, numThreads, inputSize, workAmount);
+    run<LockingWorkData<PaddedBenaphoreLock<10000>>>(
+                "benaphore-10000", method, numThreads, inputSize, workAmount);
+    run<LockingWorkData<BenaphoreLock<10000>>>(
+                "benaphore-10000,unaligned", method, numThreads, inputSize, workAmount);
     run<LockingWorkData<SemaphoreLock<CACHE_LINE_WIDTH>>>(
                 "semaphore", method, numThreads, inputSize, workAmount);
     run<LockingWorkData<SemaphoreLock<sizeof(Semaphore)>>>(
