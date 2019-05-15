@@ -24,8 +24,6 @@
 #error "Unsupported OS"
 #endif
 
-const size_t CACHE_LINE_WIDTH = 64;
-
 
 #if defined(_WIN32) && defined(__GNUC__)
 // MinGW ships without std::thread and std::mutex support, add a partial implementation of those.
@@ -180,12 +178,12 @@ struct SemaphoreLock {
 };
 
 // The idea taken from http://preshing.com/20150316/semaphores-are-surprisingly-versatile/
-template<int kSpins = 10000>
+template<int kSpins = 10000, bool preload = true>
 struct PaddedBenaphoreLock {
     std::atomic<size_t> count;
-    char padding1[CACHE_LINE_WIDTH - sizeof(size_t)];
+    char padding1[CACHE_LINE_SIZE - sizeof(size_t)];
     Semaphore semaphore;
-    char padding2[CACHE_LINE_WIDTH - sizeof(Semaphore)];
+    char padding2[CACHE_LINE_SIZE - sizeof(Semaphore)];
 
     PaddedBenaphoreLock()
         : count(0)
@@ -196,7 +194,7 @@ struct PaddedBenaphoreLock {
     {
         for (int spins = 0; spins < kSpins; spins++) {
             size_t expected = 0;
-            if (count.load(std::memory_order_relaxed) == expected
+            if ((!preload || count.load(std::memory_order_relaxed) == expected)
                     && count.compare_exchange_weak(expected, 1, std::memory_order_acq_rel)) {
                 return spins;
             }
@@ -215,7 +213,7 @@ struct PaddedBenaphoreLock {
     }
 };
 
-template<int kSpins = 10000>
+template<int kSpins = 10000, bool preload = true>
 struct BenaphoreLock {
     std::atomic<size_t> count;
     Semaphore semaphore;
@@ -229,7 +227,7 @@ struct BenaphoreLock {
     {
         for (int spins = 0; spins < kSpins; spins++) {
             size_t expected = 0;
-            if (count.load(std::memory_order_relaxed) == expected
+            if ((!preload || count.load(std::memory_order_relaxed) == expected)
                     && count.compare_exchange_weak(expected, 1, std::memory_order_acq_rel)) {
                 return spins;
             }
@@ -440,13 +438,13 @@ struct LockingWorkData {
 };
 
 struct LockFreeWorkData {
-    PaddedAtomic<CACHE_LINE_WIDTH> inputIndex;
+    PaddedAtomic<CACHE_LINE_SIZE> inputIndex;
     std::vector<unsigned> input;
-    char padding1[CACHE_LINE_WIDTH - sizeof(size_t)];
+    char padding1[CACHE_LINE_SIZE - sizeof(size_t)];
 
-    PaddedAtomic<CACHE_LINE_WIDTH> outputIndex;
+    PaddedAtomic<CACHE_LINE_SIZE> outputIndex;
     std::vector<unsigned> output;
-    char padding2[CACHE_LINE_WIDTH - sizeof(size_t)];
+    char padding2[CACHE_LINE_SIZE - sizeof(size_t)];
 
     LockFreeWorkData(const std::vector<unsigned>& sourceInput)
     {
@@ -676,60 +674,82 @@ int main(int argc, char** argv)
     if (numThreads == 1) {
         run<UnlockedWorkData>("no lock", method, numThreads, inputSize, workAmount);
     }
+
     run<LockFreeWorkData>("lock-free", method, numThreads, inputSize, workAmount);
-    run<LockingWorkData<SpinLock<EmptyBackoff, CACHE_LINE_WIDTH, true>>>(
+
+    run<LockingWorkData<SpinLock<EmptyBackoff, CACHE_LINE_SIZE, true>>>(
                 "spinlock", method,numThreads, inputSize, workAmount);
+
 #if !defined(_MSC_VER)
-    run<LockingWorkData<SpinLock<PauseBackoff, CACHE_LINE_WIDTH, true>>>(
+    run<LockingWorkData<SpinLock<PauseBackoff, CACHE_LINE_SIZE, true>>>(
                 "spinlock+pause", method, numThreads, inputSize, workAmount);
-    run<LockingWorkData<SpinLock<NopBackoff, CACHE_LINE_WIDTH, true>>>(
+
+    run<LockingWorkData<SpinLock<NopBackoff, CACHE_LINE_SIZE, true>>>(
                 "spinlock+nop", method, numThreads, inputSize, workAmount);
 #endif
-    run<LockingWorkData<SpinLock<SchedBackoff, CACHE_LINE_WIDTH, true>>>(
+
+    run<LockingWorkData<SpinLock<SchedBackoff, CACHE_LINE_SIZE, true>>>(
                 "spinlock+yield", method, numThreads, inputSize, workAmount);
-    run<LockingWorkData<SpinLock<SleepBackoff, CACHE_LINE_WIDTH, true>>>(
+
+    run<LockingWorkData<SpinLock<SleepBackoff, CACHE_LINE_SIZE, true>>>(
                 "spinlock+sleep", method, numThreads, inputSize, workAmount);
-    run<LockingWorkData<SpinLock<EmptyBackoff, CACHE_LINE_WIDTH, false>>>(
+
+    run<LockingWorkData<SpinLock<EmptyBackoff, CACHE_LINE_SIZE, false>>>(
                 "spinlock,no load loop", method, numThreads, inputSize, workAmount);
+
 #if !defined(_MSC_VER)
-    run<LockingWorkData<SpinLock<PauseBackoff, CACHE_LINE_WIDTH, false>>>(
+    run<LockingWorkData<SpinLock<PauseBackoff, CACHE_LINE_SIZE, false>>>(
                 "spinlock+pause,no load loop", method, numThreads, inputSize, workAmount);
 #endif
+
     run<LockingWorkData<SpinLock<EmptyBackoff, sizeof(size_t), true>>>(
                 "spinlock,unaligned", method, numThreads, inputSize, workAmount);
+
 #if !defined(_MSC_VER)
     run<LockingWorkData<SpinLock<PauseBackoff, sizeof(size_t), true>>>(
                 "spinlock+pause,unaligned", method, numThreads, inputSize, workAmount);
 #endif
-    run<LockingWorkData<TicketLock<EmptyBackoff, CACHE_LINE_WIDTH>>>(
+
+    run<LockingWorkData<TicketLock<EmptyBackoff, CACHE_LINE_SIZE>>>(
                 "ticketlock", method, numThreads, inputSize, workAmount);
     run<LockingWorkData<TicketLock<EmptyBackoff, sizeof(size_t)>>>(
                 "ticketlock,unaligned", method, numThreads, inputSize, workAmount);
-    run<LockingWorkData<PaddedBenaphoreLock<1000>>>(
+
+    run<LockingWorkData<PaddedBenaphoreLock<1000, false>>>(
                 "benaphore-1000", method, numThreads, inputSize, workAmount);
-    run<LockingWorkData<BenaphoreLock<1000>>>(
+    run<LockingWorkData<BenaphoreLock<1000, false>>>(
                 "benaphore-1000,unaligned", method, numThreads, inputSize, workAmount);
-    run<LockingWorkData<PaddedBenaphoreLock<10000>>>(
+    run<LockingWorkData<PaddedBenaphoreLock<1000, true>>>(
+                "benaphore-1000-preload", method, numThreads, inputSize, workAmount);
+    run<LockingWorkData<BenaphoreLock<1000, true>>>(
+                "benaphore-1000-preload,unaligned", method, numThreads, inputSize, workAmount);
+
+    run<LockingWorkData<PaddedBenaphoreLock<10000, false>>>(
                 "benaphore-10000", method, numThreads, inputSize, workAmount);
-    run<LockingWorkData<BenaphoreLock<10000>>>(
+    run<LockingWorkData<BenaphoreLock<10000, false>>>(
                 "benaphore-10000,unaligned", method, numThreads, inputSize, workAmount);
-    run<LockingWorkData<SemaphoreLock<CACHE_LINE_WIDTH>>>(
+    run<LockingWorkData<PaddedBenaphoreLock<10000, true>>>(
+                "benaphore-10000-preload", method, numThreads, inputSize, workAmount);
+    run<LockingWorkData<BenaphoreLock<10000, true>>>(
+                "benaphore-10000-preload,unaligned", method, numThreads, inputSize, workAmount);
+
+    run<LockingWorkData<SemaphoreLock<CACHE_LINE_SIZE>>>(
                 "semaphore", method, numThreads, inputSize, workAmount);
     run<LockingWorkData<SemaphoreLock<sizeof(Semaphore)>>>(
                 "semaphore,unaligned", method, numThreads, inputSize, workAmount);
     // std::mutex and default pthread_mutex is horribly slow on OS X, skip it altogether
  #if !defined(__APPLE__)
-    run<LockingWorkData<MutexLock<CACHE_LINE_WIDTH>>>(
+    run<LockingWorkData<MutexLock<CACHE_LINE_SIZE>>>(
                 "std::mutex", method, numThreads, inputSize, workAmount);
     run<LockingWorkData<MutexLock<sizeof(pthread_mutex_t)>>>(
                 "std::mutex,unaligned", method, numThreads, inputSize, workAmount);
-    run<LockingWorkData<PThreadMutexLock<CACHE_LINE_WIDTH>>>(
+    run<LockingWorkData<PThreadMutexLock<CACHE_LINE_SIZE>>>(
                 "pthread_mutex", method, numThreads, inputSize, workAmount);
     run<LockingWorkData<PThreadMutexLock<sizeof(pthread_mutex_t)>>>(
                 "pthread_mutex,unaligned", method, numThreads, inputSize, workAmount);
 #endif
 #if defined(__APPLE__)
-    run<LockingWorkData<PThreadMutexUnfairLock<CACHE_LINE_WIDTH>>>(
+    run<LockingWorkData<PThreadMutexUnfairLock<CACHE_LINE_SIZE>>>(
                 "pthread_mutex,unfair", method, numThreads, inputSize, workAmount);
     run<LockingWorkData<PThreadMutexUnfairLock<sizeof(pthread_mutex_t)>>>(
                 "pthread_mutex,unfair,unaligned", method, numThreads, inputSize, workAmount);
