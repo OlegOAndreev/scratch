@@ -26,7 +26,8 @@
 // MODIFIED: Added <utility> for std::forward.
 #include <utility>
 
-template<typename T>
+// MODIFIED: Added shuffle_pos.
+template<typename T, bool shuffle_pos = false>
 class mpmc_bounded_queue
 {
 public:
@@ -39,8 +40,21 @@ public:
   {
     assert((buffer_size >= 2) &&
       ((buffer_size & (buffer_size - 1)) == 0));
+    if constexpr (shuffle_pos && sizeof(T) < cacheline_size) {
+      size_t per_line = (cacheline_size + sizeof(T) - 1) / sizeof(T);
+      shuffle_bits_ = 1;
+      while ((1 << shuffle_bits_) < per_line) {
+        shuffle_bits_++;
+      }
+      if (buffer_size < (1 << (shuffle_bits_ * 2))) {
+        shuffle_bits_ = 0;
+      }
+      low_mask_ = (1 << shuffle_bits_) - 1;
+      mid_mask_ = low_mask_ << shuffle_bits_;
+      up_mask_ = buffer_mask_ & ~(low_mask_ | mid_mask_);
+    }
     for (size_t i = 0; i != buffer_size; i += 1)
-      buffer_[i].sequence_.store(i, std::memory_order_relaxed);
+      buffer_[get_index(i)].sequence_.store(i, std::memory_order_relaxed);
     enqueue_pos_.store(0, std::memory_order_relaxed);
     dequeue_pos_.store(0, std::memory_order_relaxed);
   }
@@ -58,7 +72,8 @@ public:
     size_t pos = enqueue_pos_.load(std::memory_order_relaxed);
     for (;;)
     {
-      cell = &buffer_[pos & buffer_mask_];
+      // MODIFIED: Added shuffle_pos.
+      cell = &buffer_[get_index(pos)];
       size_t seq =
         cell->sequence_.load(std::memory_order_acquire);
       intptr_t dif = (intptr_t)seq - (intptr_t)pos;
@@ -87,7 +102,8 @@ public:
     size_t pos = dequeue_pos_.load(std::memory_order_relaxed);
     for (;;)
     {
-      cell = &buffer_[pos & buffer_mask_];
+      // MODIFIED: Added shuffle_pos.
+      cell = &buffer_[get_index(pos)];
       // MODIFIED: Use seq_cst instead of acquire as a way to prevent reordering of the memory
       // accesses around it (see blockingtaskqueue.h for more details).
       size_t seq =
@@ -123,7 +139,12 @@ private:
   cacheline_pad_t         pad0_;
   cell_t* const           buffer_;
   size_t const            buffer_mask_;
-  cacheline_pad_t         pad1_;
+  // MODIFIED: Added shuffle_pos.
+  size_t                  shuffle_bits_;
+  size_t                  low_mask_;
+  size_t                  mid_mask_;
+  size_t                  up_mask_;
+  cacheline_pad_t pad1_;
   std::atomic<size_t>     enqueue_pos_;
   cacheline_pad_t         pad2_;
   std::atomic<size_t>     dequeue_pos_;
@@ -131,4 +152,17 @@ private:
 
   mpmc_bounded_queue(mpmc_bounded_queue const&);
   void operator = (mpmc_bounded_queue const&);
+
+  // MODIFIED: Added shuffle_pos.
+  size_t get_index(size_t pos)
+  {
+    if constexpr (shuffle_pos && sizeof(T) < cacheline_size) {
+      size_t pos_up = pos & up_mask_;
+      size_t pos_mid = (pos & mid_mask_) >> shuffle_bits_;
+      size_t pos_low = (pos & low_mask_) << shuffle_bits_;
+      return pos_up | pos_mid | pos_low;
+    } else {
+      return pos & buffer_mask_;
+    }
+  }
 };

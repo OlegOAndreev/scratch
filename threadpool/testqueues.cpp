@@ -237,9 +237,13 @@ void testQueues()
         testQueueImpl<int>(stdBlockingQueueInt, "int", "StdBlockingQueue", kIters,
                            nullptr, baselineSpeedInt);
 
-        BlockingQueue<mpmc_bounded_queue<int>> mpmcBlockingQueueInt(kQueueSize);
-        testQueueImpl<int>(mpmcBlockingQueueInt, "int", "mpmc_bounded_queue", kIters,
-                           baselineSpeedInt, nullptr);
+        BlockingQueue<mpmc_bounded_queue<int, true>> mpmcBlockingQueueIntShuffle(kQueueSize);
+        testQueueImpl<int>(mpmcBlockingQueueIntShuffle, "int", "mpmc_bounded_queue<shuffle>",
+                           kIters, baselineSpeedInt, nullptr);
+
+        BlockingQueue<mpmc_bounded_queue<int, false>> mpmcBlockingQueueIntNoShuffle(kQueueSize);
+        testQueueImpl<int>(mpmcBlockingQueueIntNoShuffle, "int", "mpmc_bounded_queue<no shuffle>",
+                           kIters, baselineSpeedInt, nullptr);
 
         BlockingQueue<MpScUnboundedQueue<int>> mpscBlockingQueueInt;
         testQueueImpl<int>(mpscBlockingQueueInt, "int", "MpScUnboundedQueue", kIters,
