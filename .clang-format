@@ -1,6 +1,7 @@
 ---
 Language: Cpp
-AlignAfterOpenBracket: true
+AlignAfterOpenBracket: Align
+AlignOperands: true
 AllowShortBlocksOnASingleLine: false
 AllowShortCaseLabelsOnASingleLine: false
 AllowShortFunctionsOnASingleLine: None
@@ -12,7 +13,7 @@ BreakBeforeBraces: Linux
 BreakBeforeTernaryOperators: true
 BreakConstructorInitializersBeforeComma: true
 BreakStringLiterals: true
-ColumnLimit: 120
+ColumnLimit: 100
 Cpp11BracedListStyle: true
 DerivePointerAlignment: true
 IndentWidth: 4
