@@ -6,7 +6,6 @@
 #include <thread>
 
 #include "testcountwaiter.h"
-#include "testfiber.h"
 #include "testfixedfunction.h"
 #include "testpools.h"
 #include "testqueues.h"
@@ -21,8 +20,7 @@ void printUsage(const char* argv0)
            "Pool names:\n"
            "\tsimple\n"
            "\tsimple-mpmc\n"
-           "\twork-stealing\n"
-           "\tfiber\n",
+           "\twork-stealing\n",
            argv0);
 }
 
@@ -58,10 +56,6 @@ int main(int argc, char** argv)
 
     if (poolNames.empty() || setContains(poolNames, "count-waiter")) {
         testCountWaiter();
-    }
-
-    if (poolNames.empty() || setContains(poolNames, "fiber")) {
-        testFiber();
     }
 
     if (poolNames.empty() || setContains(poolNames, "fixed-function")) {
