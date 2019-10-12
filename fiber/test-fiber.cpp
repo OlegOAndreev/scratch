@@ -37,7 +37,7 @@ void trivialFiberTestFunc(void* arg)
     }
 }
 
-void testFiber()
+int main()
 {
     {
         // Create two groups of fibers on one thread, each of the groups circularly pointing
@@ -110,5 +110,4 @@ void testFiber()
     }
 
     printf("Fiber tests passed. %lld fiber switches per second\n", (long long)switchesPerSecond);
-    printf("=====\n");
 }
