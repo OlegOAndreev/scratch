@@ -16,6 +16,8 @@ public:
 
     void dequeue(T& t);
 
+    bool tryDequeue(T& t);
+
 private:
     std::deque<T> deque;
 
@@ -42,4 +44,16 @@ void StdBlockingQueue<T>::dequeue(T& t)
     consumerWakeup.wait(l, [this] { return !deque.empty(); });
     t = std::move(deque.front());
     deque.pop_front();
+}
+
+template<typename T>
+bool StdBlockingQueue<T>::tryDequeue(T& t)
+{
+    std::unique_lock<std::mutex> l(lock);
+    if (deque.empty()) {
+        return false;
+    }
+    t = std::move(deque.front());
+    deque.pop_front();
+    return true;
 }

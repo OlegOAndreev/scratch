@@ -29,6 +29,9 @@ public:
     // Dequeues the element, blocking if the queue is empty.
     void dequeue(T& t);
 
+    // Tries to dequeue the element. Returns true if dequeue succeeded.
+    bool tryDequeue(T& t);
+
 private:
     BaseQueueType baseQueue;
     std::atomic<int> numSleepingConsumers{0};
@@ -113,4 +116,10 @@ void BlockingQueue<BaseQueueType>::dequeue(T& t)
             numSleepingConsumers.fetch_sub(1, std::memory_order_seq_cst);
         }
     }
+}
+
+template<typename BaseQueueType>
+bool BlockingQueue<BaseQueueType>::tryDequeue(T& t)
+{
+    return baseQueue.dequeue(t);
 }

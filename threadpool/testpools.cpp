@@ -5,8 +5,9 @@
 #include <thread>
 #include <vector>
 
+#include "../countwaiter/countwaiter.h"
+
 #include "blockingqueue.h"
-#include "countwaiter.h"
 #include "fixedfunction.h"
 #include "futureutils.h"
 #include "simplethreadpool.h"

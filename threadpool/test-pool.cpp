@@ -5,19 +5,19 @@
 #include <set>
 #include <thread>
 
-#include "testcountwaiter.h"
 #include "testfixedfunction.h"
 #include "testpools.h"
 #include "testqueues.h"
-#include "testsizedpoolalloc.h"
 
 
 void printUsage(const char* argv0)
 {
-    printf("Usage: %s [options] [pool names]\n"
+    printf("Usage: %s [options] [test names]\n"
            "Options:\n"
            "\t--num-threads NUM\t\tSet number of threads in a pool (number of cores by default)\n"
-           "Pool names:\n"
+           "Test names:\n"
+           "\tfixed-function\n"
+           "\tqueues\n"
            "\tsimple\n"
            "\tsimple-mpmc\n"
            "\twork-stealing\n",
@@ -54,20 +54,12 @@ int main(int argc, char** argv)
         }
     }
 
-    if (poolNames.empty() || setContains(poolNames, "count-waiter")) {
-        testCountWaiter();
-    }
-
     if (poolNames.empty() || setContains(poolNames, "fixed-function")) {
         testFixedFunction();
     }
 
     if (poolNames.empty() || setContains(poolNames, "queues")) {
-        testQueues();
-    }
-
-    if (poolNames.empty() || setContains(poolNames, "sized-pool-alloc")) {
-        testSizedPoolAlloc(numThreads);
+        testQueues(numThreads);
     }
 
     if (poolNames.empty() || setContains(poolNames, "simple")) {
