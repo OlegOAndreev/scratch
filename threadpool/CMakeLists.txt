@@ -3,11 +3,9 @@ cmake_minimum_required(VERSION 2.8)
 
 add_executable(${PROJECT_NAME}
     test-pool.cpp
-    testcountwaiter.cpp
     testfixedfunction.cpp
     testpools.cpp
-    testqueues.cpp
-    testsizedpoolalloc.cpp)
+    testqueues.cpp)
 
 target_include_directories(${PROJECT_NAME} PRIVATE ..)
 
