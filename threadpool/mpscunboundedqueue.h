@@ -3,17 +3,14 @@
 #include <atomic>
 #include <utility>
 
-#include "alloc.h"
-
 // Lock-free multi-producer single-consumer queue based on Dmitry Vyukov MPSC queue:
 // http://www.1024cores.net/home/lock-free-algorithms/queues/intrusive-mpsc-node-based-queue
-template<typename T, typename Alloc = DefaultAlloc>
+template<typename T>
 class MpScUnboundedQueue {
 public:
     using ElementType = T;
 
     MpScUnboundedQueue();
-    MpScUnboundedQueue(Alloc& alloc_);
     ~MpScUnboundedQueue();
 
     template<typename U>
@@ -37,52 +34,40 @@ private:
     Node* tail;
     Node stub;
 
-    Alloc& alloc;
-
-    // Used when initializing from default constructor.
-    static Alloc& staticAlloc();
-
     void enqueueImpl(Node* newNode);
 };
 
-template<typename T, typename Alloc>
-MpScUnboundedQueue<T, Alloc>::MpScUnboundedQueue()
-    : MpScUnboundedQueue(staticAlloc())
-{
-}
-
-template<typename T, typename Alloc>
-MpScUnboundedQueue<T, Alloc>::MpScUnboundedQueue(Alloc& alloc_)
-    : alloc(alloc_)
+template<typename T>
+MpScUnboundedQueue<T>::MpScUnboundedQueue()
 {
     head.store(&stub, std::memory_order_relaxed);
     tail = &stub;
 }
 
-template<typename T, typename Alloc>
-MpScUnboundedQueue<T, Alloc>::~MpScUnboundedQueue()
+template<typename T>
+MpScUnboundedQueue<T>::~MpScUnboundedQueue()
 {
     Node* it = tail;
     while (it != nullptr) {
         Node* next = it->next.load(std::memory_order_seq_cst);
         if (it != &stub) {
-            allocDelete(alloc, it);
+            delete it;
         }
         it = next;
     }
 }
 
-template<typename T, typename Alloc>
+template<typename T>
 template<typename U>
-bool MpScUnboundedQueue<T, Alloc>::enqueue(U&& u)
+bool MpScUnboundedQueue<T>::enqueue(U&& u)
 {
-    Node* newNode = allocNew<Node>(alloc, std::forward<U>(u));
+    Node* newNode = new Node(std::forward<U>(u));
     enqueueImpl(newNode);
     return true;
 }
 
-template<typename T, typename Alloc>
-bool MpScUnboundedQueue<T, Alloc>::dequeue(T& t)
+template<typename T>
+bool MpScUnboundedQueue<T>::dequeue(T& t)
 {
     Node* curTail = tail;
     Node* next = curTail->next.load(std::memory_order_acquire);
@@ -97,7 +82,7 @@ bool MpScUnboundedQueue<T, Alloc>::dequeue(T& t)
     if (next != nullptr) {
         tail = next;
         t = std::move(curTail->data);
-        allocDelete(alloc, curTail);
+        delete curTail;
         return true;
     }
     // Head modification must be seq_cst, see blockingqueue.h for details.
@@ -110,37 +95,30 @@ bool MpScUnboundedQueue<T, Alloc>::dequeue(T& t)
     if (next != nullptr) {
         tail = next;
         t = std::move(curTail->data);
-        allocDelete(alloc, curTail);
+        delete curTail;
         return true;
     }
     return false;
 }
 
-template<typename T, typename Alloc>
-void MpScUnboundedQueue<T, Alloc>::enqueueImpl(Node* newNode)
+template<typename T>
+void MpScUnboundedQueue<T>::enqueueImpl(Node* newNode)
 {
     // Head modification must be seq_cst, see blockingqueue.h for details.
     Node* oldHead = head.exchange(newNode, std::memory_order_seq_cst);
     oldHead->next.store(newNode, std::memory_order_release);
 }
 
-template<typename T, typename Alloc>
-MpScUnboundedQueue<T, Alloc>::Node::Node()
+template<typename T>
+MpScUnboundedQueue<T>::Node::Node()
 {
     next.store(nullptr, std::memory_order_relaxed);
 }
 
-template<typename T, typename Alloc>
+template<typename T>
 template<typename U>
-MpScUnboundedQueue<T, Alloc>::Node::Node(U&& u)
+MpScUnboundedQueue<T>::Node::Node(U&& u)
     : data(std::forward<U>(u))
 {
     next.store(nullptr, std::memory_order_relaxed);
-}
-
-template<typename T, typename Alloc>
-Alloc& MpScUnboundedQueue<T, Alloc>::staticAlloc()
-{
-    static Alloc instance;
-    return instance;
 }
