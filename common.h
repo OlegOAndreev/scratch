@@ -392,6 +392,12 @@ inline int elapsedMsec(uint64_t startTime)
     return (getTimeTicks() - startTime) * 1000LL / getTimeFreq();
 }
 
+// Returns elapsed microseconds since startTime ticks.
+inline int elapsedUsec(uint64_t startTime)
+{
+    return (getTimeTicks() - startTime) * 1000000LL / getTimeFreq();
+}
+
 // Sleep for the given number of milliseconds. See enableFinegrainedSleep() for details
 // on sleep precision.
 inline void sleepMsec(int msec)
