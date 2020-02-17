@@ -1,5 +1,6 @@
 ---
 Language: Cpp
+AccessModifierOffset: -4
 AlignAfterOpenBracket: Align
 AlignOperands: true
 AllowShortBlocksOnASingleLine: false
@@ -9,7 +10,7 @@ AllowShortIfStatementsOnASingleLine: false
 AllowShortLoopsOnASingleLine: false
 AlwaysBreakTemplateDeclarations: true
 BreakBeforeBinaryOperators: All
-BreakBeforeBraces: Linux
+BreakBeforeBraces: WebKit
 BreakBeforeTernaryOperators: true
 BreakConstructorInitializersBeforeComma: true
 BreakStringLiterals: true
