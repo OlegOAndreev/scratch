@@ -55,7 +55,7 @@ int64_t doMain(int64_t times, int numThreads, const char* name, Value* values, s
         });
     }
 
-    // Wait until all thes threads start.
+    // Wait until all the threads start.
     while (flag.load() != numThreads - 1);
 
     int64_t timeStart = getTimeTicks();
@@ -66,7 +66,7 @@ int64_t doMain(int64_t times, int numThreads, const char* name, Value* values, s
         doSum(times, &values[0], &dummyValue, adder, r);
     }
 
-    // Wait until all thes threads stop.
+    // Wait until all the threads stop.
     while (stopFlag.load() != numThreads - 1);
 
     int64_t deltaTime = getTimeTicks() - timeStart;
