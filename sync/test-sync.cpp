@@ -3,11 +3,11 @@
 #include <cstdio>
 #include <cstring>
 #include <set>
+#include <string>
 #include <thread>
 
-#include "testfixedfunction.h"
-#include "testpools.h"
-
+void testCountWaiter();
+void testQueues(int numThreads);
 
 void printUsage(const char* argv0)
 {
@@ -15,10 +15,8 @@ void printUsage(const char* argv0)
            "Options:\n"
            "\t--num-threads NUM\t\tSet number of threads in a pool (number of cores by default)\n"
            "Test names:\n"
-           "\tfixed-function\n"
-           "\tsimple\n"
-           "\tsimple-mpmc\n"
-           "\twork-stealing\n",
+           "\tcountwaiter\n"
+           "\tqueues\n",
            argv0);
 }
 
@@ -52,19 +50,11 @@ int main(int argc, char** argv)
         }
     }
 
-    if (testNames.empty() || setContains(testNames, "fixed-function")) {
-        testFixedFunction();
+    if (testNames.empty() || setContains(testNames, "countwaiter")) {
+        testCountWaiter();
     }
 
-    if (testNames.empty() || setContains(testNames, "simple")) {
-        testPoolSimple(numThreads);
-    }
-
-    if (testNames.empty() || setContains(testNames, "simple-mpmc")) {
-        testPoolSimpleMpMc(numThreads);
-    }
-
-    if (testNames.empty() || setContains(testNames, "work-stealing")) {
-        testPoolWorkStealing(numThreads);
+    if (testNames.empty() || setContains(testNames, "queues")) {
+        testQueues(numThreads);
     }
 }

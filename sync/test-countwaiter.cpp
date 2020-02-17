@@ -4,7 +4,7 @@
 
 #include "countwaiter.h"
 
-int main()
+void testCountWaiter()
 {
     int const kNumIterations = 10000;
     int const kRandomSpinMax = 10000;

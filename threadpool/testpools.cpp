@@ -5,7 +5,7 @@
 #include <thread>
 #include <vector>
 
-#include "../countwaiter/countwaiter.h"
+#include "../sync/countwaiter.h"
 
 #include "blockingqueue.h"
 #include "fixedfunction.h"
