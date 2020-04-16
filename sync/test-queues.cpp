@@ -23,7 +23,6 @@ void testQueueImpl(Queue& testQueue, const char* typeName, const char* testQueue
         std::sort(out.begin(), out.end());
         for (int i = 0, n = out.size(); i < n; i++) {
             ENSURE(out[i] == T(i), "");
-            stderr;
         }
     };
 

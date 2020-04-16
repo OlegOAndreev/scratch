@@ -13,6 +13,11 @@ std::atomic<uint32_t> totalSum{0};
 template<typename Value, typename Adder>
 NO_INLINE void doSum(int64_t times, Value* value, Value const* nextValue, Adder adder, uint32_t r)
 {
+#if defined __clang__
+#pragma nounroll
+#elif defined __GNUC__
+#pragma GCC unroll 1
+#endif
     for (int64_t i = 0; i < times; i++) {
         r = (r << 1) | (r >> 31);
         // Very simple pseudo-random code to throw off the optimizer.
