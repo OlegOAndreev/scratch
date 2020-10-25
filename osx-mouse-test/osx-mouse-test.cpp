@@ -1,9 +1,9 @@
-// #define OLD_STYLE_API
+#define OLD_STYLE_API
 
-#include <stdlib.h>
-#include <unistd.h>
 #include <ApplicationServices/ApplicationServices.h>
 #include <IOKit/hid/IOHIDLib.h>
+#include <stdlib.h>
+#include <unistd.h>
 
 #if defined(OLD_STYLE_API)
 #include <IOKit/hidsystem/IOHIDShared.h>
@@ -13,159 +13,176 @@
 #include <string>
 #include <vector>
 
+const size_t sleepMs = 10;
+
 // Copied from IOHIDFamily-870.21.4/IOHIDEventSystemPlugIns/IOHIDAccelerationTable.hpp
 
-#define FIXED_TO_DOUBLE(x) ((x)/65536.0)
+#define FIXED_TO_DOUBLE(x) ((x) / 65536.0)
 
 typedef struct {
-    double   m;
-    double   b;
-    double   x;
+    double m;
+    double b;
+    double x;
 } ACCEL_SEGMENT;
 
 typedef struct {
-    double  x;
-    double  y;
+    double x;
+    double y;
 } ACCEL_POINT;
 
 struct ACCEL_TABLE_ENTRY {
 
     template<typename T>
-    T acceleration () const;
+    T acceleration() const;
 
-    uint32_t count  () const;
-    uint32_t length () const;
-
-    template<typename T>
-    T x  (unsigned int index) const;
+    uint32_t count() const;
+    uint32_t length() const;
 
     template<typename T>
-    T y  (unsigned int index) const;
+    T x(unsigned int index) const;
 
-    ACCEL_POINT point (unsigned int) const;
+    template<typename T>
+    T y(unsigned int index) const;
+
+    ACCEL_POINT point(unsigned int) const;
 
 private:
-
     uint32_t accel_;
     uint16_t count_;
     uint32_t points_[1][2];
 
-} __attribute__ ((packed));
-
+} __attribute__((packed));
 
 struct ACCEL_TABLE {
 
     template<typename T>
-    T scale () const ;
+    T scale() const;
 
-    uint32_t count () const;
+    uint32_t count() const;
 
-    uint32_t signature () const;
+    uint32_t signature() const;
 
-    const ACCEL_TABLE_ENTRY * entry (int index) const;
+    const ACCEL_TABLE_ENTRY* entry(int index) const;
 
-    friend std::ostream & operator<<(std::ostream &os, const ACCEL_TABLE& t);
+    friend std::ostream& operator<<(std::ostream& os, const ACCEL_TABLE& t);
 
 private:
-
     uint32_t scale_;
     uint32_t signature_;
     uint16_t count_;
     ACCEL_TABLE_ENTRY entry_;
 
-} __attribute__ ((packed));
+} __attribute__((packed));
 
-#define APPLE_ACCELERATION_MT_TABLE_SIGNATURE       0x2a425355
-#define APPLE_ACCELERATION_DEFAULT_TABLE_SIGNATURE  0x30303240
+#define APPLE_ACCELERATION_MT_TABLE_SIGNATURE 0x2a425355
+#define APPLE_ACCELERATION_DEFAULT_TABLE_SIGNATURE 0x30303240
 
-inline  int32_t ACCEL_TABLE_CONSUME_INT32 (const void ** t) {
+inline int32_t ACCEL_TABLE_CONSUME_INT32(const void** t)
+{
     int32_t val = OSReadBigInt32(*t, 0);
     *t = (uint8_t*)*t + 4;
     return val;
 }
 
-inline  int16_t ACCEL_TABLE_CONSUME_INT16 (const void ** t) {
+inline int16_t ACCEL_TABLE_CONSUME_INT16(const void** t)
+{
     int16_t val = OSReadBigInt16(*t, 0);
     *t = (uint8_t*)*t + 2;
     return val;
 }
 
-#define ACCELL_TABLE_CONSUME_POINT(t) {FIXED_TO_DOUBLE(ACCEL_TABLE_CONSUME_INT32(t)), \
-    FIXED_TO_DOUBLE(ACCEL_TABLE_CONSUME_INT32(t))}
+#define ACCELL_TABLE_CONSUME_POINT(t)                                                              \
+    {                                                                                              \
+        FIXED_TO_DOUBLE(ACCEL_TABLE_CONSUME_INT32(t)),                                             \
+            FIXED_TO_DOUBLE(ACCEL_TABLE_CONSUME_INT32(t))                                          \
+    }
 
 // Copied from IOHIDFamily-870.21.4/IOHIDEventSystemPlugIns/IOHIDAccelerationTable.cpp
 
 template<>
-IOFixed ACCEL_TABLE_ENTRY::acceleration<IOFixed> () const {
+IOFixed ACCEL_TABLE_ENTRY::acceleration<IOFixed>() const
+{
     return OSReadBigInt32(&accel_, 0);
 }
 
 template<>
-double ACCEL_TABLE_ENTRY::acceleration<double> () const {
+double ACCEL_TABLE_ENTRY::acceleration<double>() const
+{
     return FIXED_TO_DOUBLE(acceleration<IOFixed>());
 }
 
-uint32_t ACCEL_TABLE_ENTRY::count () const {
+uint32_t ACCEL_TABLE_ENTRY::count() const
+{
     return OSReadBigInt16(&count_, 0);
 }
 
 template<>
-IOFixed ACCEL_TABLE_ENTRY::x<IOFixed> (unsigned int index) const {
-    return   OSReadBigInt32(&points_[index][0], 0);
+IOFixed ACCEL_TABLE_ENTRY::x<IOFixed>(unsigned int index) const
+{
+    return OSReadBigInt32(&points_[index][0], 0);
 }
 
 template<>
-double ACCEL_TABLE_ENTRY::x<double>(unsigned int index) const {
+double ACCEL_TABLE_ENTRY::x<double>(unsigned int index) const
+{
     return FIXED_TO_DOUBLE(x<IOFixed>(index));
 }
 
 template<>
-IOFixed ACCEL_TABLE_ENTRY::y (unsigned int index) const {
-    return  OSReadBigInt32(&points_[index][1], 0);
+IOFixed ACCEL_TABLE_ENTRY::y(unsigned int index) const
+{
+    return OSReadBigInt32(&points_[index][1], 0);
 }
 
 template<>
-double ACCEL_TABLE_ENTRY::y (unsigned int index) const {
+double ACCEL_TABLE_ENTRY::y(unsigned int index) const
+{
     return FIXED_TO_DOUBLE(y<IOFixed>(index));
 }
 
-ACCEL_POINT ACCEL_TABLE_ENTRY::point (unsigned int index) const {
+ACCEL_POINT ACCEL_TABLE_ENTRY::point(unsigned int index) const
+{
     ACCEL_POINT result;
     result.x = x<double>(index);
     result.y = y<double>(index);
     return result;
 }
 
-uint32_t ACCEL_TABLE_ENTRY::length () const {
-    return count() * sizeof(uint32_t) * 2 + sizeof (uint32_t) + sizeof(uint16_t) ;
+uint32_t ACCEL_TABLE_ENTRY::length() const
+{
+    return count() * sizeof(uint32_t) * 2 + sizeof(uint32_t) + sizeof(uint16_t);
 }
 
 template<>
-IOFixed ACCEL_TABLE::scale () const {
+IOFixed ACCEL_TABLE::scale() const
+{
     return OSReadBigInt32(&scale_, 0);
 }
 
 template<>
-double ACCEL_TABLE::scale () const {
+double ACCEL_TABLE::scale() const
+{
     return FIXED_TO_DOUBLE(scale<IOFixed>());
 }
 
-uint32_t ACCEL_TABLE::count () const {
+uint32_t ACCEL_TABLE::count() const
+{
     return OSReadBigInt16(&count_, 0);
 }
 
-uint32_t ACCEL_TABLE::signature() const {
+uint32_t ACCEL_TABLE::signature() const
+{
     return signature_;
 }
 
-const ACCEL_TABLE_ENTRY * ACCEL_TABLE::entry (int index) const {
-    const ACCEL_TABLE_ENTRY *current = &entry_;
-    for (int i = 1 ; i <= index; i++) {
+const ACCEL_TABLE_ENTRY* ACCEL_TABLE::entry(int index) const
+{
+    const ACCEL_TABLE_ENTRY* current = &entry_;
+    for (int i = 1; i <= index; i++) {
         current = (ACCEL_TABLE_ENTRY*)((uint8_t*)current + current->length());
     }
     return current;
 }
-
 
 struct Device {
     IOHIDDeviceRef hidDevice;
@@ -176,6 +193,11 @@ IOHIDManagerRef hidManager;
 std::vector<Device> devices;
 int iohidDeltaX = 0;
 int iohidDeltaY = 0;
+int hidTapDeltaX = 0;
+int hidTapDeltaY = 0;
+int hidTapEvents = 0;
+int cgEventDeltaX = 0;
+int cgEventDeltaY = 0;
 
 std::string cfToString(CFStringRef str)
 {
@@ -198,8 +220,8 @@ void printOldAcceleration()
         printf("Failed to IOHIDGetAccelerationWithKey\n");
         abort();
     }
-    if (IOHIDGetAccelerationWithKey(handle, CFSTR(kIOHIDTrackpadAccelerationType),
-                                    &trackpadAccel) != 0) {
+    if (IOHIDGetAccelerationWithKey(handle, CFSTR(kIOHIDTrackpadAccelerationType), &trackpadAccel)
+        != 0) {
         printf("Failed to IOHIDGetAccelerationWithKey\n");
         abort();
     }
@@ -216,25 +238,28 @@ void printDeviceImpl(io_service_t service, int padding)
         printf("Failed to IOObjectGetClass\n");
         abort();
     }
-    
+
     CFMutableDictionaryRef properties;
-    if (IORegistryEntryCreateCFProperties(service, &properties, kCFAllocatorDefault,
-                                          kNilOptions) != 0) {
+    if (IORegistryEntryCreateCFProperties(service, &properties, kCFAllocatorDefault, kNilOptions)
+        != 0) {
         printf("Failed to IORegistryEntryCreateCFProperties\n");
         abort();
     }
 
     std::vector<std::string> keys;
-    CFDictionaryApplyFunction(properties, [](const void* key, const void* value, void* context) {
-        ((std::vector<std::string>*)context)->push_back(cfToString((CFStringRef)key));
-    }, &keys);
-    
+    CFDictionaryApplyFunction(
+        properties,
+        [](const void* key, const void* /*value*/, void* context) {
+            ((std::vector<std::string>*)context)->push_back(cfToString((CFStringRef)key));
+        },
+        &keys);
+
     printf("%sClass: %s\n", strPadding.c_str(), classname);
     for (const auto& key : keys) {
         printf("%sProperty: %s\n", strPadding.c_str(), key.c_str());
     }
     printf("\n");
-    
+
     io_iterator_t children;
     IORegistryEntryGetChildIterator(service, kIOServicePlane, &children);
     io_object_t child;
@@ -254,12 +279,12 @@ void printDevice(IOHIDDeviceRef device)
 int getResolutionImpl(io_service_t service)
 {
     CFTypeRef res = IORegistryEntrySearchCFProperty(
-                service, kIOServicePlane,CFSTR(kIOHIDPointerResolutionKey), kCFAllocatorDefault,
-                kIORegistryIterateRecursively);
+        service, kIOServicePlane, CFSTR(kIOHIDPointerResolutionKey), kCFAllocatorDefault,
+        kIORegistryIterateRecursively);
     if (res) {
         SInt32 resolution = -1;
         if (CFGetTypeID(res) == CFNumberGetTypeID()
-                && CFNumberGetValue((CFNumberRef)res,kCFNumberSInt32Type, &resolution)) {
+            && CFNumberGetValue((CFNumberRef)res, kCFNumberSInt32Type, &resolution)) {
             resolution = resolution >> 16;
         }
         return resolution;
@@ -284,10 +309,10 @@ bool setResolutionImpl(io_service_t service, int resolution)
                                                     kCFAllocatorDefault, kNilOptions);
     if (res) {
         SInt32 i32Resolution = resolution << 16;
-        CFNumberRef numberRef = CFNumberCreate(kCFAllocatorDefault, kCFNumberSInt32Type,
-                                               &i32Resolution);
-        if (IORegistryEntrySetCFProperty(
-                    service, CFSTR(kIOHIDPointerResolutionKey), numberRef) != 0) {
+        CFNumberRef numberRef
+            = CFNumberCreate(kCFAllocatorDefault, kCFNumberSInt32Type, &i32Resolution);
+        if (IORegistryEntrySetCFProperty(service, CFSTR(kIOHIDPointerResolutionKey), numberRef)
+            != 0) {
             printf("Failed to IORegistryEntrySetCFProperty\n");
             abort();
         }
@@ -322,12 +347,12 @@ bool setResolution(IOHIDDeviceRef device, int resolution)
 double getAccelerationImpl(io_service_t service)
 {
     CFTypeRef res = IORegistryEntrySearchCFProperty(
-                service, kIOServicePlane, CFSTR(kIOHIDPointerAccelerationTableKey),
-                kCFAllocatorDefault, kIORegistryIterateRecursively);
+        service, kIOServicePlane, CFSTR(kIOHIDPointerAccelerationTableKey), kCFAllocatorDefault,
+        kIORegistryIterateRecursively);
     if (res) {
         ACCEL_TABLE* table = (ACCEL_TABLE*)CFDataGetBytePtr((CFDataRef)res);
         if (table->signature() != APPLE_ACCELERATION_MT_TABLE_SIGNATURE
-                && table->signature() != APPLE_ACCELERATION_MT_TABLE_SIGNATURE) {
+            && table->signature() != APPLE_ACCELERATION_MT_TABLE_SIGNATURE) {
             printf("Wrong accel table signature %x\n", table->signature());
             return -1;
         }
@@ -350,7 +375,7 @@ int32_t getIOHIDInt32Property(IOHIDDeviceRef device, CFStringRef prop)
 {
     CFTypeRef ref = IOHIDDeviceGetProperty(device, prop);
     if (!ref) {
-        printf("Failed to IOHIDDeviceGetProperty\n");
+        printf("Failed to IOHIDDeviceGetProperty %s\n", cfToString(prop).c_str());
         abort();
     }
     int32_t ret;
@@ -365,9 +390,9 @@ std::string getIOHIDStringProperty(IOHIDDeviceRef device, CFStringRef prop, bool
 {
     CFStringRef str = (CFStringRef)IOHIDDeviceGetProperty(device, prop);
     if (!str) {
-        printf("Failed to IOHIDDeviceGetProperty\n");
+        printf("Failed to IOHIDDeviceGetProperty %s\n", cfToString(prop).c_str());
         if (allowNull) {
-            return nullptr;
+            return "";
         } else {
             abort();
         }
@@ -378,21 +403,20 @@ std::string getIOHIDStringProperty(IOHIDDeviceRef device, CFStringRef prop, bool
 
 void iohidInputCallback(void* /*context*/, IOReturn /*res*/, void* /*sender*/, IOHIDValueRef val)
 {
-    printf("FIRED\n");
     IOHIDElementRef elem = IOHIDValueGetElement(val);
     CFIndex value = IOHIDValueGetIntegerValue(val);
     uint32_t page = IOHIDElementGetUsagePage(elem);
     uint32_t usage = IOHIDElementGetUsage(elem);
     if (page == kHIDPage_GenericDesktop && value != 0) {
         switch (usage) {
-            case kHIDUsage_GD_X:
-                iohidDeltaX += (int)value;
-                break;
-            case kHIDUsage_GD_Y:
-                iohidDeltaY += (int)value;
-                break;
-            default:
-                break;
+        case kHIDUsage_GD_X:
+            iohidDeltaX += (int)value;
+            break;
+        case kHIDUsage_GD_Y:
+            iohidDeltaY += (int)value;
+            break;
+        default:
+            break;
         }
     }
 }
@@ -406,7 +430,6 @@ void initIOHID()
     }
     IOHIDManagerSetDeviceMatching(hidManager, NULL);
     IOHIDManagerOpen(hidManager, kIOHIDOptionsTypeNone);
-    IOHIDManagerRegisterInputValueCallback(hidManager, iohidInputCallback, nullptr);
     IOHIDManagerScheduleWithRunLoop(hidManager, CFRunLoopGetCurrent(), kCFRunLoopDefaultMode);
     CFSetRef deviceSet = IOHIDManagerCopyDevices(hidManager);
     CFIndex num = CFSetGetCount(deviceSet);
@@ -416,8 +439,8 @@ void initIOHID()
         IOHIDDeviceRef hidDevice = hidDevices[i];
         int32_t usagePage = getIOHIDInt32Property(hidDevice, CFSTR(kIOHIDPrimaryUsagePageKey));
         int32_t usage = getIOHIDInt32Property(hidDevice, CFSTR(kIOHIDPrimaryUsageKey));
-        std::string manufacturer = getIOHIDStringProperty(hidDevice, CFSTR(kIOHIDManufacturerKey),
-                                                          true);
+        std::string manufacturer
+            = getIOHIDStringProperty(hidDevice, CFSTR(kIOHIDManufacturerKey), true);
         std::string product = getIOHIDStringProperty(hidDevice, CFSTR(kIOHIDProductKey), true);
         printf("Device: %d: %s: %s (%d %d)\n", i, manufacturer.c_str(), product.c_str(), usagePage,
                usage);
@@ -430,8 +453,6 @@ void initIOHID()
             }
             IOHIDDeviceRegisterInputValueCallback(hidDevice, iohidInputCallback, nullptr);
             IOHIDDeviceScheduleWithRunLoop(hidDevice, CFRunLoopGetCurrent(), kCFRunLoopDefaultMode);
-            IOHIDQueueRef queue = IOHIDQueueCreate(kCFAllocatorDefault, hidDevice, 1024,
-                                                   kIOHIDOptionsTypeNone);
             Device device;
             device.hidDevice = hidDevice;
             device.name = manufacturer;
@@ -442,9 +463,31 @@ void initIOHID()
     }
 }
 
-void processIOHID()
+CGEventRef hidEventTapCallback(CGEventTapProxy /*proxy*/, CGEventType /*type*/, CGEventRef event,
+                               void* /*userInfo*/)
 {
-    while (CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0, true) == kCFRunLoopRunHandledSource);
+    hidTapDeltaX += (int)CGEventGetIntegerValueField(event, kCGMouseEventDeltaX);
+    hidTapDeltaY += (int)CGEventGetIntegerValueField(event, kCGMouseEventDeltaY);
+    hidTapEvents++;
+    return event;
+}
+
+void initCGEventTap()
+{
+    CGEventMask eventMask = CGEventMaskBit(kCGEventMouseMoved);
+    CFMachPortRef hidTap
+        = CGEventTapCreate(kCGHIDEventTap, kCGHeadInsertEventTap, kCGEventTapOptionListenOnly,
+                           eventMask, hidEventTapCallback, nullptr);
+    if (hidTap == nullptr) {
+        printf("Could not CGEventTapCreate\n");
+        return;
+    }
+    CFRunLoopSourceRef loopSrc = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, hidTap, 0);
+    CFRunLoopAddSource(CFRunLoopGetCurrent(), loopSrc, kCFRunLoopDefaultMode);
+    CFRelease(loopSrc);
+    CGEventTapEnable(hidTap, true);
+    printf("Installed tap. Please add the application in the Preferences > Security & Privacy > "
+           "Privacy > Accessibility\n");
 }
 
 CGPoint getCurrentCgPoint()
@@ -457,22 +500,21 @@ CGPoint getCurrentCgPoint()
 
 // Very simple class for computing amortized averages (the average of the last N elements).
 template<typename T>
-class RollingAverage
-{
+class RollingAverage {
 public:
     RollingAverage(size_t size)
-        : mBuffer(new T[size]),
-          mSize(size),
-          mCounter(0),
-          mItems(0)
+        : mBuffer(new T[size])
+        , mSize(size)
+        , mCounter(0)
+        , mItems(0)
     {
     }
-    
+
     ~RollingAverage()
     {
         delete[] mBuffer;
     }
-    
+
     void push(T t)
     {
         mBuffer[mCounter % mSize] = t;
@@ -481,7 +523,7 @@ public:
             mItems++;
         }
     }
-    
+
     T average() const
     {
         T avg = T();
@@ -493,7 +535,7 @@ public:
         }
         return avg;
     }
-    
+
 private:
     T* mBuffer;
     size_t mSize;
@@ -508,8 +550,9 @@ int main(int argc, char** argv)
 #endif
 
     initIOHID();
+    initCGEventTap();
 
-    for (const Device& device: devices) {
+    for (const Device& device : devices) {
         printf("%s resolution: %d\n", device.name.c_str(), getResolution(device.hidDevice));
         printf("%s acceleration: %g\n", device.name.c_str(), getAcceleration(device.hidDevice));
     }
@@ -519,7 +562,7 @@ int main(int argc, char** argv)
         if (strcmp(argv[i], "--set-resolution") == 0) {
             const char* name = argv[i + 1];
             int resolution = atoi(argv[i + 2]);
-            for (const Device& device: devices) {
+            for (const Device& device : devices) {
                 if (device.name.find_first_of(name) != std::string::npos) {
                     printf("Setting resolution for %s to %d\n", device.name.c_str(), resolution);
                     if (!setResolution(device.hidDevice, resolution)) {
@@ -536,39 +579,52 @@ int main(int argc, char** argv)
     }
 
     CGPoint lastCgPoint = getCurrentCgPoint();
+    RollingAverage<float> tapSpeed(5);
     RollingAverage<float> iohidSpeed(5);
     RollingAverage<float> cgSpeed(5);
     while (true) {
         bool movement = false;
-        
+
         iohidDeltaX = 0;
         iohidDeltaY = 0;
-        processIOHID();
+        hidTapDeltaX = 0;
+        hidTapDeltaY = 0;
+        while (CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0, true) == kCFRunLoopRunHandledSource)
+            ;
+
+        if (hidTapDeltaX != 0 || hidTapDeltaY != 0) {
+            printf("HID Tap Delta: %d %d\n", hidTapDeltaX, hidTapDeltaY);
+            tapSpeed.push(sqrt(hidTapDeltaX * hidTapDeltaX + hidTapDeltaY * hidTapDeltaY));
+            movement = true;
+        }
+
         if (iohidDeltaX != 0 || iohidDeltaY != 0) {
             printf("IOHID Delta: %d %d\n", iohidDeltaX, iohidDeltaY);
             iohidSpeed.push(sqrt(iohidDeltaX * iohidDeltaX + iohidDeltaY * iohidDeltaY));
             movement = true;
         }
-        
+
         CGPoint cgPoint = getCurrentCgPoint();
-        float cgDeltax = cgPoint.x - lastCgPoint.x;
-        float cgDeltay = cgPoint.y - lastCgPoint.y;
-        if (cgDeltax != 0 || cgDeltay != 0) {
-            printf("CG deltas: %d %d (%g %g)\n", (int)round(cgDeltax), (int)round(cgDeltay),
-                   cgDeltax, cgDeltay);
+        float cgDeltaX = cgPoint.x - lastCgPoint.x;
+        float cgDeltaY = cgPoint.y - lastCgPoint.y;
+        if (cgDeltaX != 0 || cgDeltaY != 0) {
+            printf("CG deltas: %d %d (%g %g)\n", (int)round(cgDeltaX), (int)round(cgDeltaY),
+                   cgDeltaX, cgDeltaY);
             lastCgPoint = cgPoint;
-            cgSpeed.push(sqrt(cgDeltax * cgDeltax + cgDeltay * cgDeltay));
+            cgSpeed.push(sqrt(cgDeltaX * cgDeltaX + cgDeltaY * cgDeltaY));
             movement = true;
         }
-        
+
         if (movement) {
-            printf("IOHID speed: %g, CG speed: %g\n", iohidSpeed.average(), cgSpeed.average());
+            printf("IOHID speed: %g, CG speed: %g, HID tap speed: %g (%d events)\n",
+                   iohidSpeed.average(), cgSpeed.average(), tapSpeed.average(), hidTapEvents);
             if (speedDump != nullptr) {
-                fprintf(speedDump, "%g %g\n", iohidSpeed.average(), cgSpeed.average());
+                fprintf(speedDump, "%g %g %g\n", iohidSpeed.average(), cgSpeed.average(),
+                        tapSpeed.average());
                 fflush(speedDump);
             }
             printf("\n");
         }
-        usleep(1000);
+        usleep(sleepMs * 1000);
     }
 }
