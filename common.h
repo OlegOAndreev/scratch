@@ -584,6 +584,13 @@ auto simpleAverage(C const& container) -> typename RemoveCRef<decltype(*containe
     return simpleAverage(container.begin(), container.end());
 }
 
+// Appends container to vecContainer.
+template<typename V, typename C>
+void vecAppend(V& vecContainer, C const& container)
+{
+    vecContainer.insert(vecContainer.end(), container.begin(), container.end());
+}
+
 // Returns true if the set-like container contains value (container must have methods find(value)
 // and end()), false if not.
 template<typename S, typename V>

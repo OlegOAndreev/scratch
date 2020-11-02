@@ -17,6 +17,7 @@ BreakStringLiterals: true
 ColumnLimit: 100
 Cpp11BracedListStyle: true
 DerivePointerAlignment: true
+ExperimentalAutoDetectBinPacking: true
 IndentWidth: 4
 NamespaceIndentation: None
 ReflowComments: true

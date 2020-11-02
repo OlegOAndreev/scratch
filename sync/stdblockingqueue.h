@@ -14,14 +14,18 @@ public:
     template<typename U>
     bool enqueue(U&& u);
 
-    void dequeue(T& t);
+    bool dequeue(T& t);
 
     bool tryDequeue(T& t);
 
+    void close();
+    bool isClosed() const;
+
 private:
     std::deque<T> deque;
+    bool closed = false;
 
-    std::mutex lock;
+    mutable std::mutex lock;
     std::condition_variable consumerWakeup;
 };
 
@@ -38,12 +42,16 @@ bool StdBlockingQueue<T>::enqueue(U&& u)
 }
 
 template<typename T>
-void StdBlockingQueue<T>::dequeue(T& t)
+bool StdBlockingQueue<T>::dequeue(T& t)
 {
     std::unique_lock<std::mutex> l(lock);
-    consumerWakeup.wait(l, [this] { return !deque.empty(); });
+    consumerWakeup.wait(l, [this] { return !deque.empty() || closed; });
+    if (deque.empty()) {
+        return false;
+    }
     t = std::move(deque.front());
     deque.pop_front();
+    return true;
 }
 
 template<typename T>
@@ -56,4 +64,18 @@ bool StdBlockingQueue<T>::tryDequeue(T& t)
     t = std::move(deque.front());
     deque.pop_front();
     return true;
+}
+
+template<typename T>
+void StdBlockingQueue<T>::close()
+{
+    std::unique_lock<std::mutex> l(lock);
+    closed = true;
+}
+
+template<typename T>
+bool StdBlockingQueue<T>::isClosed() const
+{
+    std::unique_lock<std::mutex> l(lock);
+    return closed;
 }
