@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <cstring>
+#include <deque>
 #include <memory>
 #include <thread>
 #include <vector>
@@ -121,14 +122,15 @@ void computeAndPrintRatio(size_t index, int64_t opPerSec, int64_t const* baselin
     }
 };
 
+enum class Wait { NO_WAIT, WAIT_ONLY, BOTH };
+
 // T must have a constructor T(int) and have a comparison operator==(T const&, T const&).
 template<template<typename> typename Queue, typename T>
 void testQueueImpl(const char* typeName, const char* testQueueName, int numIters, int numThreads,
-                   bool isMp, bool isMc, bool withWait, int64_t const* baselineSpeed,
-                   int64_t* newSpeed)
+                   bool isMp, bool isMc, Wait wait, int64_t const* baselineSpeed, int64_t* newSpeed)
 {
     // Run one producer and one consumer.
-    {
+    if (wait != Wait::WAIT_ONLY) {
         Queue<T> queue;
         int64_t pushPerSec, popPerSec;
         runProducerConsumer<T>(queue, numIters, 1, 1, false, &pushPerSec, &popPerSec);
@@ -144,7 +146,7 @@ void testQueueImpl(const char* typeName, const char* testQueueName, int numIters
     }
 
     // Run one producer and one consumer after the producer finished.
-    if (withWait) {
+    if (wait != Wait::NO_WAIT) {
         Queue<T> queue;
         int64_t pushPerSec, popPerSec;
         runProducerConsumer<T>(queue, numIters, 1, 1, true, &pushPerSec, &popPerSec);
@@ -160,7 +162,7 @@ void testQueueImpl(const char* typeName, const char* testQueueName, int numIters
     }
 
     // Run N producers and one consumer.
-    if (isMp) {
+    if (wait != Wait::WAIT_ONLY && isMp) {
         Queue<T> queue;
         int64_t pushPerSec, popPerSec;
         runProducerConsumer<T>(queue, numIters, numThreads, 1, false, &pushPerSec, &popPerSec);
@@ -176,7 +178,7 @@ void testQueueImpl(const char* typeName, const char* testQueueName, int numIters
     }
 
     // Run N producers and one consumer after the producers finished.
-    if (withWait && isMp) {
+    if (wait != Wait::NO_WAIT && isMp) {
         Queue<T> queue;
         int64_t pushPerSec, popPerSec;
         runProducerConsumer<T>(queue, numIters, numThreads, 1, true, &pushPerSec, &popPerSec);
@@ -192,7 +194,7 @@ void testQueueImpl(const char* typeName, const char* testQueueName, int numIters
     }
 
     // Run N producers and N consumers.
-    if (isMp && isMc) {
+    if (wait != Wait::WAIT_ONLY && isMp && isMc) {
         Queue<T> queue;
         int64_t pushPerSec, popPerSec;
         runProducerConsumer<T>(queue, numIters, numThreads, numThreads, false, &pushPerSec,
@@ -209,7 +211,7 @@ void testQueueImpl(const char* typeName, const char* testQueueName, int numIters
     }
 
     // Run N producers and N consumers after the producers finished.
-    if (withWait && isMp && isMc) {
+    if (wait != Wait::NO_WAIT && isMp && isMc) {
         Queue<T> queue;
         int64_t pushPerSec, popPerSec;
         runProducerConsumer<T>(queue, numIters, numThreads, numThreads, true, &pushPerSec,
@@ -290,6 +292,68 @@ struct BigBlockingMpmcBoundedQueueWithShuffle : public BlockingQueue<mpmc_bounde
 template<typename T>
 using BlockingMpScUnboundedQueue = BlockingQueue<MpScUnboundedQueue<T>>;
 
+// Non-threadsafe deque-based queue to compare the performance with.
+template<typename T>
+struct StdDeque {
+    bool enqueue(T const& t)
+    {
+        d.push_back(t);
+        return true;
+    }
+
+    bool dequeue(T& t)
+    {
+        if (d.empty()) {
+            return false;
+        }
+        t = d.front();
+        d.pop_front();
+        return true;
+    }
+
+    void close()
+    {
+    }
+
+    bool isClosed() const
+    {
+        return d.empty();
+    }
+
+    std::deque<T> d;
+};
+
+// Non-threadsafe stack-based (i.e. unfair) "queue" to compare the performance with.
+template<typename T>
+struct StdStack {
+    bool enqueue(T const& t)
+    {
+        v.push_back(t);
+        return true;
+    }
+
+    bool dequeue(T& t)
+    {
+        if (v.empty()) {
+            return false;
+        }
+        t = v.back();
+        v.pop_back();
+        return true;
+    }
+
+    void close()
+    {
+    }
+
+    bool isClosed() const
+    {
+        return v.empty();
+    }
+
+    std::vector<T> v;
+};
+
 void testQueues(int numThreads)
 {
     char queueName[1000];
@@ -299,23 +363,32 @@ void testQueues(int numThreads)
         int64_t baselineSpeedInt[12] = {};
 
         testQueueImpl<StdBlockingQueue, int>("int", "StdBlockingQueue", kIters, numThreads, true,
-                                             true, true, nullptr, baselineSpeedInt);
+                                             true, Wait::BOTH, nullptr, baselineSpeedInt);
 
         sprintf(queueName, "mpmc_bounded_queue<noshuffle, %d>", (int)kSmallQueueSize);
-        testQueueImpl<SmallBlockingMpmcBoundedQueue, int>(
-            "int", queueName, kIters, numThreads, true, true, false, baselineSpeedInt, nullptr);
+        testQueueImpl<SmallBlockingMpmcBoundedQueue, int>("int", queueName, kIters, numThreads,
+                                                          true, true, Wait::NO_WAIT,
+                                                          baselineSpeedInt, nullptr);
 
         sprintf(queueName, "mpmc_bounded_queue<noshuffle, %d>", (int)kBigQueueSize);
         testQueueImpl<BigBlockingMpmcBoundedQueue, int>("int", queueName, kIters, numThreads, true,
-                                                        true, true, baselineSpeedInt, nullptr);
+                                                        true, Wait::BOTH, baselineSpeedInt,
+                                                        nullptr);
 
         sprintf(queueName, "mpmc_bounded_queue<shuffle, %d>", (int)kBigQueueSize);
         testQueueImpl<BigBlockingMpmcBoundedQueueWithShuffle, int>(
-            "int", queueName, kIters, numThreads, true, true, true, baselineSpeedInt, nullptr);
+            "int", queueName, kIters, numThreads, true, true, Wait::BOTH, baselineSpeedInt,
+            nullptr);
 
         testQueueImpl<BlockingMpScUnboundedQueue, int>("int", "MpScUnboundedQueue", kIters,
-                                                       numThreads, true, false, true,
+                                                       numThreads, true, false, Wait::BOTH,
                                                        baselineSpeedInt, nullptr);
+
+        testQueueImpl<StdDeque, int>("int", "std::deque", kIters, numThreads, false, false,
+                                     Wait::WAIT_ONLY, baselineSpeedInt, nullptr);
+
+        testQueueImpl<StdStack, int>("int", "std::vector", kIters, numThreads, false, false,
+                                     Wait::WAIT_ONLY, baselineSpeedInt, nullptr);
 
         printf("=====\n");
     }
@@ -326,22 +399,30 @@ void testQueues(int numThreads)
         int64_t baselineSpeedFat[12] = {};
 
         testQueueImpl<StdBlockingQueue, FatQueueItem>("FatQueueItem", "StdBlockingQueue", kIters,
-                                                      numThreads, true, true, true, nullptr,
+                                                      numThreads, true, true, Wait::BOTH, nullptr,
                                                       baselineSpeedFat);
 
         sprintf(queueName, "mpmc_bounded_queue<noshuffle, %d>", (int)kSmallQueueSize);
         testQueueImpl<SmallBlockingMpmcBoundedQueue, FatQueueItem>(
-            "FatQueueItem", queueName, kIters, numThreads, true, true, false, baselineSpeedFat,
-            nullptr);
+            "FatQueueItem", queueName, kIters, numThreads, true, true, Wait::NO_WAIT,
+            baselineSpeedFat, nullptr);
 
         sprintf(queueName, "mpmc_bounded_queue<noshuffle, %d>", (int)kBigQueueSize);
         testQueueImpl<BigBlockingMpmcBoundedQueue, FatQueueItem>("FatQueueItem", queueName, kIters,
-                                                                 numThreads, true, true, true,
+                                                                 numThreads, true, true, Wait::BOTH,
                                                                  baselineSpeedFat, nullptr);
 
         testQueueImpl<BlockingMpScUnboundedQueue, FatQueueItem>(
-            "FatQueueItem", "MpScUnboundedQueue", kIters, numThreads, true, false, true,
+            "FatQueueItem", "MpScUnboundedQueue", kIters, numThreads, true, false, Wait::BOTH,
             baselineSpeedFat, nullptr);
+
+        testQueueImpl<StdDeque, FatQueueItem>("FatQueueItem", "std::deque", kIters, numThreads,
+                                              false, false, Wait::WAIT_ONLY, baselineSpeedFat,
+                                              nullptr);
+
+        testQueueImpl<StdStack, FatQueueItem>("FatQueueItem", "std::vector", kIters, numThreads,
+                                              false, false, Wait::WAIT_ONLY, baselineSpeedFat,
+                                              nullptr);
 
         printf("=====\n");
     }

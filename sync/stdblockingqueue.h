@@ -71,6 +71,7 @@ void StdBlockingQueue<T>::close()
 {
     std::unique_lock<std::mutex> l(lock);
     closed = true;
+    consumerWakeup.notify_all();
 }
 
 template<typename T>
