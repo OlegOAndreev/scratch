@@ -4,6 +4,7 @@ cmake_minimum_required(VERSION 2.8)
 add_executable(${PROJECT_NAME}
     test-countwaiter.cpp
     test-queues.cpp
+    test-semaphore.cpp
     test-sync.cpp)
 
 target_include_directories(${PROJECT_NAME} PRIVATE ..)

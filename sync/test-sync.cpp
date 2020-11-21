@@ -8,6 +8,7 @@
 
 void testCountWaiter();
 void testQueues(int numThreads);
+void testSemaphores(int numThreads);
 
 void printUsage(const char* argv0)
 {
@@ -16,7 +17,8 @@ void printUsage(const char* argv0)
            "\t--num-threads NUM\t\tSet number of threads in a pool (number of cores by default)\n"
            "Test names:\n"
            "\tcountwaiter\n"
-           "\tqueues\n",
+           "\tqueues\n"
+           "\tsemaphore\n",
            argv0);
 }
 
@@ -56,5 +58,9 @@ int main(int argc, char** argv)
 
     if (testNames.empty() || setContains(testNames, "queues")) {
         testQueues(numThreads);
+    }
+
+    if (testNames.empty() || setContains(testNames, "semaphore")) {
+        testSemaphores(numThreads);
     }
 }
