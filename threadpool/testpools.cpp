@@ -5,14 +5,14 @@
 #include <thread>
 #include <vector>
 
+#include "../sync/blockingqueue.h"
 #include "../sync/countwaiter.h"
+#include "../sync/stdblockingqueue.h"
 
-#include "blockingqueue.h"
 #include "fixedfunction.h"
 #include "futureutils.h"
 #include "simplethreadpool.h"
 #include "simpleworkstealingpool.h"
-#include "stdblockingqueue.h"
 
 // Simplest sanity checks for SimpleThreadPool.
 template<typename TP>
@@ -30,7 +30,7 @@ void basicTests(TP& tp)
         ENSURE(futures2[i].get() == i * i, "");
     }
 
-    auto future3 = submitFuture(tp, (double(*)(double))sqrt, 1.0);
+    auto future3 = submitFuture(tp, (double (*)(double))sqrt, 1.0);
     ENSURE(future3.get() == 1.0, "");
 
     int result4 = 0;
@@ -84,14 +84,14 @@ void printTinyJobsStats(std::vector<int64_t>& jobsPerSec, int64_t baseJobsPerSec
     int64_t avgJobsPerSec = simpleAverage(jobsPerSec);
     int64_t medianJobsPerSec = jobsPerSec[jobsPerSec.size() / 2];
     int64_t maxJobsPerSec = jobsPerSec.back();
-    double accel = avgJobsPerSec * 100.0  / baseJobsPerSec;
+    double accel = avgJobsPerSec * 100.0 / baseJobsPerSec;
     for (size_t i = 0; i < numJobsPerBatch; i++) {
         ENSURE(baseResults[i] == results[i], "");
     }
     printf("Tiny job test with %d-iter-job for pool (%s): avg %lld, median %lld,"
-           " max %lld jobs per sec, perf vs single core: %.1f%%\n", numItersPerJob, description,
-           (long long)avgJobsPerSec, (long long)medianJobsPerSec, (long long)maxJobsPerSec, accel);
-
+           " max %lld jobs per sec, perf vs single core: %.1f%%\n",
+           numItersPerJob, description, (long long)avgJobsPerSec, (long long)medianJobsPerSec,
+           (long long)maxJobsPerSec, accel);
 }
 
 template<typename F>
@@ -142,8 +142,8 @@ void tinyJobsTest(TP& tp, int numItersPerJob)
             baseResults[i] = tinyJob(jobInput[i]);
         }
     }
-    int64_t baseJobsPerSec = timeFreq * (kNumRepeats * kNumJobsPerBatch)
-            / (getTimeTicks() - baseStartTime);
+    int64_t baseJobsPerSec
+        = timeFreq * (kNumRepeats * kNumJobsPerBatch) / (getTimeTicks() - baseStartTime);
 
     // Actually do five tests:
     //  1. for submitFuture and std::based future,
@@ -152,31 +152,32 @@ void tinyJobsTest(TP& tp, int numItersPerJob)
     //  4. for submit and CountWaiter and results with padding.
     //  5. for submitRange and CountWaiter and results with padding.
 
-//    // Run the test for ~3 seconds.
-//    {
-//        std::vector<std::future<double>> futures;
-//        std::vector<double> results;
-//        futures.resize(kNumJobsPerBatch);
-//        results.resize(kNumJobsPerBatch);
-//        std::vector<int64_t> jobsPerSec;
-//        repeatForSeconds(kSeconds, [&] {
-//            int64_t batchStartTime = getTimeTicks();
-//            // Run a batch of tiny jobs and wait for them to complete.
-//            for (size_t i = 0; i < kNumJobsPerBatch; i++) {
-//                futures[i] = submitFuture(tp, tinyJob, jobInput[i]);
-//            }
+    //    // Run the test for ~3 seconds.
+    //    {
+    //        std::vector<std::future<double>> futures;
+    //        std::vector<double> results;
+    //        futures.resize(kNumJobsPerBatch);
+    //        results.resize(kNumJobsPerBatch);
+    //        std::vector<int64_t> jobsPerSec;
+    //        repeatForSeconds(kSeconds, [&] {
+    //            int64_t batchStartTime = getTimeTicks();
+    //            // Run a batch of tiny jobs and wait for them to complete.
+    //            for (size_t i = 0; i < kNumJobsPerBatch; i++) {
+    //                futures[i] = submitFuture(tp, tinyJob, jobInput[i]);
+    //            }
 
-//            for (size_t i = 0; i < kNumJobsPerBatch; i++) {
-//                results[i] = futures[i].get();
-//            }
-//            jobsPerSec.push_back(timeFreq * kNumJobsPerBatch / (getTimeTicks() - batchStartTime));
-//        });
-//        printTinyJobsStats(jobsPerSec, baseJobsPerSec, results, baseResults, kNumJobsPerBatch,
-//                           numItersPerJob, "submit std::future");
-//#if defined(WORK_STEALING_STATS)
-//        printWorkStealingStats(tp);
-//#endif
-//    }
+    //            for (size_t i = 0; i < kNumJobsPerBatch; i++) {
+    //                results[i] = futures[i].get();
+    //            }
+    //            jobsPerSec.push_back(timeFreq * kNumJobsPerBatch / (getTimeTicks() -
+    //            batchStartTime));
+    //        });
+    //        printTinyJobsStats(jobsPerSec, baseJobsPerSec, results, baseResults, kNumJobsPerBatch,
+    //                           numItersPerJob, "submit std::future");
+    //#if defined(WORK_STEALING_STATS)
+    //        printWorkStealingStats(tp);
+    //#endif
+    //    }
 
     // Run the test for ~3 seconds.
     {
@@ -215,12 +216,14 @@ void tinyJobsTest(TP& tp, int numItersPerJob)
             // Run a batch of tiny jobs and wait for them to complete.
             for (size_t i = 0; i < kNumJobsPerBatch; i += kNumJobsPerSubBatch) {
                 size_t num = std::min(kNumJobsPerSubBatch, kNumJobsPerBatch - i);
-                tp.submitRange([&jobInput, &results, &countWaiter] (size_t from, size_t to) {
-                    for (size_t j = from; j < to; j++) {
-                        results[j] = tinyJob(jobInput[j]);
-                    }
-                    countWaiter.post(to - from);
-                }, i, i + num);
+                tp.submitRange(
+                    [&jobInput, &results, &countWaiter](size_t from, size_t to) {
+                        for (size_t j = from; j < to; j++) {
+                            results[j] = tinyJob(jobInput[j]);
+                        }
+                        countWaiter.post(to - from);
+                    },
+                    i, i + num);
             }
 
             countWaiter.wait();
@@ -281,12 +284,14 @@ void tinyJobsTest(TP& tp, int numItersPerJob)
             // Run a batch of tiny jobs and wait for them to complete.
             for (size_t i = 0; i < kNumJobsPerBatch; i += kNumJobsPerSubBatch) {
                 size_t num = std::min(kNumJobsPerSubBatch, kNumJobsPerBatch - i);
-                tp.submitRange([&jobInput, &results, &countWaiter] (size_t from, size_t to) {
-                    for (size_t j = from; j < to; j++) {
-                        results[j * kResultsStride] = tinyJob(jobInput[j]);
-                    }
-                    countWaiter.post(to - from);
-                }, i, i + num);
+                tp.submitRange(
+                    [&jobInput, &results, &countWaiter](size_t from, size_t to) {
+                        for (size_t j = from; j < to; j++) {
+                            results[j * kResultsStride] = tinyJob(jobInput[j]);
+                        }
+                        countWaiter.post(to - from);
+                    },
+                    i, i + num);
             }
 
             countWaiter.wait();
@@ -311,8 +316,7 @@ using TaskType = FixedFunction<void()>;
 
 // A wrapper for MpMcBlockingQueue, providing the queue size.
 size_t const kMaxTasksInQueue = 32 * 1024;
-struct MpMcFixedBlockingQueue : public BlockingQueue<mpmc_bounded_queue<TaskType>>
-{
+struct MpMcFixedBlockingQueue : public BlockingQueue<mpmc_bounded_queue<TaskType>> {
     MpMcFixedBlockingQueue()
         : BlockingQueue(kMaxTasksInQueue)
     {
@@ -329,7 +333,7 @@ void testPoolSimple(int numThreads)
 
     tinyJobsTest(tp, 20);
     tinyJobsTest(tp, 200);
-//        tinyJobsTest(tp, 2000);
+    //        tinyJobsTest(tp, 2000);
 }
 
 void testPoolSimpleMpMc(int numThreads)
@@ -342,7 +346,7 @@ void testPoolSimpleMpMc(int numThreads)
 
     tinyJobsTest(tp, 20);
     tinyJobsTest(tp, 200);
-//        tinyJobsTest(tp, 2000);
+    //        tinyJobsTest(tp, 2000);
 }
 
 void testPoolWorkStealing(int numThreads)
@@ -358,5 +362,5 @@ void testPoolWorkStealing(int numThreads)
 
     tinyJobsTest(tp, 20);
     tinyJobsTest(tp, 200);
-//        tinyJobsTest(tp, 2000);
+    //        tinyJobsTest(tp, 2000);
 }

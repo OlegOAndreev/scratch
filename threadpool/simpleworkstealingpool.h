@@ -5,7 +5,7 @@
 #include <thread>
 
 #include "common.h"
-#include "mpmc_bounded_queue/mpmc_bounded_queue.h"
+#include "sync/mpmc_bounded_queue/mpmc_bounded_queue.h"
 
 #define WORK_STEALING_STATS
 
