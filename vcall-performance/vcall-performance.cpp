@@ -19,6 +19,7 @@ enum class Op
     OP_MAX
 };
 
+NO_INLINE
 unsigned processOp(unsigned value, Op op)
 {
     switch (op) {

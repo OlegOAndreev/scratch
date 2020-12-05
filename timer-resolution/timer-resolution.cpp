@@ -376,7 +376,8 @@ void testSleepAccuracy(SleepF sleepf)
 {
     const int nsecs[] = { 10000, 1000, 100, 1 };
 
-    static const size_t NUM_ITERATIONS = 10000;
+    static const size_t NUM_ITERATIONS = 10;
+    // static const size_t NUM_ITERATIONS = 10000;
     int* deltas = new int[NUM_ITERATIONS];
     for (int nsec : nsecs) {
         uint64_t start = clockGetNsec(CLOCK_MONOTONIC);
