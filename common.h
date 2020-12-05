@@ -443,6 +443,7 @@ struct Semaphore {
     Semaphore(unsigned value) { sem_init(&sema, 0, value); }
     ~Semaphore() { sem_destroy(&sema); }
     void post() { sem_post(&sema); }
+    bool tryWait() { return sem_trywait(&sema) == 0; }
     void wait() { sem_wait(&sema); }
 };
 
@@ -455,7 +456,8 @@ struct Semaphore {
     Semaphore(unsigned value) { sema = dispatch_semaphore_create(value); }
     ~Semaphore() { dispatch_release(sema); }
     void post() { dispatch_semaphore_signal(sema); }
-    void wait() { dispatch_semaphore_wait(sema, ~uint64_t(0)); }
+    bool tryWait() { return dispatch_semaphore_wait(sema, DISPATCH_TIME_NOW) == 0; }
+    void wait() { dispatch_semaphore_wait(sema, DISPATCH_TIME_FOREVER); }
 };
 
 #elif defined(_WIN32)
@@ -467,6 +469,7 @@ struct Semaphore {
     Semaphore(unsigned value) { sema = CreateSemaphore(NULL, value, MAXLONG, NULL); }
     ~Semaphore() { CloseHandle(sema); }
     void post() { ReleaseSemaphore(sema, 1, NULL); }
+    bool tryWait() { return WaitForSingleObject(sema, 0) == WAIT_OBJECT_0; }
     void wait() { WaitForSingleObject(sema, INFINITE); }
 };
 
