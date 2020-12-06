@@ -15,7 +15,7 @@
 
 #if defined(CPU_IS_X86_64)
 #define RTE_MACHINE_CPUFLAG_AVX2
-#include "rte_memcpy.h"
+#include "3rdparty/rte_memcpy/rte_memcpy.h"
 #endif
 
 // Defines if we have an assembly file with memcpy.

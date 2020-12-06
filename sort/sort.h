@@ -9,8 +9,8 @@
 #include <cstring>
 #include <iterator>
 
-#include "pdqsort/pdqsort.h"
-#include "cpp-timsort/timsort.hpp"
+#include "3rdparty/pdqsort/pdqsort.h"
+#include "3rdparty/cpp-timsort/timsort.hpp"
 
 // A number of sorting routines.
 

@@ -8,7 +8,7 @@
 #include <vector>
 
 #define kiss_fft_scalar float
-#include "kiss_fft/kiss_fftr.h"
+#include "3rdparty/kiss_fft/kiss_fftr.h"
 
 #include "common.h"
 

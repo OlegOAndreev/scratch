@@ -8,9 +8,10 @@
 #include <thread>
 #include <vector>
 
+#include "3rdparty/mpmc_bounded_queue/mpmc_bounded_queue.h"
+
 #include "blockingqueue.h"
 #include "countwaiter.h"
-#include "mpmc_bounded_queue/mpmc_bounded_queue.h"
 #include "mpscunboundedqueue.h"
 #include "stdblockingqueue.h"
 

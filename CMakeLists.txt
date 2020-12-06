@@ -72,8 +72,8 @@ add_executable(atomic-add-performance atomic-add-performance/atomic-add-performa
 
 add_executable(audio-stretch
     audio-stretch/audio-stretch.cpp
-    audio-stretch/kiss_fft/kiss_fft.c
-    audio-stretch/kiss_fft/kiss_fftr.c)
+    3rdparty/kiss_fft/kiss_fft.c
+    3rdparty/kiss_fft/kiss_fftr.c)
 
 if(NOT ANDROID)
     add_executable(audio-test audio-test/audio-test.cpp)

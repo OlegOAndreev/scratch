@@ -5,9 +5,9 @@
 #include <thread>
 #include <vector>
 
-#include "../sync/blockingqueue.h"
-#include "../sync/countwaiter.h"
-#include "../sync/stdblockingqueue.h"
+#include "sync/blockingqueue.h"
+#include "sync/countwaiter.h"
+#include "sync/stdblockingqueue.h"
 
 #include "fixedfunction.h"
 #include "futureutils.h"
