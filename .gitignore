@@ -6,7 +6,8 @@ build-debug/
 build-android/
 build-linux/
 build-gcc/
+compile_commands.json
+.cache
 .idea
 .vscode
-.cquery
 .DS_Store
