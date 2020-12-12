@@ -4,40 +4,44 @@
 #include <thread>
 
 #include "fiber.h"
+#include "marl-fiber.h"
 
-struct FiberTestState
-{
+template<typename FiberType>
+struct FiberTestState {
     int numIterations;
     double startOutput;
     double* output;
-    FiberId nextFiber;
+    FiberType nextFiber;
 };
 
+template<typename FiberType>
 void fiberTestFunc(void* arg)
 {
-    FiberTestState* state = (FiberTestState*)arg;
+    FiberTestState<FiberType>* state = (FiberTestState<FiberType>*)arg;
     for (int i = 0; i < state->numIterations; i++) {
         state->output[i] = i * state->startOutput;
         state->nextFiber.switchTo();
     }
 }
 
-struct TrivialFiberTestState
-{
+template<typename FiberType>
+struct TrivialFiberTestState {
     int numIterations;
-    FiberId nextFiber;
+    FiberType nextFiber;
 };
 
+template<typename FiberType>
 void trivialFiberTestFunc(void* arg)
 {
-    TrivialFiberTestState* state = (TrivialFiberTestState*)arg;
+    TrivialFiberTestState<FiberType>* state = (TrivialFiberTestState<FiberType>*)arg;
 
     for (int i = 0; i < state->numIterations; i++) {
         state->nextFiber.switchTo();
     }
 }
 
-int main()
+template<typename FiberType>
+void doTest(const char* fiberTypeName)
 {
     {
         // Create two groups of fibers on one thread, each of the groups circularly pointing
@@ -47,14 +51,14 @@ int main()
         // kNumFibers must be divisible by 2.
         int const kNumFibers = 8;
         std::unique_ptr<double[]> output{new double[kNumIterations * kNumFibers]};
-        FiberTestState state[kNumFibers];
-        FiberId fibers[kNumFibers];
+        FiberTestState<FiberType> state[kNumFibers];
+        FiberType fibers[kNumFibers];
 
         for (int i = 0; i < kNumFibers; i++) {
             state[i].numIterations = kNumIterations;
             state[i].startOutput = i;
             state[i].output = &output[i * kNumIterations];
-            fibers[i] = FiberId::create(256 * 1024, fiberTestFunc, &state[i]);
+            fibers[i] = FiberType::create(256 * 1024, fiberTestFunc<FiberType>, &state[i]);
         }
         for (int i = 0; i < kNumFibers; i++) {
             // Make two groups of fibers: 0-2-4-... and 1-3-5-...
@@ -88,12 +92,12 @@ int main()
         // Run trivial fibers switching to next one in a loop.
         int const kNumIterations = 1000000;
         int const kNumFibers = 10;
-        TrivialFiberTestState state[kNumFibers];
-        FiberId fibers[kNumFibers];
+        TrivialFiberTestState<FiberType> state[kNumFibers];
+        FiberType fibers[kNumFibers];
 
         for (int i = 0; i < kNumFibers; i++) {
             state[i].numIterations = kNumIterations;
-            fibers[i] = FiberId::create(256 * 1024, trivialFiberTestFunc, &state[i]);
+            fibers[i] = FiberType::create(256 * 1024, trivialFiberTestFunc<FiberType>, &state[i]);
         }
         for (int i = 0; i < kNumFibers; i++) {
             state[i].nextFiber = fibers[(i + 1) % kNumFibers];
@@ -109,5 +113,12 @@ int main()
         }
     }
 
-    printf("Fiber tests passed. %lld fiber switches per second\n", (long long)switchesPerSecond);
+    printf("Fiber tests for %s passed. %lld fiber switches per second\n", fiberTypeName,
+           (long long)switchesPerSecond);
+}
+
+int main()
+{
+    doTest<FiberId>("FiberId");
+    doTest<MarlFiber>("MarlFiber");
 }

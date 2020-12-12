@@ -89,7 +89,20 @@ add_executable(external-sort external-sort/external-sort.cpp)
 target_include_directories(external-sort PRIVATE sort)
 
 
-add_executable(fiber fiber/fiber.cpp fiber/test-fiber.cpp)
+if(NOT MSVC)
+    if(${ARCH} MATCHES "x86_64")
+        set(FIBER_ADDITIONAL_SOURCES
+            3rdparty/marl/osfiber_asm_x64.S
+            3rdparty/marl/osfiber_x64.c
+            fiber/marl-fiber.cpp)
+    elseif(${ARCH} MATCHES "aarch64")
+        set(FIBER_ADDITIONAL_SOURCES
+            3rdparty/marl/osfiber_asm_aarch64.S
+            3rdparty/marl/osfiber_aarch64.c
+            fiber/marl-fiber.cpp)
+    endif()
+endif()
+add_executable(fiber fiber/fiber.cpp fiber/test-fiber.cpp ${FIBER_ADDITIONAL_SOURCES})
 
 
 if(NOT ANDROID)

@@ -123,9 +123,6 @@ FiberId FiberId::create(size_t stackSize, void (*entry)(void*), void* arg)
 
 void FiberId::switchTo()
 {
-    if (tlRunningImpl == impl) {
-        return;
-    }
     if (tlRunningImpl != nullptr) {
         if (sigsetjmp(tlRunningImpl->context, 0) == kLongJmpVal) {
             // Currently running fiber has been switched back to.
@@ -191,9 +188,6 @@ void __stdcall fiberEntry(void* arg)
 
 FiberId FiberId::create(size_t stackSize, void (*entry)(void*), void* arg)
 {
-    if (tlMainThreadFiber == nullptr) {
-        tlMainThreadFiber = ConvertThreadToFiber(0);
-    }
     FiberImpl* impl = new FiberImpl;
     impl->fiberHandle = CreateFiber(stackSize, fiberEntry, (void*)impl);
     impl->entry = entry;
