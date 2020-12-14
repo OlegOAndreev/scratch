@@ -3,15 +3,16 @@
 #include <memory>
 #include <thread>
 
-#include "fiber.h"
 #include "marl-fiber.h"
+#include "os-fiber.h"
 
 template<typename FiberType>
 struct FiberTestState {
     int numIterations;
     double startOutput;
     double* output;
-    FiberType nextFiber;
+    typename FiberType::Handle* thisFiber;
+    typename FiberType::Handle* nextFiber;
 };
 
 template<typename FiberType>
@@ -20,14 +21,15 @@ void fiberTestFunc(void* arg)
     FiberTestState<FiberType>* state = (FiberTestState<FiberType>*)arg;
     for (int i = 0; i < state->numIterations; i++) {
         state->output[i] = i * state->startOutput;
-        state->nextFiber.switchTo();
+        FiberType::switchTo(state->thisFiber, state->nextFiber);
     }
 }
 
 template<typename FiberType>
 struct TrivialFiberTestState {
     int numIterations;
-    FiberType nextFiber;
+    typename FiberType::Handle* thisFiber;
+    typename FiberType::Handle* nextFiber;
 };
 
 template<typename FiberType>
@@ -36,7 +38,7 @@ void trivialFiberTestFunc(void* arg)
     TrivialFiberTestState<FiberType>* state = (TrivialFiberTestState<FiberType>*)arg;
 
     for (int i = 0; i < state->numIterations; i++) {
-        state->nextFiber.switchTo();
+        FiberType::switchTo(state->thisFiber, state->nextFiber);
     }
 }
 
@@ -52,13 +54,14 @@ void doTest(const char* fiberTypeName)
         int const kNumFibers = 8;
         std::unique_ptr<double[]> output{new double[kNumIterations * kNumFibers]};
         FiberTestState<FiberType> state[kNumFibers];
-        FiberType fibers[kNumFibers];
+        typename FiberType::Handle* fibers[kNumFibers];
 
         for (int i = 0; i < kNumFibers; i++) {
             state[i].numIterations = kNumIterations;
             state[i].startOutput = i;
             state[i].output = &output[i * kNumIterations];
             fibers[i] = FiberType::create(256 * 1024, fiberTestFunc<FiberType>, &state[i]);
+            state[i].thisFiber = fibers[i];
         }
         for (int i = 0; i < kNumFibers; i++) {
             // Make two groups of fibers: 0-2-4-... and 1-3-5-...
@@ -69,10 +72,10 @@ void doTest(const char* fiberTypeName)
         // between the threads.
         std::thread fiberRunnerThread([&] {
             // Run the first group of fibers.
-            fibers[0].switchTo();
+            FiberType::switchFromThread(fibers[0]);
         });
         // Run the second group of fibers.
-        fibers[1].switchTo();
+        FiberType::switchFromThread(fibers[1]);
         fiberRunnerThread.join();
 
         for (int j = 0; j < kNumFibers; j++) {
@@ -83,7 +86,7 @@ void doTest(const char* fiberTypeName)
         }
 
         for (int i = 0; i < kNumFibers; i++) {
-            fibers[i].destroy();
+            FiberType::destroy(fibers[i]);
         }
     }
 
@@ -93,23 +96,24 @@ void doTest(const char* fiberTypeName)
         int const kNumIterations = 1000000;
         int const kNumFibers = 10;
         TrivialFiberTestState<FiberType> state[kNumFibers];
-        FiberType fibers[kNumFibers];
+        typename FiberType::Handle* fibers[kNumFibers];
 
         for (int i = 0; i < kNumFibers; i++) {
             state[i].numIterations = kNumIterations;
             fibers[i] = FiberType::create(256 * 1024, trivialFiberTestFunc<FiberType>, &state[i]);
+            state[i].thisFiber = fibers[i];
         }
         for (int i = 0; i < kNumFibers; i++) {
             state[i].nextFiber = fibers[(i + 1) % kNumFibers];
         }
 
         int64_t startTime = getTimeTicks();
-        fibers[0].switchTo();
+        FiberType::switchFromThread(fibers[0]);
         int64_t runTime = getTimeTicks() - startTime;
         switchesPerSecond = kNumIterations * kNumFibers * getTimeFreq() / runTime;
 
         for (int i = 0; i < kNumFibers; i++) {
-            fibers[i].destroy();
+            FiberType::destroy(fibers[i]);
         }
     }
 
@@ -119,6 +123,6 @@ void doTest(const char* fiberTypeName)
 
 int main()
 {
-    doTest<FiberId>("FiberId");
+    doTest<OsFiber>("OsFiber");
     doTest<MarlFiber>("MarlFiber");
 }

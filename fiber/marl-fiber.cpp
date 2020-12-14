@@ -22,7 +22,7 @@ void marl_fiber_set_target(struct marl_fiber_context* ctx,
                            void* arg);
 }
 
-struct MarlFiber::FiberImpl {
+struct MarlFiber::Handle {
     char* stack = nullptr;
     marl_fiber_context context = {};
 
@@ -34,59 +34,44 @@ struct MarlFiber::FiberImpl {
 namespace {
 
 // Used when returning from fiber entry back to "main" thread entry.
-thread_local MarlFiber::FiberImpl* tlMainThreadImpl = nullptr;
-thread_local MarlFiber::FiberImpl* tlRunningImpl = nullptr;
-
-void switchToImpl(MarlFiber::FiberImpl* impl)
-{
-    marl_fiber_context* fromContext = &tlRunningImpl->context;
-    tlRunningImpl = impl;
-    marl_fiber_swap(fromContext, &impl->context);
-}
+thread_local marl_fiber_context tlMainThreadContext = {};
 
 void fiberEntry(void* arg)
 {
-    MarlFiber::FiberImpl* impl = (MarlFiber::FiberImpl*)arg;
+    MarlFiber::Handle* handle = (MarlFiber::Handle*)arg;
     try {
-        impl->entry(impl->arg);
+        handle->entry(handle->arg);
     } catch (...) {
         fprintf(stderr, "Uncaught exception in fiber entry, aborting\n");
         abort();
     }
-    // Return control the point in the original thread which called switchTo() first.
-    switchToImpl(tlMainThreadImpl);
+    marl_fiber_swap(&handle->context, &tlMainThreadContext);
 }
 
 } // namespace
 
-MarlFiber MarlFiber::create(size_t stackSize, void (*entry)(void*), void* arg)
+MarlFiber::Handle* MarlFiber::create(size_t stackSize, void (*entry)(void*), void* arg)
 {
-    MarlFiber ret;
-    ret.impl = new MarlFiber::FiberImpl;
-    ret.impl->stack = new char[stackSize];
-    ret.impl->entry = entry;
-    ret.impl->arg = arg;
-    marl_fiber_set_target(&ret.impl->context, ret.impl->stack, stackSize, fiberEntry, ret.impl);
-    return ret;
+    MarlFiber::Handle* handle = new MarlFiber::Handle;
+    handle->stack = new char[stackSize];
+    handle->entry = entry;
+    handle->arg = arg;
+    marl_fiber_set_target(&handle->context, handle->stack, stackSize, fiberEntry, handle);
+    return handle;
 }
 
-void MarlFiber::switchTo()
+void MarlFiber::switchTo(Handle* from, Handle* to)
 {
-    bool isMainThread = false;
-    if (tlMainThreadImpl == nullptr) {
-        isMainThread = true;
-        tlMainThreadImpl = new MarlFiber::FiberImpl;
-        tlRunningImpl = tlMainThreadImpl;
-    }
-    switchToImpl(impl);
-    if (isMainThread) {
-        tlMainThreadImpl = nullptr;
-        tlRunningImpl = nullptr;
-    }
+    marl_fiber_swap(&from->context, &to->context);
 }
 
-void MarlFiber::destroy()
+void MarlFiber::switchFromThread(Handle* to)
 {
-    delete[] impl->stack;
-    delete impl;
+    marl_fiber_swap(&tlMainThreadContext, &to->context);
+}
+
+void MarlFiber::destroy(Handle* handle)
+{
+    delete[] handle->stack;
+    delete handle;
 }

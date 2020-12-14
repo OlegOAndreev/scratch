@@ -4,14 +4,11 @@
 #include <cstdint>
 
 // A simple wrapper around 3rdparty/marl assembly fiber switching. The interface matches the FiberId.
-class MarlFiber {
-public:
-    struct FiberImpl;
+struct MarlFiber {
+    struct Handle;
 
-    static MarlFiber create(size_t stackSize, void (*entry)(void*), void* arg);
-    void switchTo();
-    void destroy();
-
-private:
-    FiberImpl* impl = nullptr;
+    static Handle* create(size_t stackSize, void (*entry)(void*), void* arg);
+    static void switchTo(Handle* from, Handle* to);
+    static void switchFromThread(Handle* to);
+    static void destroy(Handle* handle);
 };

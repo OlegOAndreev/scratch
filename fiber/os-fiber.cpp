@@ -1,4 +1,4 @@
-#include "fiber.h"
+#include "os-fiber.h"
 
 #include <atomic>
 
@@ -22,12 +22,12 @@
 #pragma pop_macro("_FORTIFY_SOURCE")
 #pragma pop_macro("__USE_FORTIFY_LEVEL")
 
-struct FiberId::FiberImpl {
+struct OsFiber::Handle {
     char* stack = nullptr;
     sigjmp_buf context = {};
 
     // The following two fields are used only when first starting the fiber.
-    void(*entry)(void*) = nullptr;
+    void (*entry)(void*) = nullptr;
     void* arg = nullptr;
 };
 
@@ -36,44 +36,38 @@ namespace {
 static int const kLongJmpVal = 123;
 
 // The only way to pass arguments into sighandler.
-thread_local FiberId::FiberImpl* tlPassToSignalImpl = nullptr;
-// Currently running fiber.
-thread_local FiberId::FiberImpl* tlRunningImpl = nullptr;
-// Place in the running thread, which calls the first switchTo(). Invariant: if tlRunningImpl
-// is not null, this context contains parent thread context.
+thread_local OsFiber::Handle* tlPassToSignalHandle = nullptr;
+// Place in the running thread, which calls the first switchTo().
 thread_local sigjmp_buf tlParentThreadContext = {};
 
 void fiberEntry(int)
 {
     // Copy thread-local var to stack, otherwise the second call to create() will overwrite
     // the first value.
-    FiberId::FiberImpl* impl = tlPassToSignalImpl;
-    if (sigsetjmp(impl->context, 0) == kLongJmpVal) {
+    OsFiber::Handle* handle = tlPassToSignalHandle;
+    if (sigsetjmp(handle->context, 0) == kLongJmpVal) {
         try {
-            impl->entry(impl->arg);
+            handle->entry(handle->arg);
         } catch (...) {
             fprintf(stderr, "Uncaught exception in fiber entry, aborting\n");
             abort();
         }
-        // Return to the point in the parent thread which called switchTo().
-        ENSURE(tlRunningImpl == impl, "Inconsistent fiber state");
-        tlRunningImpl = nullptr;
         siglongjmp(tlParentThreadContext, kLongJmpVal);
     }
 }
 
 } // namespace
 
-FiberId FiberId::create(size_t stackSize, void (*entry)(void*), void* arg)
+OsFiber::Handle* OsFiber::create(size_t stackSize, void (*entry)(void*), void* arg)
 {
     // MINSIGSTKSZ is 32kB on MacOS, 2kB on glibc/musl x86-64, make it double just in case.
     if (stackSize < MINSIGSTKSZ * 2) {
         stackSize = MINSIGSTKSZ * 2;
     }
-    FiberImpl* impl = new FiberImpl;
-    impl->stack = new char[stackSize];
-    impl->entry = entry;
-    impl->arg = arg;
+    Handle* handle = new Handle;
+    handle->stack = new char[stackSize];
+    handle->entry = entry;
+    handle->arg = arg;
 
     // Signal manipulations (sigaction, sigaltstack) are process-wide, so make the whole operation
     // thread-safe with a big mutex.
@@ -82,7 +76,7 @@ FiberId FiberId::create(size_t stackSize, void (*entry)(void*), void* arg)
         std::unique_lock<std::mutex> signalLock(signalMutex);
 
         stack_t sigstack;
-        sigstack.ss_sp = impl->stack;
+        sigstack.ss_sp = handle->stack;
         sigstack.ss_size = stackSize;
         sigstack.ss_flags = 0;
         stack_t oldsigstack;
@@ -100,11 +94,11 @@ FiberId FiberId::create(size_t stackSize, void (*entry)(void*), void* arg)
             FAIL("sigaction");
         }
 
-        tlPassToSignalImpl = impl;
+        tlPassToSignalHandle = handle;
         if (raise(SIGUSR2) < 0) {
             FAIL("raise");
         }
-        tlPassToSignalImpl = nullptr;
+        tlPassToSignalHandle = nullptr;
 
         if (oldsigstack.ss_size > 0) {
             if (sigaltstack(&oldsigstack, nullptr) < 0) {
@@ -116,35 +110,31 @@ FiberId FiberId::create(size_t stackSize, void (*entry)(void*), void* arg)
         }
     }
 
-    FiberId ret;
-    ret.impl = impl;
-    return ret;
+    return handle;
 }
 
-void FiberId::switchTo()
+void OsFiber::switchTo(Handle* from, Handle* to)
 {
-    if (tlRunningImpl != nullptr) {
-        if (sigsetjmp(tlRunningImpl->context, 0) == kLongJmpVal) {
-            // Currently running fiber has been switched back to.
-            return;
-        }
-    } else {
-        // We are not in the fiber right now, store the thread context to return to.
-        if (sigsetjmp(tlParentThreadContext, 0) == kLongJmpVal) {
-            return;
-        }
+    if (sigsetjmp(from->context, 0) == kLongJmpVal) {
+        // Currently running fiber has been switched back to.
+        return;
     }
-    // Please note, that we modify tlRunningImpl before the siglongjmp, not after the sigsetjmp.
-    // This prevents the errors when the compiler caches thread_local variable value and
-    // the fiber moves across the threads.
-    tlRunningImpl = impl;
-    siglongjmp(impl->context, kLongJmpVal);
+    siglongjmp(to->context, kLongJmpVal);
 }
 
-void FiberId::destroy()
+void OsFiber::switchFromThread(Handle* to)
 {
-    delete[] impl->stack;
-    delete impl;
+    // We are not in the fiber right now, store the thread context to return to.
+    if (sigsetjmp(tlParentThreadContext, 0) == kLongJmpVal) {
+        return;
+    }
+    siglongjmp(to->context, kLongJmpVal);
+}
+
+void OsFiber::destroy(Handle* handle)
+{
+    delete[] handle->stack;
+    delete handle;
 }
 
 #elif defined(_WIN32)
@@ -153,13 +143,12 @@ void FiberId::destroy()
 
 #include <windows.h>
 
-struct FiberId::FiberImpl {
-    void* handle = nullptr;
+struct OsFiber::Handle {
+    void* fiberHandle = nullptr;
 
     // The following two fields are used only when first starting the fiber.
-    void(*entry)(void*) = nullptr;
+    void (*entry)(void*) = nullptr;
     void* arg = nullptr;
-};
 };
 
 namespace {
@@ -167,53 +156,45 @@ namespace {
 // Must be set to the return value of ConvertThreadToFiber, used when returning from fiber entry
 // back to "main" thread entry.
 thread_local void* tlMainThreadFiber = nullptr;
-// Currently running fiber.
-thread_local FiberId::FiberImpl* tlRunningImpl = nullptr;
 
 void __stdcall fiberEntry(void* arg)
 {
-    FiberId::FiberImpl* impl = (FiberId::FiberImpl*)arg;
+    OsFiber::Handle* handle = (OsFiber::Handle*)arg;
     try {
-        impl->entry(impl->arg);
+        handle->entry(handle->arg);
     } catch (...) {
         fprintf(stderr, "Uncaught exception in fiber entry, aborting\n");
         abort();
     }
-    // Return control the point in the original thread which called switchTo() first.
-    tlRunningImpl = nullptr;
     SwitchToFiber(tlMainThreadFiber);
 }
 
 } // namespace
 
-FiberId FiberId::create(size_t stackSize, void (*entry)(void*), void* arg)
+FiberId OsFiber::create(size_t stackSize, void (*entry)(void*), void* arg)
 {
-    FiberImpl* impl = new FiberImpl;
-    impl->fiberHandle = CreateFiber(stackSize, fiberEntry, (void*)impl);
-    impl->entry = entry;
-    impl->arg = arg;
-
-    FiberId ret;
-    ret.impl = impl;
-    return ret;
+    Handle* handle = new Handle;
+    handle->fiberHandle = CreateFiber(stackSize, fiberEntry, (void*)handle);
+    handle->entry = entry;
+    handle->arg = arg;
+    return handle;
 }
 
-void FiberId::switchTo()
+void OsFiber::switchTo(Handle* /*from*/, Handle* to)
 {
-    if (tlMainThreadFiber == nullptr) {
-        tlMainThreadFiber = ConvertThreadToFiber(0);
-    }
-    if (tlRunningImpl == impl) {
-        return;
-    }
-    tlRunningImpl = impl;
-    SwitchToFiber(impl->fiberHandle);
+    SwitchToFiber(to->fiberHandle);
 }
 
-void FiberId::destroy()
+void OsFiber::switchFromThread(Handle* to)
 {
-    DestroyFiber(impl->fiberHandle);
-    delete impl;
+    tlMainThreadFiber = ConvertThreadToFiber(0);
+    SwitchToFiber(to->fiberHandle);
+}
+
+void OsFiber::destroy(Handle* handle)
+{
+    DestroyFiber(handle->fiberHandle);
+    delete handle;
 }
 
 #else
@@ -221,4 +202,3 @@ void FiberId::destroy()
 #error "Unsupported OS"
 
 #endif
-
